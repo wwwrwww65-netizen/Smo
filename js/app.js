@@ -1,5 +1,5 @@
 /**
- * لعبة اسم حيوان نبات - Agora RTM v1.4.4 (بدون Token)
+ * لعبة اسم حيوان نبات - Agora RTM v1.4.4
  */
 
 const APP_ID = "36713fd4db3d48919d8e393e71c78026";
@@ -28,6 +28,14 @@ class GameManager {
 
         this.initElements();
         this.initEvents();
+        
+        // التحقق من AgoraRTM قبل التهيئة
+        if (typeof AgoraRTM === 'undefined') {
+            console.error('❌ AgoraRTM not loaded!');
+            this.showToast('❌ فشل تحميل المكتبة');
+            return;
+        }
+        
         this.initRTM();
     }
 
@@ -65,18 +73,18 @@ class GameManager {
         try {
             console.log('🔄 Initializing RTM v1.4.4...');
             
-            // ✅ RTM v1 API (بدون Token)
+            // ✅ RTM v1.4.4 API
             this.client = AgoraRTM.createInstance(APP_ID);
             
             await this.client.login({ uid: this.myId });
-            console.log('✅ RTM Login Success - UID:', this.myId);
+            console.log('✅ RTM Login Success');
             
             this.client.on('ConnectionStateChanged', (newState, reason) => {
                 console.log('📡 Connection State:', newState, reason);
             });
             
         } catch (error) {
-            console.error("❌ RTM Init Error:", error);
+            console.error("❌ RTM Error:", error);
             this.showToast("فشل الاتصال: " + error.message);
         }
     }
@@ -88,25 +96,21 @@ class GameManager {
             this.roomId = channelId;
             console.log('🔄 Joining channel:', channelId);
             
-            // ✅ إنشاء Channel في v1
             this.channel = this.client.createChannel(channelId);
             
-            // ✅ مستمعي الأحداث في v1
             this.channel.on('ChannelMessage', (message, memberId) => {
                 try {
                     const data = JSON.parse(message.text);
                     this.handleMessage(memberId, data);
                 } catch (e) {
-                    console.error("Message parse error:", e);
+                    console.error("Parse error:", e);
                 }
             });
 
             this.channel.on('MemberJoined', (memberId) => {
                 if (memberId !== this.myId) {
                     this.showToast(`👋 انضم لاعب جديد`);
-                    if (this.isHost) {
-                        setTimeout(() => this.syncState(), 500);
-                    }
+                    if (this.isHost) setTimeout(() => this.syncState(), 500);
                 }
             });
 
@@ -114,11 +118,9 @@ class GameManager {
                 this.handlePlayerLeave(memberId);
             });
 
-            // ✅ الانضمام للقناة في v1
             await this.channel.join();
             console.log('✅ Joined channel:', channelId);
             
-            // إرسال رسالة الانضمام
             setTimeout(() => {
                 this.channel.sendMessage({ 
                     text: JSON.stringify({
@@ -130,7 +132,7 @@ class GameManager {
             }, 300);
 
         } catch (error) {
-            console.error("❌ Join Channel Error:", error);
+            console.error("❌ Join Error:", error);
             this.showToast("فشل الانضمام: " + error.message);
             throw error;
         }
@@ -145,8 +147,7 @@ class GameManager {
 
     handleMessage(publisher, data) {
         if (publisher === this.myId && data.type !== 'sync-state') return;
-        console.log('📨 Message:', data.type, 'from:', publisher);
-
+        
         switch (data.type) {
             case 'join':
                 if (this.isHost && publisher !== this.myId) {
@@ -297,7 +298,7 @@ class GameManager {
             this.playSound('join');
             
         } catch (error) {
-            console.error("Create Room Error:", error);
+            console.error("Create Error:", error);
             this.showToast("❌ فشل إنشاء الغرفة");
             this.isHost = false;
             this.roomId = "";
@@ -332,7 +333,7 @@ class GameManager {
             this.playSound('join');
             
         } catch (error) {
-            console.error("Join Room Error:", error);
+            console.error("Join Error:", error);
             this.showToast("❌ فشل الانضمام");
         } finally {
             this.btnJoinRoom.disabled = false;
@@ -582,7 +583,14 @@ class GameManager {
     }
 }
 
+// ✅ التحقق قبل التشغيل
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('🎮 Game initializing (RTM v1.4.4)...');
-    window.gameManager = new GameManager();
+    console.log('🎮 Game initializing...');
+    if (typeof AgoraRTM === 'undefined') {
+        console.error('❌ AgoraRTM not loaded!');
+        document.getElementById('main-toast').textContent = '❌ فشل تحميل المكتبة';
+        document.getElementById('main-toast').classList.remove('hidden');
+    } else {
+        window.gameManager = new GameManager();
+    }
 });
