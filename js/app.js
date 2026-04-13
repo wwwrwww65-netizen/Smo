@@ -97,13 +97,32 @@ class GameManager {
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) return this.showToast("الرجاء إدخال اسمك أولاً");
 
+        const btnCreate = document.getElementById('btn-create-room');
+        btnCreate.disabled = true;
+        const originalText = btnCreate.innerHTML;
+        btnCreate.innerHTML = `<span>جارٍ الإنشاء...</span> <div class="spinner"></div>`;
+
+        const resetBtn = () => {
+            btnCreate.disabled = false;
+            btnCreate.innerHTML = originalText;
+        };
+
         if (this.peer) this.peer.destroy();
 
         const id = this.generateId();
-        this.peer = new Peer(id);
+        this.peer = new Peer(id, {
+            debug: 1,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
         this.isHost = true;
 
         this.peer.on('open', (id) => {
+            resetBtn();
             this.roomId = id;
             this.displayRoomId.textContent = id;
             this.players = [{ id: id, name: this.playerName, ready: false, totalScore: 0 }];
@@ -116,6 +135,7 @@ class GameManager {
         });
 
         this.peer.on('error', (err) => {
+            resetBtn();
             if (err.type === 'unavailable-id' && retryCount < 5) {
                 setTimeout(() => this.createRoom(retryCount + 1), 500);
             } else if (err.type === 'network' || err.type === 'disconnected') {
@@ -138,17 +158,48 @@ class GameManager {
         const originalText = this.btnJoinRoom.innerHTML;
         this.btnJoinRoom.innerHTML = `<span>جارٍ الانضمام...</span> <div class="spinner"></div>`;
 
-        if (this.peer) this.peer.destroy();
-        this.peer = new Peer();
-
         const resetJoinBtn = () => {
             this.btnJoinRoom.disabled = false;
             this.btnJoinRoom.innerHTML = originalText;
+            if (this.joinTimeout) {
+                clearTimeout(this.joinTimeout);
+                this.joinTimeout = null;
+            }
         };
 
+        if (this.peer) this.peer.destroy();
+
+        this.peer = new Peer({
+            debug: 1,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
+
+        // Timeout for the joining process
+        this.joinTimeout = setTimeout(() => {
+            if (!this.conn || !this.conn.open) {
+                this.showToast("استغرق الاتصال وقتاً طويلاً. تأكد من وجود المضيف ومن جودة الإنترنت.");
+                resetJoinBtn();
+                if (this.peer) this.peer.destroy();
+            }
+        }, 15000);
+
         this.peer.on('open', () => {
-            this.conn = this.peer.connect(this.roomId);
-            this.handleGuestConnection(this.conn);
+            this.conn = this.peer.connect(this.roomId, {
+                reliable: true
+            });
+
+            this.conn.on('error', (err) => {
+                resetJoinBtn();
+                this.showToast("حدث خطأ أثناء الاتصال بالطرف الآخر");
+                console.error("Connection Error:", err);
+            });
+
+            this.handleGuestConnection(this.conn, resetJoinBtn);
         });
 
         this.peer.on('error', (err) => {
@@ -158,8 +209,9 @@ class GameManager {
             } else if (err.type === 'network' || err.type === 'disconnected') {
                 this.showToast("انقطع الاتصال بالشبكة، يرجى المحاولة مرة أخرى");
             } else {
-                this.showToast("فشل الانضمام: " + err.type);
+                this.showToast("فشل الانضمام، تأكد من الرمز وحاول مجدداً");
             }
+            console.error("Peer Error:", err);
         });
     }
 
@@ -194,8 +246,9 @@ class GameManager {
         });
     }
 
-    handleGuestConnection(conn) {
+    handleGuestConnection(conn, resetBtnCallback) {
         conn.on('open', () => {
+            if (resetBtnCallback) resetBtnCallback();
             conn.send({ type: 'join', name: this.playerName });
             this.showSection('lobby');
             this.displayRoomId.textContent = this.roomId;
@@ -237,7 +290,12 @@ class GameManager {
         this.playerList.innerHTML = '';
         this.players.forEach(p => {
             const li = document.createElement('li');
-            li.innerHTML = `<span>${p.name}</span> <span>${p.ready ? '✅ مستعد' : '⏳ ينتظر'}</span>`;
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = p.name;
+            const statusSpan = document.createElement('span');
+            statusSpan.textContent = p.ready ? '✅ مستعد' : '⏳ ينتظر';
+            li.appendChild(nameSpan);
+            li.appendChild(statusSpan);
             this.playerList.appendChild(li);
         });
     }
@@ -255,8 +313,10 @@ class GameManager {
             this.updatePlayerList();
             this.broadcast({ type: 'players-update', players: this.players });
             this.checkAllReady();
-        } else {
+        } else if (this.conn && this.conn.open) {
             this.conn.send({ type: 'ready' });
+        } else {
+            return this.showToast("انقطع الاتصال بالمضيف");
         }
         const btnReady = document.getElementById('btn-ready');
         btnReady.disabled = true;
@@ -299,7 +359,7 @@ class GameManager {
     stopGame() {
         if (this.isHost) {
             this.broadcastStop();
-        } else {
+        } else if (this.conn && this.conn.open) {
             this.conn.send({ type: 'stop' });
         }
     }
@@ -321,7 +381,7 @@ class GameManager {
         };
         if (this.isHost) {
             this.handleAnswers(this.roomId, answers);
-        } else {
+        } else if (this.conn && this.conn.open) {
             this.conn.send({ type: 'submit-answers', answers: answers });
         }
     }
