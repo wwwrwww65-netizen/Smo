@@ -24,12 +24,18 @@ jobs:
         npm init -y
         npm install agora-rtm-sdk@2.2.3
         
-    - name: Copy SDK to js folder
+    - name: Find and copy SDK file
       run: |
         mkdir -p js
-        # الملف المطلوب موجود داخل node_modules
-        cp node_modules/agora-rtm-sdk/bundles/agora-rtm-sdk.min.js js/agora-rtm.min.js
-        echo "✅ SDK copied successfully"
+        # البحث عن أي ملف .min.js داخل الحزمة المثبتة
+        SDK_FILE=$(find node_modules/agora-rtm-sdk -name "*.min.js" | head -1)
+        if [ -z "$SDK_FILE" ]; then
+          echo "❌ Could not find any .min.js file in the package"
+          exit 1
+        fi
+        echo "✅ Found SDK file: $SDK_FILE"
+        cp "$SDK_FILE" js/agora-rtm.min.js
+        ls -la js/
         
     - name: Verify SDK file size
       run: |
