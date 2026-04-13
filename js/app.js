@@ -1,6 +1,5 @@
 /**
- * لعبة اسم حيوان نبات - Agora RTM v2
- * مشروع جديد بدون Certificate
+ * لعبة اسم حيوان نبات - Agora RTM v1.4.4 (بدون Token)
  */
 
 const APP_ID = "36713fd4db3d48919d8e393e71c78026";
@@ -16,7 +15,7 @@ const SOUNDS = {
 
 class GameManager {
     constructor() {
-        this.rtmClient = null;
+        this.client = null;
         this.channel = null;
         this.isHost = false;
         this.playerName = "";
@@ -26,7 +25,6 @@ class GameManager {
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
         this.myId = Math.floor(Math.random() * 1000000000).toString();
-        this.isLoggedIn = false;
 
         this.initElements();
         this.initEvents();
@@ -65,22 +63,17 @@ class GameManager {
 
     async initRTM() {
         try {
-            console.log('🔄 Initializing RTM...');
+            console.log('🔄 Initializing RTM v1.4.4...');
             
-            this.rtmClient = new AgoraRTM.RTM(APP_ID, this.myId);
+            // ✅ RTM v1 API (بدون Token)
+            this.client = AgoraRTM.createInstance(APP_ID);
             
-            this.rtmClient.addEventListener('status', (event) => {
-                console.log('📡 RTM Status:', event.state);
-                if (event.state === 'CONNECTED') {
-                    this.isLoggedIn = true;
-                    console.log('✅ RTM Connected');
-                } else if (event.state === 'DISCONNECTED') {
-                    this.isLoggedIn = false;
-                }
+            await this.client.login({ uid: this.myId });
+            console.log('✅ RTM Login Success - UID:', this.myId);
+            
+            this.client.on('ConnectionStateChanged', (newState, reason) => {
+                console.log('📡 Connection State:', newState, reason);
             });
-
-            await this.rtmClient.login();
-            console.log('✅ RTM Login Success');
             
         } catch (error) {
             console.error("❌ RTM Init Error:", error);
@@ -90,44 +83,49 @@ class GameManager {
 
     async joinChannel(channelId) {
         try {
-            if (!this.rtmClient) throw new Error("RTM Client not initialized");
-            
-            if (!this.isLoggedIn) {
-                await this.waitForLogin();
-            }
+            if (!this.client) throw new Error("RTM not initialized");
 
             this.roomId = channelId;
             console.log('🔄 Joining channel:', channelId);
             
-            this.channel = this.rtmClient.createChannel(channelId);
+            // ✅ إنشاء Channel في v1
+            this.channel = this.client.createChannel(channelId);
             
-            this.channel.addEventListener('message', (event) => {
+            // ✅ مستمعي الأحداث في v1
+            this.channel.on('ChannelMessage', (message, memberId) => {
                 try {
-                    const data = JSON.parse(event.message.text);
-                    this.handleMessage(event.publisher, data);
+                    const data = JSON.parse(message.text);
+                    this.handleMessage(memberId, data);
                 } catch (e) {
                     console.error("Message parse error:", e);
                 }
             });
 
-            this.channel.addEventListener('presence', (event) => {
-                console.log('👥 Presence:', event.eventType);
-                if (event.eventType === 'REMOTE_JOIN' && event.publisher !== this.myId) {
+            this.channel.on('MemberJoined', (memberId) => {
+                if (memberId !== this.myId) {
                     this.showToast(`👋 انضم لاعب جديد`);
-                    if (this.isHost) setTimeout(() => this.syncState(), 500);
-                } else if (event.eventType === 'REMOTE_LEAVE') {
-                    this.handlePlayerLeave(event.publisher);
+                    if (this.isHost) {
+                        setTimeout(() => this.syncState(), 500);
+                    }
                 }
             });
 
+            this.channel.on('MemberLeft', (memberId) => {
+                this.handlePlayerLeave(memberId);
+            });
+
+            // ✅ الانضمام للقناة في v1
             await this.channel.join();
             console.log('✅ Joined channel:', channelId);
             
+            // إرسال رسالة الانضمام
             setTimeout(() => {
-                this.sendMessage({
-                    type: 'join',
-                    name: this.playerName,
-                    id: this.myId
+                this.channel.sendMessage({ 
+                    text: JSON.stringify({
+                        type: 'join',
+                        name: this.playerName,
+                        id: this.myId
+                    })
                 });
             }, 300);
 
@@ -138,26 +136,16 @@ class GameManager {
         }
     }
 
-    async waitForLogin() {
-        let attempts = 0;
-        while (!this.isLoggedIn && attempts < 50) {
-            await new Promise(r => setTimeout(r, 100));
-            attempts++;
-        }
-    }
-
-    async sendMessage(message) {
-        if (!this.channel) return;
-        try {
-            await this.channel.sendMessage({ text: JSON.stringify(message) });
-        } catch (err) {
-            console.error("Send error:", err);
+    sendMessage(message) {
+        if (this.channel) {
+            this.channel.sendMessage({ text: JSON.stringify(message) })
+                .catch(err => console.error("Send error:", err));
         }
     }
 
     handleMessage(publisher, data) {
         if (publisher === this.myId && data.type !== 'sync-state') return;
-        console.log('📨 Message:', data.type);
+        console.log('📨 Message:', data.type, 'from:', publisher);
 
         switch (data.type) {
             case 'join':
@@ -579,13 +567,12 @@ class GameManager {
         
         try {
             if (this.channel) {
-                await this.sendMessage({ type: 'quit', id: this.myId, name: this.playerName });
                 await this.channel.leave();
                 this.channel = null;
             }
-            if (this.rtmClient) {
-                await this.rtmClient.logout();
-                this.rtmClient = null;
+            if (this.client) {
+                await this.client.logout();
+                this.client = null;
             }
         } catch (error) {
             console.error("Quit Error:", error);
@@ -596,6 +583,6 @@ class GameManager {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('🎮 Game initializing...');
+    console.log('🎮 Game initializing (RTM v1.4.4)...');
     window.gameManager = new GameManager();
 });
