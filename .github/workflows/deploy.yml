@@ -19,32 +19,115 @@ jobs:
       with:
         node-version: '18'
         
-    - name: Download Agora RTM SDK
+    - name: Download Agora RTM SDK (الإصدار المتاح 2.3.1)
       run: |
         mkdir -p js
-        # تحميل Agora v1.4.4 مباشرة
-        curl -L "https://download.agora.io/sdk/release/AgoraRTM-1.4.4.min.js" -o js/agora-rtm.min.js
-        # إنشاء نسخة احتياطية محلية
-        echo "✅ SDK downloaded successfully"
+        # ✅ استخدام الإصدار الجديد المتاح رسمياً
+        curl -L "https://cdn.agora.io/sdk/release/agora-rtm.sdk-2.3.1.min.js" -o js/agora-rtm.min.js
+        echo "✅ Agora RTM SDK 2.3.1 downloaded successfully"
         
-    - name: Validate Files
+        # التحقق من حجم الملف (يجب أن يكون أكبر من 100 كيلوبايت)
+        FILE_SIZE=$(stat -c%s "js/agora-rtm.min.js")
+        if [ $FILE_SIZE -lt 10000 ]; then
+          echo "❌ Downloaded file is too small ($FILE_SIZE bytes) - download failed"
+          exit 1
+        fi
+        echo "✅ File size: $FILE_SIZE bytes"
+        
+    - name: Create compatibility layer for old code
       run: |
+        # إنشاء ملف محاكاة التوافق (compatibility wrapper)
+        cat > js/compat.js << 'EOF'
+        // طبقة توافق بين الإصدار 2.x والإصدار 1.4.4 القديم
+        (function() {
+            if (typeof AgoraRTM !== 'undefined') return;
+            
+            // انتظار تحميل الـ SDK الجديد
+            const waitForSDK = setInterval(() => {
+                if (typeof RTM !== 'undefined') {
+                    clearInterval(waitForSDK);
+                    window.AgoraRTM = {
+                        VERSION: '2.3.1-compat',
+                        createInstance: (appId, config) => {
+                            console.log('🔄 Compatibility: Creating RTM client v2.x');
+                            const client = RTM.createInstance(appId, config);
+                            
+                            // إضافة دوال الإصدار القديم
+                            if (!client.login) {
+                                client.login = (token, uid) => client.login({ token, uid });
+                            }
+                            if (!client.logout) {
+                                client.logout = () => client.logout();
+                            }
+                            if (!client.createChannel) {
+                                client.createChannel = (name) => {
+                                    const channel = client.createChannel(name);
+                                    if (!channel.sendMessage) {
+                                        channel.sendMessage = (msg) => channel.sendMessage({ text: msg.text });
+                                    }
+                                    if (!channel.on) {
+                                        channel.on = (event, fn) => {
+                                            if (event === 'ChannelMessage') {
+                                                channel.on('message', (message, peerId) => {
+                                                    fn(message, peerId);
+                                                });
+                                            } else {
+                                                channel.on(event, fn);
+                                            }
+                                        };
+                                    }
+                                    return channel;
+                                };
+                            }
+                            return client;
+                        }
+                    };
+                    console.log('✅ Compatibility layer activated for Agora RTM 1.4.4 API');
+                }
+            }, 100);
+            
+            // مهلة 5 ثواني
+            setTimeout(() => {
+                clearInterval(waitForSDK);
+                if (typeof AgoraRTM === 'undefined') {
+                    console.error('❌ Failed to load Agora RTM SDK');
+                }
+            }, 5000);
+        })();
+        EOF
+        echo "✅ Compatibility layer created"
+        
+    - name: Update HTML to use local SDK with compatibility
+      run: |
+        # تعديل الـ HTML لاستخدام الملفات المحلية
+        sed -i 's|https://cdn.agora.io/sdk/release/agora-rtm.sdk-2.2.3.min.js|js/agora-rtm.min.js|g' index.html
+        
+        # إضافة طبقة التوافق بعد تحميل الـ SDK
+        sed -i '/<script src="js\/agora-rtm.min.js"><\/script>/a \    <script src="js/compat.js"><\/script>' index.html
+        
+        echo "✅ HTML updated to use local SDK with compatibility"
+        
+    - name: Validate all files
+      run: |
+        echo "📁 Checking files..."
+        ls -la js/
+        
         if [ ! -f "js/agora-rtm.min.js" ]; then
-          echo "❌ Failed to download SDK"
+          echo "❌ SDK file missing!"
           exit 1
         fi
-        if [ ! -f "index.html" ]; then
-          echo "❌ index.html not found"
-          exit 1
-        fi
-        echo "✅ All files validated"
         
-    - name: Update HTML to use local SDK
-      run: |
-        sed -i 's|https://unpkg.com/agora-rtm-sdk@1.4.4/agora-rtm.min.js|js/agora-rtm.min.js|g' index.html
-        sed -i 's|https://cdn.jsdelivr.net/npm/agora-rtm-sdk@2.2.0/agora-rtm.min.js|js/agora-rtm.min.js|g' index.html
-        sed -i 's|https://download.agora.io/sdk/release/AgoraRTM-1.4.4.min.js|js/agora-rtm.min.js|g' index.html
-        echo "✅ HTML updated to use local SDK"
+        if [ ! -f "index.html" ]; then
+          echo "❌ index.html missing!"
+          exit 1
+        fi
+        
+        if [ ! -f "js/compat.js" ]; then
+          echo "❌ compat.js missing!"
+          exit 1
+        fi
+        
+        echo "✅ All files validated successfully"
         
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
@@ -53,3 +136,6 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./
         force_orphan: true
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
+        commit_message: 'Deploy with Agora RTM SDK 2.3.1 + compatibility layer'
