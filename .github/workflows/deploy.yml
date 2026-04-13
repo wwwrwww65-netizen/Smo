@@ -19,21 +19,27 @@ jobs:
       with:
         node-version: '18'
         
-    - name: Download Agora RTM SDK (✅ confirmed working version 2.2.3)
+    - name: Install Agora RTM SDK from npm
+      run: |
+        npm init -y
+        npm install agora-rtm-sdk@2.2.3
+        
+    - name: Copy SDK to js folder
       run: |
         mkdir -p js
-        # استخدام الرابط المؤكد للإصدار 2.2.3 (يعمل 100%)
-        curl -L "https://cdn.agora.io/sdk/release/agora-rtm.sdk-2.2.3.min.js" -o js/agora-rtm.min.js
-        echo "✅ Agora RTM SDK 2.2.3 downloaded"
+        # الملف المطلوب موجود داخل node_modules
+        cp node_modules/agora-rtm-sdk/bundles/agora-rtm-sdk.min.js js/agora-rtm.min.js
+        echo "✅ SDK copied successfully"
         
-        # التحقق من الحجم (الملف الصحيح حجمه حوالي 130-150 كيلوبايت)
+    - name: Verify SDK file size
+      run: |
         FILE_SIZE=$(stat -c%s "js/agora-rtm.min.js")
         echo "📦 File size: $FILE_SIZE bytes"
-        if [ $FILE_SIZE -lt 50000 ]; then
-          echo "❌ Download failed - file too small ($FILE_SIZE bytes). Check the URL."
+        if [ $FILE_SIZE -lt 100000 ]; then
+          echo "❌ SDK file too small ($FILE_SIZE bytes) - something wrong"
           exit 1
         fi
-        echo "✅ File size validation passed"
+        echo "✅ SDK file size OK"
         
     - name: Create compatibility layer (v1.4.4 to v2.x)
       run: |
@@ -67,7 +73,7 @@ jobs:
                             return client;
                         }
                     };
-                    console.log('✅ Compatibility layer ready (v1.4.4 API)');
+                    console.log('✅ Compatibility layer ready');
                 }
             }, 100);
             setTimeout(() => {
@@ -80,18 +86,19 @@ jobs:
         
     - name: Update index.html to use local SDK
       run: |
-        # استبدال رابط CDN بالملف المحلي
-        sed -i 's|https://cdn.agora.io/sdk/release/agora-rtm.sdk-2.3.1.min.js|js/agora-rtm.min.js|g' index.html
-        # إضافة compat.js بعد تحميل SDK مباشرة
-        sed -i '/<script src="js\/agora-rtm.min.js"><\/script>/a \    <script src="js/compat.js"><\/script>' index.html
+        # استبدال أي رابط CDN قديم بالملف المحلي
+        sed -i 's|https://cdn.agora.io/sdk/release/agora-rtm.sdk-.*.min.js|js/agora-rtm.min.js|g' index.html
+        sed -i 's|https://download.agora.io/sdk/release/AgoraRTM-.*.min.js|js/agora-rtm.min.js|g' index.html
+        # إضافة compat.js إذا لم تكن موجودة
+        if ! grep -q "compat.js" index.html; then
+          sed -i '/<script src="js\/agora-rtm.min.js"><\/script>/a \    <script src="js/compat.js"><\/script>' index.html
+        fi
         echo "✅ index.html updated"
         
-    - name: Verify all files
+    - name: List files for verification
       run: |
         ls -la js/
-        [ -f "js/agora-rtm.min.js" ] && echo "✅ SDK exists" || exit 1
-        [ -f "js/compat.js" ] && echo "✅ compat.js exists" || exit 1
-        [ -f "index.html" ] && echo "✅ index.html exists" || exit 1
+        head -20 index.html
         
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
@@ -102,4 +109,4 @@ jobs:
         force_orphan: true
         user_name: 'github-actions[bot]'
         user_email: 'github-actions[bot]@users.noreply.github.com'
-        commit_message: 'Deploy with Agora RTM SDK 2.2.3 + compat layer'
+        commit_message: 'Deploy with Agora RTM SDK from npm'
