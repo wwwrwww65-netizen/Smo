@@ -43,7 +43,8 @@ class GameManager {
         this.letterDisplay = document.getElementById('random-letter-display');
         this.scoreTableBody = document.querySelector('#score-table tbody');
         this.hostControls = document.getElementById('host-controls');
-        this.copyToast = document.getElementById('copy-toast');
+        this.mainToast = document.getElementById('main-toast');
+        this.btnJoinRoom = document.getElementById('btn-join-room');
     }
 
     initEvents() {
@@ -79,13 +80,22 @@ class GameManager {
         }
     }
 
+    showToast(message) {
+        this.mainToast.textContent = message;
+        this.mainToast.classList.remove('hidden');
+        if (this.toastTimeout) clearTimeout(this.toastTimeout);
+        this.toastTimeout = setTimeout(() => {
+            this.mainToast.classList.add('hidden');
+        }, 3500);
+    }
+
     generateId() {
         return Math.floor(100000000 + Math.random() * 900000000).toString();
     }
 
     createRoom(retryCount = 0) {
         this.playerName = this.playerNameInput.value.trim();
-        if (!this.playerName) return alert("الرجاء إدخال اسمك أولاً");
+        if (!this.playerName) return this.showToast("الرجاء إدخال اسمك أولاً");
 
         if (this.peer) this.peer.destroy();
 
@@ -108,9 +118,10 @@ class GameManager {
         this.peer.on('error', (err) => {
             if (err.type === 'unavailable-id' && retryCount < 5) {
                 setTimeout(() => this.createRoom(retryCount + 1), 500);
+            } else if (err.type === 'network' || err.type === 'disconnected') {
+                this.showToast("انقطع الاتصال بالشبكة، يرجى المحاولة مرة أخرى");
             } else {
-                alert("خطأ في PeerJS: " + err.type);
-                location.reload();
+                this.showToast("فشل إنشاء الغرفة، يرجى التأكد من اتصالك بالإنترنت والمحاولة مجدداً");
             }
         });
     }
@@ -118,11 +129,22 @@ class GameManager {
     joinRoom() {
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
-        if (!this.playerName || !this.roomId) return alert("يرجى إدخال اسمك ورمز الغرفة");
+        if (!this.playerName || !this.roomId) return this.showToast("يرجى إدخال اسمك ورمز الغرفة");
 
         this.isHost = false;
+
+        // UI Loading State
+        this.btnJoinRoom.disabled = true;
+        const originalText = this.btnJoinRoom.innerHTML;
+        this.btnJoinRoom.innerHTML = `<span>جارٍ الانضمام...</span> <div class="spinner"></div>`;
+
         if (this.peer) this.peer.destroy();
         this.peer = new Peer();
+
+        const resetJoinBtn = () => {
+            this.btnJoinRoom.disabled = false;
+            this.btnJoinRoom.innerHTML = originalText;
+        };
 
         this.peer.on('open', () => {
             this.conn = this.peer.connect(this.roomId);
@@ -130,8 +152,14 @@ class GameManager {
         });
 
         this.peer.on('error', (err) => {
-            alert("فشل الانضمام: " + err.type);
-            location.reload();
+            resetJoinBtn();
+            if (err.type === 'peer-unavailable') {
+                this.showToast("عذراً، رمز الغرفة غير صحيح أو أن المضيف غادر اللعبة");
+            } else if (err.type === 'network' || err.type === 'disconnected') {
+                this.showToast("انقطع الاتصال بالشبكة، يرجى المحاولة مرة أخرى");
+            } else {
+                this.showToast("فشل الانضمام: " + err.type);
+            }
         });
     }
 
@@ -194,8 +222,8 @@ class GameManager {
         });
 
         conn.on('close', () => {
-            alert("انقطع الاتصال بالمضيف");
-            this.quitGame();
+            this.showToast("انقطع الاتصال بالمضيف");
+            setTimeout(() => this.quitGame(), 2000);
         });
     }
 
@@ -216,8 +244,7 @@ class GameManager {
 
     copyRoomId() {
         navigator.clipboard.writeText(this.roomId).then(() => {
-            this.copyToast.classList.remove('hidden');
-            setTimeout(() => this.copyToast.classList.add('hidden'), 2000);
+            this.showToast("تم النسخ!");
         });
     }
 
