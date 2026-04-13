@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة اسم حيوان نبات جماد بلاد</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- قسم الصفحة الرئيسية -->
+        <section id="section-home" class="active">
+            <h1>لعبة اسم حيوان نبات</h1>
+            <div class="card">
+                <input type="text" id="player-name" placeholder="أدخل اسمك هنا..." aria-label="اسم اللاعب">
+                <button id="btn-create-room" class="btn-primary">إنشاء غرفة</button>
+                <div class="separator">أو</div>
+                <input type="text" id="room-id-input" placeholder="أدخل رمز الغرفة..." aria-label="رمز الغرفة">
+                <button id="btn-join-room" class="btn-secondary">انضمام</button>
+            </div>
+        </section>
+
+        <!-- قسم الانتظار (اللوبي) -->
+        <section id="section-lobby">
+            <h2>غرفة الانتظار</h2>
+            <div class="card">
+                <p>رمز الغرفة: <strong id="display-room-id">...</strong></p>
+                <h3>اللاعبون المنضمون:</h3>
+                <ul id="player-list">
+                    <!-- قائمة اللاعبين تظهر هنا -->
+                </ul>
+                <button id="btn-ready" class="btn-success">أنا مستعد</button>
+            </div>
+        </section>
+
+        <!-- قسم اللعبة -->
+        <section id="section-game">
+            <div class="game-header">
+                <div id="random-letter-display">؟</div>
+                <div id="timer-display"></div>
+            </div>
+            <div class="card game-inputs">
+                <div class="input-group">
+                    <label>اسم</label>
+                    <input type="text" id="input-name" class="game-field">
+                </div>
+                <div class="input-group">
+                    <label>حيوان</label>
+                    <input type="text" id="input-animal" class="game-field">
+                </div>
+                <div class="input-group">
+                    <label>نبات</label>
+                    <input type="text" id="input-plant" class="game-field">
+                </div>
+                <div class="input-group">
+                    <label>جماد</label>
+                    <input type="text" id="input-object" class="game-field">
+                </div>
+                <div class="input-group">
+                    <label>بلاد</label>
+                    <input type="text" id="input-country" class="game-field">
+                </div>
+            </div>
+            <button id="btn-stop" class="btn-stop">انتهيت!</button>
+        </section>
+
+        <!-- قسم النتائج -->
+        <section id="section-score">
+            <h2>نتائج الجولة</h2>
+            <div class="card">
+                <div class="table-container">
+                    <table id="score-table">
+                        <thead>
+                            <tr>
+                                <th>اللاعب</th>
+                                <th>اسم</th>
+                                <th>حيوان</th>
+                                <th>نبات</th>
+                                <th>جماد</th>
+                                <th>بلاد</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- النتائج تظهر هنا -->
+                        </tbody>
+                    </table>
+                </div>
+                <button id="btn-new-round" class="btn-primary">جولة جديدة</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- مكتبة PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- منطق اللعبة -->
+    <script src="js/app.js"></script>
+</body>
+</html>
