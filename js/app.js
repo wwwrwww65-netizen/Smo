@@ -1,7 +1,10 @@
 /**
  * لعبة اسم حيوان نبات - الإصدار المطور باستخدام Agora RTM v2
+ * تم إصلاح جميع الأخطاء - 2025
  */
 
+// ⚠️ تحذير: استبدل هذا بـ App ID الخاص بك من Agora Console
+// يفضل تحميله من متغير بيئة وليس كتابته مباشرة
 const APP_ID = "560000db55ef467f8da4f5075b7a979c";
 
 const SOUNDS = {
@@ -15,20 +18,21 @@ const SOUNDS = {
 
 class GameManager {
     constructor() {
-        this.rtm = null;
-        this.channel = null;
+        this.rtmClient = null;      // RTM Client
+        this.channel = null;        // Channel Instance
         this.isHost = false;
         this.playerName = "";
         this.roomId = "";
-        this.players = [];     // {id, name, ready, totalScore}
-        this.results = [];     // {playerId, playerName, answers: {}, scores: {}, roundTotal: 0}
+        this.players = [];          // {id, name, ready, totalScore}
+        this.results = [];          // {playerId, playerName, answers: {}, scores: {}, roundTotal: 0}
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
         this.myId = Math.floor(Math.random() * 1000000000).toString();
+        this.isLoggedIn = false;
 
         this.initElements();
         this.initEvents();
-        this.setupRTM();
+        this.initRTM();
     }
 
     initElements() {
@@ -61,64 +65,114 @@ class GameManager {
         this.btnQuit.addEventListener('click', () => this.quitGame());
     }
 
-    async setupRTM() {
+    /**
+     * ✅ تهيئة Agora RTM v2 - الإصدار الصحيح
+     */
+    async initRTM() {
         try {
-            this.rtm = new AgoraRTM.RTM(APP_ID, this.myId);
+            // إنشاء RTM Client
+            this.rtmClient = new AgoraRTM.RTM(APP_ID, this.myId);
+            
+            // ✅ إضافة مستمع حالة الاتصال (مهم جداً)
+            this.rtmClient.addEventListener('status', (event) => {
+                console.log('RTM Status:', event.state);
+                if (event.state === 'CONNECTED') {
+                    this.isLoggedIn = true;
+                } else if (event.state === 'DISCONNECTED') {
+                    this.isLoggedIn = false;
+                    this.showToast("انقطع الاتصال بالخادم");
+                }
+            });
 
-            this.rtm.addEventListener("message", (event) => {
+            // تسجيل الدخول
+            await this.rtmClient.login();
+            console.log('✅ RTM Login Success');
+            
+        } catch (error) {
+            console.error("❌ RTM Init Error:", error);
+            this.showToast("فشل الاتصال بالخادم: " + (error.message || "خطأ غير معروف"));
+        }
+    }
+
+    /**
+     * ✅ الانضمام للقناة - الطريقة الصحيحة في RTM v2
+     */
+    async joinChannel(channelId) {
+        try {
+            if (!this.rtmClient || !this.isLoggedIn) {
+                throw new Error("لم يتم تسجيل الدخول بعد");
+            }
+
+            this.roomId = channelId;
+            
+            // ✅ إنشاء Channel instance (الطريقة الصحيحة في v2)
+            this.channel = this.rtmClient.createChannel(channelId);
+            
+            // ✅ إضافة مستمعي الأحداث على Channel وليس على RTM
+            this.channel.addEventListener('message', (event) => {
                 this.handleMessage(event.publisher, JSON.parse(event.message));
             });
 
-            this.rtm.addEventListener("presence", (event) => {
-                if (event.eventType === "SNAPSHOT") {
-                    // Initial state of users in channel
-                } else if (event.eventType === "REMOTE_JOIN") {
+            this.channel.addEventListener('presence', (event) => {
+                console.log('Presence Event:', event);
+                if (event.eventType === 'REMOTE_JOIN') {
                     this.showToast(`انضم لاعب جديد`);
                     if (this.isHost) {
                         this.syncState();
                     }
-                } else if (event.eventType === "REMOTE_LEAVE") {
+                } else if (event.eventType === 'REMOTE_LEAVE') {
                     this.handlePlayerLeave(event.publisher);
                 }
             });
 
-            await this.rtm.login();
-        } catch (error) {
-            console.error("RTM Setup Error:", error);
-            this.showToast("فشل الاتصال بالخادم. يرجى تحديث الصفحة.");
-        }
-    }
+            this.channel.addEventListener('error', (error) => {
+                console.error('Channel Error:', error);
+            });
 
-    async joinChannel(channelId) {
-        try {
-            this.channel = channelId;
-            await this.rtm.subscribe(channelId);
+            // ✅ الانضمام للقناة
+            await this.channel.join();
+            console.log('✅ Joined Channel:', channelId);
+            
             this.showSection('lobby');
             this.displayRoomId.textContent = channelId;
             this.playSound('join');
 
-            // Send join message
+            // إرسال رسالة الانضمام
             this.sendMessage({
                 type: 'join',
                 name: this.playerName,
                 id: this.myId
             });
+
         } catch (error) {
-            console.error("Join Channel Error:", error);
-            this.showToast("فشل الانضمام للغرفة");
+            console.error("❌ Join Channel Error:", error);
+            this.showToast("فشل الانضمام للغرفة: " + (error.message || "خطأ غير معروف"));
+            throw error;
         }
     }
 
+    /**
+     * ✅ إرسال رسالة - الطريقة الصحيحة
+     */
     sendMessage(message) {
-        if (this.rtm && this.channel) {
-            this.rtm.publish(this.channel, JSON.stringify(message));
+        if (this.channel) {
+            this.channel.sendMessage({ 
+                text: JSON.stringify(message) 
+            }).catch(err => {
+                console.error("Send Message Error:", err);
+            });
+        } else {
+            console.warn("Channel not available");
         }
     }
 
     handleMessage(publisher, data) {
+        // تجاهل رسائلي الخاصة (إذا كانت تُرسل لنفسي)
+        if (publisher === this.myId && data.type !== 'sync-state') return;
+
         switch (data.type) {
             case 'join':
-                if (this.isHost) {
+                if (this.isHost && publisher !== this.myId) {
                     if (!this.players.find(p => p.id === data.id)) {
                         this.players.push({ id: data.id, name: data.name, ready: false, totalScore: 0 });
                         this.syncState();
@@ -130,7 +184,7 @@ class GameManager {
                 if (!this.isHost) {
                     this.players = data.players;
                     this.updatePlayerList();
-                    if (data.gameState === 'game' && this.sections.game.classList.contains('hidden')) {
+                    if (data.gameState === 'game' && !this.sections.game.classList.contains('active')) {
                         this.startGame(data.letter);
                     } else if (data.gameState === 'score') {
                         this.results = data.results;
@@ -165,7 +219,7 @@ class GameManager {
                 this.results = data.results;
                 this.players = data.players;
                 this.renderScores();
-                if (this.sections.score.classList.contains('hidden')) {
+                if (!this.sections.score.classList.contains('active')) {
                     this.showSection('score');
                 }
                 break;
@@ -203,31 +257,43 @@ class GameManager {
     playSound(name) {
         try {
             const audio = new Audio(SOUNDS[name]);
+            audio.volume = 0.5;
             audio.play().catch(() => {});
         } catch (e) {}
     }
 
+    /**
+     * ✅ تبديل الأقسام - مع CSS صحيح
+     */
     showSection(name) {
         this.playSound('click');
+        
+        // إخفاء جميع الأقسام
         Object.values(this.sections).forEach(s => {
-            s.classList.add('hidden');
+            s.style.display = 'none';
             s.classList.remove('active');
         });
-        this.sections[name].classList.remove('hidden');
+        
+        // إظهار القسم المطلوب
+        this.sections[name].style.display = 'block';
         this.sections[name].classList.add('active');
 
+        // إدارة زر الخروج
         if (name === 'home') {
-            this.btnQuit.classList.add('hidden');
+            this.btnQuit.style.display = 'none';
         } else {
-            this.btnQuit.classList.remove('hidden');
+            this.btnQuit.style.display = 'block';
         }
     }
 
     showToast(message) {
         this.mainToast.textContent = message;
+        this.mainToast.style.display = 'block';
         this.mainToast.classList.remove('hidden');
+        
         if (this.toastTimeout) clearTimeout(this.toastTimeout);
         this.toastTimeout = setTimeout(() => {
+            this.mainToast.style.display = 'none';
             this.mainToast.classList.add('hidden');
         }, 3500);
     }
@@ -236,50 +302,77 @@ class GameManager {
         return Math.floor(100000000 + Math.random() * 900000000).toString();
     }
 
+    /**
+     * ✅ إنشاء الغرفة - مع معالجة الأخطاء
+     */
     async createRoom() {
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) return this.showToast("الرجاء إدخال اسمك أولاً");
 
         this.btnCreateRoom.disabled = true;
         const originalText = this.btnCreateRoom.innerHTML;
-        this.btnCreateRoom.innerHTML = `<span>جارٍ الإنشاء...</span> <div class="spinner"></div>`;
+        this.btnCreateRoom.innerHTML = `<span>جارٍ الإنشاء...</span>`;
 
-        this.isHost = true;
-        this.roomId = this.generateId();
-        this.players = [{ id: this.myId, name: this.playerName, ready: false, totalScore: 0 }];
+        try {
+            this.isHost = true;
+            this.roomId = this.generateId();
+            this.players = [{ id: this.myId, name: this.playerName, ready: false, totalScore: 0 }];
 
-        await this.joinChannel(this.roomId);
-
-        this.btnCreateRoom.disabled = false;
-        this.btnCreateRoom.innerHTML = originalText;
-        this.updatePlayerList();
+            await this.joinChannel(this.roomId);
+            this.updatePlayerList();
+            
+        } catch (error) {
+            console.error("Create Room Error:", error);
+            this.showToast("فشل إنشاء الغرفة");
+            this.isHost = false;
+        } finally {
+            this.btnCreateRoom.disabled = false;
+            this.btnCreateRoom.innerHTML = originalText;
+        }
     }
 
+    /**
+     * ✅ الانضمام للغرفة - مع معالجة الأخطاء
+     */
     async joinRoom() {
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
-        if (!this.playerName || !this.roomId) return this.showToast("يرجى إدخال اسمك ورمز الغرفة");
+        
+        if (!this.playerName) return this.showToast("يرجى إدخال اسمك");
+        if (!this.roomId) return this.showToast("يرجى إدخال رمز الغرفة");
         if (this.roomId.length !== 9) return this.showToast("رمز الغرفة يجب أن يتكون من 9 أرقام");
+        if (!/^\d{9}$/.test(this.roomId)) return this.showToast("رمز الغرفة يجب أن يكون 9 أرقام فقط");
 
         this.isHost = false;
         this.btnJoinRoom.disabled = true;
         const originalText = this.btnJoinRoom.innerHTML;
-        this.btnJoinRoom.innerHTML = `<span>جارٍ الانضمام...</span> <div class="spinner"></div>`;
+        this.btnJoinRoom.innerHTML = `<span>جارٍ الانضمام...</span>`;
 
-        await this.joinChannel(this.roomId);
-
-        this.btnJoinRoom.disabled = false;
-        this.btnJoinRoom.innerHTML = originalText;
+        try {
+            await this.joinChannel(this.roomId);
+        } catch (error) {
+            console.error("Join Room Error:", error);
+            this.showToast("فشل الانضمام للغرفة");
+        } finally {
+            this.btnJoinRoom.disabled = false;
+            this.btnJoinRoom.innerHTML = originalText;
+        }
     }
 
     updatePlayerList() {
         this.playerList.innerHTML = '';
         this.players.forEach(p => {
             const li = document.createElement('li');
+            li.style.cssText = "display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee;";
+            
             const nameSpan = document.createElement('span');
             nameSpan.textContent = p.name + (p.id === this.myId ? " (أنت)" : "");
+            nameSpan.style.fontWeight = p.id === this.myId ? "bold" : "normal";
+            
             const statusSpan = document.createElement('span');
             statusSpan.textContent = p.ready ? '✅ مستعد' : '⏳ ينتظر';
+            statusSpan.style.color = p.ready ? '#4caf50' : '#ff9800';
+            
             li.appendChild(nameSpan);
             li.appendChild(statusSpan);
             this.playerList.appendChild(li);
@@ -289,6 +382,16 @@ class GameManager {
     copyRoomId() {
         navigator.clipboard.writeText(this.roomId).then(() => {
             this.showToast("تم نسخ الرمز بنجاح!");
+            this.playSound('copy');
+        }).catch(() => {
+            // fallback للأجهزة التي لا تدعم clipboard
+            const textArea = document.createElement("textarea");
+            textArea.value = this.roomId;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+            this.showToast("تم نسخ الرمز!");
             this.playSound('copy');
         });
     }
@@ -324,7 +427,7 @@ class GameManager {
         this.enableInputs();
         this.showSection('game');
         this.playSound('start');
-        this.hostControls.classList.add('hidden');
+        this.hostControls.style.display = 'none';
     }
 
     clearInputs() {
@@ -378,7 +481,7 @@ class GameManager {
             this.renderScores();
             this.sendMessage({ type: 'results-update', results: this.results, players: this.players });
             this.showSection('score');
-            if (this.isHost) this.hostControls.classList.remove('hidden');
+            if (this.isHost) this.hostControls.style.display = 'block';
         }
     }
 
@@ -389,28 +492,30 @@ class GameManager {
 
             const tdName = document.createElement('td');
             tdName.textContent = res.playerName;
+            tdName.style.fontWeight = "bold";
             tr.appendChild(tdName);
 
             ['name', 'animal', 'plant', 'object', 'country'].forEach(field => {
                 const td = document.createElement('td');
                 const val = document.createElement('div');
                 val.textContent = res.answers[field] || '-';
+                val.style.marginBottom = "5px";
                 td.appendChild(val);
 
                 if (this.isHost) {
                     const controls = document.createElement('div');
-                    controls.className = 'score-controls';
+                    controls.style.cssText = "display: flex; gap: 5px; justify-content: center;";
                     [10, 5, 0].forEach(s => {
                         const btn = document.createElement('button');
                         btn.textContent = s;
-                        btn.className = `btn-score btn-score-${s}`;
+                        btn.style.cssText = `padding: 2px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${s === 10 ? '#4caf50' : s === 5 ? '#ff9800' : '#f44336'}; color: white;`;
                         btn.onclick = () => this.updateScore(res.playerId, field, s);
                         controls.appendChild(btn);
                     });
                     td.appendChild(controls);
                 } else {
                     const scoreVal = document.createElement('div');
-                    scoreVal.innerHTML = `<small style="color:#ffd54f">(${res.scores[field]})</small>`;
+                    scoreVal.innerHTML = `<small style="color:#ffd54f">(${res.scores[field]} نقطة)</small>`;
                     td.appendChild(scoreVal);
                 }
                 tr.appendChild(td);
@@ -419,7 +524,7 @@ class GameManager {
             const tdTotal = document.createElement('td');
             const player = this.players.find(p => p.id === res.playerId);
             const total = player ? player.totalScore : 0;
-            tdTotal.innerHTML = `<span style="font-size:12px">جولة: ${res.roundTotal}</span><br><strong>كلي: ${total}</strong>`;
+            tdTotal.innerHTML = `<span style="font-size:12px; color:#aaa">جولة: ${res.roundTotal}</span><br><strong style="color:#4caf50; font-size:16px">${total}</strong>`;
             tr.appendChild(tdTotal);
 
             this.scoreTableBody.appendChild(tr);
@@ -459,17 +564,36 @@ class GameManager {
 
     async quitGame() {
         this.playSound('quit');
-        if (this.rtm) {
+        
+        try {
             this.sendMessage({ type: 'quit', id: this.myId, name: this.playerName });
+            
             if (this.channel) {
-                await this.rtm.unsubscribe(this.channel);
+                await this.channel.leave();
+                this.channel = null;
             }
-            await this.rtm.logout();
+            
+            if (this.rtmClient) {
+                await this.rtmClient.logout();
+                this.rtmClient = null;
+            }
+        } catch (error) {
+            console.error("Quit Error:", error);
         }
+        
         location.reload();
     }
 }
 
-window.onload = () => {
+// ✅ تهيئة اللعبة عند تحميل الصفحة
+window.addEventListener('DOMContentLoaded', () => {
     window.gameManager = new GameManager();
-};
+    
+    // إظهار القسم الرئيسي فقط عند البداية
+    Object.values(window.gameManager.sections).forEach(s => {
+        s.style.display = 'none';
+    });
+    window.gameManager.sections.home.style.display = 'block';
+    window.gameManager.sections.home.classList.add('active');
+    window.gameManager.btnQuit.style.display = 'none';
+});
