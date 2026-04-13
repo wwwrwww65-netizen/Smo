@@ -2,21 +2,24 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>لعبة اسم حيوان نبات جماد بلاد</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
+        <!-- زر الانسحاب العالمي -->
+        <button id="btn-quit" class="btn-quit hidden">خروج 🚪</button>
+
         <!-- قسم الصفحة الرئيسية -->
         <section id="section-home" class="active">
             <h1>لعبة اسم حيوان نبات</h1>
             <div class="card">
-                <input type="text" id="player-name" placeholder="أدخل اسمك هنا..." aria-label="اسم اللاعب">
-                <button id="btn-create-room" class="btn-primary">إنشاء غرفة</button>
+                <input type="text" id="player-name" placeholder="أدخل اسمك هنا..." aria-label="اسم اللاعب" maxlength="15">
+                <button id="btn-create-room" class="btn-primary">إنشاء غرفة ✨</button>
                 <div class="separator">أو</div>
-                <input type="text" id="room-id-input" placeholder="أدخل رمز الغرفة..." aria-label="رمز الغرفة">
-                <button id="btn-join-room" class="btn-secondary">انضمام</button>
+                <input type="text" id="room-id-input" placeholder="أدخل رمز الغرفة..." aria-label="رمز الغرفة" maxlength="9">
+                <button id="btn-join-room" class="btn-secondary">انضمام 🤝</button>
             </div>
         </section>
 
@@ -24,12 +27,17 @@
         <section id="section-lobby">
             <h2>غرفة الانتظار</h2>
             <div class="card">
-                <p>رمز الغرفة: <strong id="display-room-id">...</strong></p>
+                <div class="room-info">
+                    <span>رمز الغرفة: <strong id="display-room-id">...</strong></span>
+                    <button id="btn-copy-id" class="btn-icon" title="نسخ الرمز">📋</button>
+                </div>
+                <div id="copy-toast" class="toast hidden">تم النسخ!</div>
+
                 <h3>اللاعبون المنضمون:</h3>
                 <ul id="player-list">
                     <!-- قائمة اللاعبين تظهر هنا -->
                 </ul>
-                <button id="btn-ready" class="btn-success">أنا مستعد</button>
+                <button id="btn-ready" class="btn-success">أنا مستعد 👍</button>
             </div>
         </section>
 
@@ -42,26 +50,26 @@
             <div class="card game-inputs">
                 <div class="input-group">
                     <label>اسم</label>
-                    <input type="text" id="input-name" class="game-field">
+                    <input type="text" id="input-name" class="game-field" autocomplete="off" placeholder="اسم...">
                 </div>
                 <div class="input-group">
                     <label>حيوان</label>
-                    <input type="text" id="input-animal" class="game-field">
+                    <input type="text" id="input-animal" class="game-field" autocomplete="off" placeholder="حيوان...">
                 </div>
                 <div class="input-group">
                     <label>نبات</label>
-                    <input type="text" id="input-plant" class="game-field">
+                    <input type="text" id="input-plant" class="game-field" autocomplete="off" placeholder="نبات...">
                 </div>
                 <div class="input-group">
                     <label>جماد</label>
-                    <input type="text" id="input-object" class="game-field">
+                    <input type="text" id="input-object" class="game-field" autocomplete="off" placeholder="جماد...">
                 </div>
                 <div class="input-group">
                     <label>بلاد</label>
-                    <input type="text" id="input-country" class="game-field">
+                    <input type="text" id="input-country" class="game-field" autocomplete="off" placeholder="بلاد...">
                 </div>
             </div>
-            <button id="btn-stop" class="btn-stop">انتهيت!</button>
+            <button id="btn-stop" class="btn-stop">انتهيت! 🔔</button>
         </section>
 
         <!-- قسم النتائج -->
@@ -78,6 +86,7 @@
                                 <th>نبات</th>
                                 <th>جماد</th>
                                 <th>بلاد</th>
+                                <th>المجموع</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -85,7 +94,10 @@
                         </tbody>
                     </table>
                 </div>
-                <button id="btn-new-round" class="btn-primary">جولة جديدة</button>
+                <div id="host-controls" class="hidden">
+                    <p class="host-hint">أنت المضيف: قم بتقييم الإجابات ثم اضغط الجولة التالية</p>
+                    <button id="btn-next-round" class="btn-primary">الجولة التالية 🔄</button>
+                </div>
             </div>
         </section>
     </div>
