@@ -1,0 +1,55 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Download Agora RTM SDK
+      run: |
+        mkdir -p js
+        # تحميل Agora v1.4.4 مباشرة
+        curl -L "https://download.agora.io/sdk/release/AgoraRTM-1.4.4.min.js" -o js/agora-rtm.min.js
+        # إنشاء نسخة احتياطية محلية
+        echo "✅ SDK downloaded successfully"
+        
+    - name: Validate Files
+      run: |
+        if [ ! -f "js/agora-rtm.min.js" ]; then
+          echo "❌ Failed to download SDK"
+          exit 1
+        fi
+        if [ ! -f "index.html" ]; then
+          echo "❌ index.html not found"
+          exit 1
+        fi
+        echo "✅ All files validated"
+        
+    - name: Update HTML to use local SDK
+      run: |
+        sed -i 's|https://unpkg.com/agora-rtm-sdk@1.4.4/agora-rtm.min.js|js/agora-rtm.min.js|g' index.html
+        sed -i 's|https://cdn.jsdelivr.net/npm/agora-rtm-sdk@2.2.0/agora-rtm.min.js|js/agora-rtm.min.js|g' index.html
+        sed -i 's|https://download.agora.io/sdk/release/AgoraRTM-1.4.4.min.js|js/agora-rtm.min.js|g' index.html
+        echo "✅ HTML updated to use local SDK"
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./
+        force_orphan: true
