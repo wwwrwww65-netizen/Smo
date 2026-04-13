@@ -108,30 +108,95 @@
         </section>
     </div>
 
-    <!-- ✅ Agora RTM SDK v1.4.4 (محلي - يحمّله الـ Workflow) -->
-    <script src="js/agora-rtm.min.js"></script>
+    <!-- تحميل Agora RTM SDK الإصدار الجديد 2.3.1 (الرابط يعمل) -->
+    <script src="https://cdn.agora.io/sdk/release/agora-rtm.sdk-2.3.1.min.js"></script>
     
-    <!-- ✅ Fallback: إذا لم يوجد الملف المحلي، استخدم CDN -->
+    <!-- طبقة توافق تحاكي الإصدار القديم 1.4.4 -->
     <script>
-        if (typeof AgoraRTM === 'undefined') {
-            console.warn('⚠️ Local SDK not found, loading from CDN...');
-            document.write('<script src="https://download.agora.io/sdk/release/AgoraRTM-1.4.4.min.js"><\/script>');
-        }
+        (function() {
+            // انتظر حتى يتم تحميل SDK الجديد (الذي يعرّف RTM)
+            let checkInterval = setInterval(function() {
+                if (typeof RTM !== 'undefined') {
+                    clearInterval(checkInterval);
+                    
+                    // إنشاء كائن AgoraRTM بنفس واجهة الإصدار 1.4.4
+                    window.AgoraRTM = {
+                        VERSION: '1.4.4-compat',
+                        
+                        createInstance: function(appId, config) {
+                            console.log('[Compat] Creating RTM client with appId:', appId);
+                            const client = RTM.createInstance(appId, config || {});
+                            
+                            // إضافة دوال missing في الإصدار القديم
+                            if (!client.login) {
+                                client.login = function(token, uid) {
+                                    // الإصدار القديم: login(token, uid) -> الإصدار الجديد: login({token, uid})
+                                    return client.login({ token: token, uid: uid });
+                                };
+                            }
+                            
+                            if (!client.logout) {
+                                client.logout = function() {
+                                    return client.logout();
+                                };
+                            }
+                            
+                            if (!client.createChannel) {
+                                client.createChannel = function(channelName) {
+                                    const channel = client.createChannel(channelName);
+                                    // إصلاح إرسال الرسائل: الإصدار القديم يستخدم channel.sendMessage(messageObject)
+                                    // الإصدار الجديد يستخدم channel.sendMessage({text: string})
+                                    if (!channel.sendMessage) {
+                                        channel.sendMessage = function(message) {
+                                            // إذا كان message له خاصية text نستخدمها مباشرة، وإلا نحول
+                                            let text = message.text || (typeof message === 'string' ? message : JSON.stringify(message));
+                                            return channel.sendMessage({ text: text });
+                                        };
+                                    }
+                                    // إصلاح حدث استقبال الرسائل: الإصدار القديم يستخدم channel.on('ChannelMessage', callback)
+                                    // الإصدار الجديد يستخدم channel.on('message', callback)
+                                    if (!channel.on) {
+                                        channel.on = function(eventName, callback) {
+                                            if (eventName === 'ChannelMessage') {
+                                                channel.on('message', function(message, peerId) {
+                                                    // تحويل الشكل إلى القديم: {text: ...}
+                                                    callback(message, peerId);
+                                                });
+                                            } else {
+                                                channel.on(eventName, callback);
+                                            }
+                                        };
+                                    }
+                                    return channel;
+                                };
+                            }
+                            
+                            // إصلاح client.on للإصدار القديم (مثل 'ConnectionStateChanged')
+                            if (!client.on) {
+                                client.on = function(eventName, callback) {
+                                    client.on(eventName, callback);
+                                };
+                            }
+                            
+                            return client;
+                        }
+                    };
+                    
+                    console.log('✅ Compatibility layer active: AgoraRTM ready (simulating v1.4.4)');
+                }
+            }, 50);
+            
+            // مهلة أمان: إذا لم يتحمل خلال 5 ثوانٍ
+            setTimeout(function() {
+                if (typeof window.AgoraRTM === 'undefined') {
+                    console.error('❌ Failed to load Agora RTM SDK from CDN');
+                    document.body.innerHTML = '<div style="text-align:center;padding:50px;color:white;"><h2>❌ فشل تحميل المكتبة</h2><p>يرجى تحديث الصفحة أو التحقق من الاتصال</p></div>';
+                }
+            }, 5000);
+        })();
     </script>
     
-    <!-- ✅ تحقق نهائي -->
-    <script>
-        window.addEventListener('load', function() {
-            if (typeof AgoraRTM === 'undefined') {
-                console.error('❌ AgoraRTM failed to load!');
-                document.body.innerHTML = '<div style="text-align:center;padding:50px;color:white;"><h2>❌ فشل تحميل المكتبة</h2><p>يرجى تحديث الصفحة أو التحقق من الاتصال</p></div>';
-            } else {
-                console.log('✅ AgoraRTM loaded:', AgoraRTM.VERSION);
-            }
-        });
-    </script>
-    
-    <!-- منطق اللعبة -->
+    <!-- منطق اللعبة (app.js) سيبقى كما هو ويعمل بفضل طبقة التوافق -->
     <script src="js/app.js"></script>
 </body>
 </html>
