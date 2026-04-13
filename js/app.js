@@ -1,21 +1,22 @@
 /**
- * لعبة اسم حيوان نبات - الإصدار الاحترافي
- * تطوير: Senior Frontend Developer
- * المتطلبات: 9 أرقام للغرفة، تصميم متجاوب، نظام نقاط تراكمي، تقييم يدوي، تأثيرات صوتية
+ * لعبة اسم حيوان نبات - الإصدار المطور باستخدام Agora RTM v2
  */
 
+const APP_ID = "560000db55ef467f8da4f5075b7a979c";
+
 const SOUNDS = {
-    click: 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBAAAAABAAEAIlYAAClWAAABAAgAZGF0YREAAACAgICAgICAgICAgICAgICA',
-    join: 'data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAIlYAAClWAAABAAgAZGF0YQYAAACAgICAgA==',
-    start: 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBAAAAABAAEAIlYAAClWAAABAAgAZGF0YREAAACAgICAgICAgICAgICAgICA',
-    buzzer: 'data:audio/wav;base64,UklGRkYAAABXQVZFZm10IBAAAAABAAEAIlYAAClWAAABAAgAZGF0YToAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA'
+    click: 'https://www.soundjay.com/buttons/sounds/button-16.mp3',
+    join: 'https://www.soundjay.com/buttons/sounds/button-3.mp3',
+    start: 'https://www.soundjay.com/buttons/sounds/button-09.mp3',
+    buzzer: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3',
+    copy: 'https://www.soundjay.com/buttons/sounds/button-50.mp3',
+    quit: 'https://www.soundjay.com/buttons/sounds/button-10.mp3'
 };
 
 class GameManager {
     constructor() {
-        this.peer = null;
-        this.connections = []; // للمضيف
-        this.conn = null;      // للضيف
+        this.rtm = null;
+        this.channel = null;
         this.isHost = false;
         this.playerName = "";
         this.roomId = "";
@@ -23,9 +24,11 @@ class GameManager {
         this.results = [];     // {playerId, playerName, answers: {}, scores: {}, roundTotal: 0}
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
+        this.myId = Math.floor(Math.random() * 1000000000).toString();
 
         this.initElements();
         this.initEvents();
+        this.setupRTM();
     }
 
     initElements() {
@@ -45,16 +48,156 @@ class GameManager {
         this.hostControls = document.getElementById('host-controls');
         this.mainToast = document.getElementById('main-toast');
         this.btnJoinRoom = document.getElementById('btn-join-room');
+        this.btnCreateRoom = document.getElementById('btn-create-room');
     }
 
     initEvents() {
-        document.getElementById('btn-create-room').addEventListener('click', () => this.createRoom());
-        document.getElementById('btn-join-room').addEventListener('click', () => this.joinRoom());
+        this.btnCreateRoom.addEventListener('click', () => this.createRoom());
+        this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
         document.getElementById('btn-ready').addEventListener('click', () => this.setReady());
         document.getElementById('btn-stop').addEventListener('click', () => this.stopGame());
         document.getElementById('btn-next-round').addEventListener('click', () => this.nextRound());
         document.getElementById('btn-copy-id').addEventListener('click', () => this.copyRoomId());
         this.btnQuit.addEventListener('click', () => this.quitGame());
+    }
+
+    async setupRTM() {
+        try {
+            this.rtm = new AgoraRTM.RTM(APP_ID, this.myId);
+
+            this.rtm.addEventListener("message", (event) => {
+                this.handleMessage(event.publisher, JSON.parse(event.message));
+            });
+
+            this.rtm.addEventListener("presence", (event) => {
+                if (event.eventType === "SNAPSHOT") {
+                    // Initial state of users in channel
+                } else if (event.eventType === "REMOTE_JOIN") {
+                    this.showToast(`انضم لاعب جديد`);
+                    if (this.isHost) {
+                        this.syncState();
+                    }
+                } else if (event.eventType === "REMOTE_LEAVE") {
+                    this.handlePlayerLeave(event.publisher);
+                }
+            });
+
+            await this.rtm.login();
+        } catch (error) {
+            console.error("RTM Setup Error:", error);
+            this.showToast("فشل الاتصال بالخادم. يرجى تحديث الصفحة.");
+        }
+    }
+
+    async joinChannel(channelId) {
+        try {
+            this.channel = channelId;
+            await this.rtm.subscribe(channelId);
+            this.showSection('lobby');
+            this.displayRoomId.textContent = channelId;
+            this.playSound('join');
+
+            // Send join message
+            this.sendMessage({
+                type: 'join',
+                name: this.playerName,
+                id: this.myId
+            });
+        } catch (error) {
+            console.error("Join Channel Error:", error);
+            this.showToast("فشل الانضمام للغرفة");
+        }
+    }
+
+    sendMessage(message) {
+        if (this.rtm && this.channel) {
+            this.rtm.publish(this.channel, JSON.stringify(message));
+        }
+    }
+
+    handleMessage(publisher, data) {
+        switch (data.type) {
+            case 'join':
+                if (this.isHost) {
+                    if (!this.players.find(p => p.id === data.id)) {
+                        this.players.push({ id: data.id, name: data.name, ready: false, totalScore: 0 });
+                        this.syncState();
+                        this.updatePlayerList();
+                    }
+                }
+                break;
+            case 'sync-state':
+                if (!this.isHost) {
+                    this.players = data.players;
+                    this.updatePlayerList();
+                    if (data.gameState === 'game' && this.sections.game.classList.contains('hidden')) {
+                        this.startGame(data.letter);
+                    } else if (data.gameState === 'score') {
+                        this.results = data.results;
+                        this.renderScores();
+                        this.showSection('score');
+                    }
+                }
+                break;
+            case 'ready':
+                if (this.isHost) {
+                    const p = this.players.find(p => p.id === data.id);
+                    if (p) p.ready = true;
+                    this.updatePlayerList();
+                    this.syncState();
+                    this.checkAllReady();
+                }
+                break;
+            case 'start-game':
+                this.startGame(data.letter);
+                break;
+            case 'stop-game':
+                this.disableInputs();
+                this.submitAnswers();
+                this.playSound('buzzer');
+                break;
+            case 'submit-answers':
+                if (this.isHost) {
+                    this.handleAnswers(data.id, data.answers);
+                }
+                break;
+            case 'results-update':
+                this.results = data.results;
+                this.players = data.players;
+                this.renderScores();
+                if (this.sections.score.classList.contains('hidden')) {
+                    this.showSection('score');
+                }
+                break;
+            case 'quit':
+                this.showToast(`انسحب اللاعب ${data.name}`);
+                this.handlePlayerLeave(data.id);
+                break;
+        }
+    }
+
+    handlePlayerLeave(id) {
+        this.players = this.players.filter(p => p.id !== id);
+        this.updatePlayerList();
+        if (this.isHost) {
+            this.syncState();
+        }
+    }
+
+    syncState() {
+        if (this.isHost) {
+            let gameState = 'lobby';
+            if (this.sections.game.classList.contains('active')) gameState = 'game';
+            if (this.sections.score.classList.contains('active')) gameState = 'score';
+
+            this.sendMessage({
+                type: 'sync-state',
+                players: this.players,
+                gameState: gameState,
+                letter: this.currentLetter,
+                results: this.results
+            });
+        }
     }
 
     playSound(name) {
@@ -93,197 +236,40 @@ class GameManager {
         return Math.floor(100000000 + Math.random() * 900000000).toString();
     }
 
-    createRoom(retryCount = 0) {
+    async createRoom() {
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) return this.showToast("الرجاء إدخال اسمك أولاً");
 
-        const btnCreate = document.getElementById('btn-create-room');
-        btnCreate.disabled = true;
-        const originalText = btnCreate.innerHTML;
-        btnCreate.innerHTML = `<span>جارٍ الإنشاء...</span> <div class="spinner"></div>`;
+        this.btnCreateRoom.disabled = true;
+        const originalText = this.btnCreateRoom.innerHTML;
+        this.btnCreateRoom.innerHTML = `<span>جارٍ الإنشاء...</span> <div class="spinner"></div>`;
 
-        const resetBtn = () => {
-            btnCreate.disabled = false;
-            btnCreate.innerHTML = originalText;
-        };
-
-        if (this.peer) this.peer.destroy();
-
-        const id = this.generateId();
-        this.peer = new Peer(id, {
-            debug: 1,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        });
         this.isHost = true;
+        this.roomId = this.generateId();
+        this.players = [{ id: this.myId, name: this.playerName, ready: false, totalScore: 0 }];
 
-        this.peer.on('open', (id) => {
-            resetBtn();
-            this.roomId = id;
-            this.displayRoomId.textContent = id;
-            this.players = [{ id: id, name: this.playerName, ready: false, totalScore: 0 }];
-            this.updatePlayerList();
-            this.showSection('lobby');
-        });
+        await this.joinChannel(this.roomId);
 
-        this.peer.on('connection', (conn) => {
-            this.handleHostConnection(conn);
-        });
-
-        this.peer.on('error', (err) => {
-            resetBtn();
-            if (err.type === 'unavailable-id' && retryCount < 5) {
-                setTimeout(() => this.createRoom(retryCount + 1), 500);
-            } else if (err.type === 'network' || err.type === 'disconnected') {
-                this.showToast("انقطع الاتصال بالشبكة، يرجى المحاولة مرة أخرى");
-            } else {
-                this.showToast("فشل إنشاء الغرفة، يرجى التأكد من اتصالك بالإنترنت والمحاولة مجدداً");
-            }
-        });
+        this.btnCreateRoom.disabled = false;
+        this.btnCreateRoom.innerHTML = originalText;
+        this.updatePlayerList();
     }
 
-    joinRoom() {
+    async joinRoom() {
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
         if (!this.playerName || !this.roomId) return this.showToast("يرجى إدخال اسمك ورمز الغرفة");
+        if (this.roomId.length !== 9) return this.showToast("رمز الغرفة يجب أن يتكون من 9 أرقام");
 
         this.isHost = false;
-
-        // UI Loading State
         this.btnJoinRoom.disabled = true;
         const originalText = this.btnJoinRoom.innerHTML;
         this.btnJoinRoom.innerHTML = `<span>جارٍ الانضمام...</span> <div class="spinner"></div>`;
 
-        const resetJoinBtn = () => {
-            this.btnJoinRoom.disabled = false;
-            this.btnJoinRoom.innerHTML = originalText;
-            if (this.joinTimeout) {
-                clearTimeout(this.joinTimeout);
-                this.joinTimeout = null;
-            }
-        };
+        await this.joinChannel(this.roomId);
 
-        if (this.peer) this.peer.destroy();
-
-        this.peer = new Peer({
-            debug: 1,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
-        });
-
-        // Timeout for the joining process
-        this.joinTimeout = setTimeout(() => {
-            if (!this.conn || !this.conn.open) {
-                this.showToast("استغرق الاتصال وقتاً طويلاً. تأكد من وجود المضيف ومن جودة الإنترنت.");
-                resetJoinBtn();
-                if (this.peer) this.peer.destroy();
-            }
-        }, 15000);
-
-        this.peer.on('open', () => {
-            this.conn = this.peer.connect(this.roomId, {
-                reliable: true
-            });
-
-            this.conn.on('error', (err) => {
-                resetJoinBtn();
-                this.showToast("حدث خطأ أثناء الاتصال بالطرف الآخر");
-                console.error("Connection Error:", err);
-            });
-
-            this.handleGuestConnection(this.conn, resetJoinBtn);
-        });
-
-        this.peer.on('error', (err) => {
-            resetJoinBtn();
-            if (err.type === 'peer-unavailable') {
-                this.showToast("عذراً، رمز الغرفة غير صحيح أو أن المضيف غادر اللعبة");
-            } else if (err.type === 'network' || err.type === 'disconnected') {
-                this.showToast("انقطع الاتصال بالشبكة، يرجى المحاولة مرة أخرى");
-            } else {
-                this.showToast("فشل الانضمام، تأكد من الرمز وحاول مجدداً");
-            }
-            console.error("Peer Error:", err);
-        });
-    }
-
-    handleHostConnection(conn) {
-        conn.on('open', () => {
-            this.playSound('join');
-            conn.on('data', (data) => {
-                if (data.type === 'join') {
-                    this.players.push({ id: conn.peer, name: data.name, ready: false, totalScore: 0 });
-                    this.connections.push(conn);
-                    this.broadcast({ type: 'players-update', players: this.players });
-                    this.updatePlayerList();
-                } else if (data.type === 'ready') {
-                    const p = this.players.find(p => p.id === conn.peer);
-                    if (p) p.ready = true;
-                    this.updatePlayerList();
-                    this.broadcast({ type: 'players-update', players: this.players });
-                    this.checkAllReady();
-                } else if (data.type === 'stop') {
-                    this.broadcastStop();
-                } else if (data.type === 'submit-answers') {
-                    this.handleAnswers(conn.peer, data.answers);
-                }
-            });
-        });
-
-        conn.on('close', () => {
-            this.players = this.players.filter(p => p.id !== conn.peer);
-            this.connections = this.connections.filter(c => c.peer !== conn.peer);
-            this.updatePlayerList();
-            this.broadcast({ type: 'players-update', players: this.players });
-        });
-    }
-
-    handleGuestConnection(conn, resetBtnCallback) {
-        conn.on('open', () => {
-            if (resetBtnCallback) resetBtnCallback();
-            conn.send({ type: 'join', name: this.playerName });
-            this.showSection('lobby');
-            this.displayRoomId.textContent = this.roomId;
-        });
-
-        conn.on('data', (data) => {
-            if (data.type === 'players-update') {
-                this.players = data.players;
-                this.updatePlayerList();
-            } else if (data.type === 'start-game') {
-                this.startGame(data.letter);
-            } else if (data.type === 'stop-game') {
-                this.disableInputs();
-                this.submitAnswers();
-                this.playSound('buzzer');
-            } else if (data.type === 'results-update') {
-                this.results = data.results;
-                this.players = data.players;
-                this.renderScores();
-                if (this.sections.score.classList.contains('hidden')) {
-                    this.showSection('score');
-                }
-            }
-        });
-
-        conn.on('close', () => {
-            this.showToast("انقطع الاتصال بالمضيف");
-            setTimeout(() => this.quitGame(), 2000);
-        });
-    }
-
-    broadcast(data) {
-        this.connections.forEach(c => {
-            if (c.open) c.send(data);
-        });
+        this.btnJoinRoom.disabled = false;
+        this.btnJoinRoom.innerHTML = originalText;
     }
 
     updatePlayerList() {
@@ -291,7 +277,7 @@ class GameManager {
         this.players.forEach(p => {
             const li = document.createElement('li');
             const nameSpan = document.createElement('span');
-            nameSpan.textContent = p.name;
+            nameSpan.textContent = p.name + (p.id === this.myId ? " (أنت)" : "");
             const statusSpan = document.createElement('span');
             statusSpan.textContent = p.ready ? '✅ مستعد' : '⏳ ينتظر';
             li.appendChild(nameSpan);
@@ -302,21 +288,20 @@ class GameManager {
 
     copyRoomId() {
         navigator.clipboard.writeText(this.roomId).then(() => {
-            this.showToast("تم النسخ!");
+            this.showToast("تم نسخ الرمز بنجاح!");
+            this.playSound('copy');
         });
     }
 
     setReady() {
         if (this.isHost) {
-            const p = this.players.find(p => p.id === this.roomId);
+            const p = this.players.find(p => p.id === this.myId);
             if (p) p.ready = true;
             this.updatePlayerList();
-            this.broadcast({ type: 'players-update', players: this.players });
+            this.syncState();
             this.checkAllReady();
-        } else if (this.conn && this.conn.open) {
-            this.conn.send({ type: 'ready' });
         } else {
-            return this.showToast("انقطع الاتصال بالمضيف");
+            this.sendMessage({ type: 'ready', id: this.myId });
         }
         const btnReady = document.getElementById('btn-ready');
         btnReady.disabled = true;
@@ -326,7 +311,7 @@ class GameManager {
     checkAllReady() {
         if (this.players.length > 1 && this.players.every(p => p.ready)) {
             const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
-            this.broadcast({ type: 'start-game', letter: letter });
+            this.sendMessage({ type: 'start-game', letter: letter });
             this.startGame(letter);
         }
     }
@@ -357,18 +342,7 @@ class GameManager {
     }
 
     stopGame() {
-        if (this.isHost) {
-            this.broadcastStop();
-        } else if (this.conn && this.conn.open) {
-            this.conn.send({ type: 'stop' });
-        }
-    }
-
-    broadcastStop() {
-        this.playSound('buzzer');
-        this.disableInputs();
-        this.submitAnswers();
-        this.broadcast({ type: 'stop-game' });
+        this.sendMessage({ type: 'stop-game' });
     }
 
     submitAnswers() {
@@ -380,9 +354,9 @@ class GameManager {
             country: document.getElementById('input-country').value.trim()
         };
         if (this.isHost) {
-            this.handleAnswers(this.roomId, answers);
-        } else if (this.conn && this.conn.open) {
-            this.conn.send({ type: 'submit-answers', answers: answers });
+            this.handleAnswers(this.myId, answers);
+        } else {
+            this.sendMessage({ type: 'submit-answers', id: this.myId, answers: answers });
         }
     }
 
@@ -390,6 +364,8 @@ class GameManager {
         if (this.results.find(r => r.playerId === playerId)) return;
 
         const player = this.players.find(p => p.id === playerId);
+        if (!player) return;
+
         this.results.push({
             playerId: playerId,
             playerName: player.name,
@@ -400,7 +376,7 @@ class GameManager {
 
         if (this.results.length === this.players.length) {
             this.renderScores();
-            this.broadcast({ type: 'results-update', results: this.results, players: this.players });
+            this.sendMessage({ type: 'results-update', results: this.results, players: this.players });
             this.showSection('score');
             if (this.isHost) this.hostControls.classList.remove('hidden');
         }
@@ -442,7 +418,8 @@ class GameManager {
 
             const tdTotal = document.createElement('td');
             const player = this.players.find(p => p.id === res.playerId);
-            tdTotal.innerHTML = `<span style="font-size:12px">جولة: ${res.roundTotal}</span><br><strong>كلي: ${player.totalScore}</strong>`;
+            const total = player ? player.totalScore : 0;
+            tdTotal.innerHTML = `<span style="font-size:12px">جولة: ${res.roundTotal}</span><br><strong>كلي: ${total}</strong>`;
             tr.appendChild(tdTotal);
 
             this.scoreTableBody.appendChild(tr);
@@ -453,6 +430,8 @@ class GameManager {
         const res = this.results.find(r => r.playerId === playerId);
         const player = this.players.find(p => p.id === playerId);
 
+        if (!res || !player) return;
+
         res.roundTotal -= res.scores[field];
         player.totalScore -= res.scores[field];
 
@@ -461,16 +440,16 @@ class GameManager {
         player.totalScore += points;
 
         this.renderScores();
-        this.broadcast({ type: 'results-update', results: this.results, players: this.players });
+        this.sendMessage({ type: 'results-update', results: this.results, players: this.players });
     }
 
     nextRound() {
         this.players.forEach(p => p.ready = false);
         this.updatePlayerList();
-        this.broadcast({ type: 'players-update', players: this.players });
 
         const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
-        this.broadcast({ type: 'start-game', letter: letter });
+        this.sendMessage({ type: 'start-game', letter: letter });
+        this.syncState();
         this.startGame(letter);
 
         const btnReady = document.getElementById('btn-ready');
@@ -478,8 +457,15 @@ class GameManager {
         btnReady.textContent = 'أنا مستعد 👍';
     }
 
-    quitGame() {
-        if (this.peer) this.peer.destroy();
+    async quitGame() {
+        this.playSound('quit');
+        if (this.rtm) {
+            this.sendMessage({ type: 'quit', id: this.myId, name: this.playerName });
+            if (this.channel) {
+                await this.rtm.unsubscribe(this.channel);
+            }
+            await this.rtm.logout();
+        }
         location.reload();
     }
 }

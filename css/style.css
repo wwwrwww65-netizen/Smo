@@ -4,8 +4,8 @@
     --success-color: #4caf50;
     --danger-color: #ff4b2b;
     --text-color: #ffffff;
-    --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --glass-bg: rgba(255, 255, 255, 0.15);
+    --bg-gradient: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%);
+    --glass-bg: rgba(255, 255, 255, 0.1);
     --glass-border: rgba(255, 255, 255, 0.25);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
@@ -81,14 +81,21 @@ h2 {
 
 input[type="text"] {
     padding: 14px 16px;
-    border-radius: 14px;
+    border-radius: 16px;
     border: 1px solid var(--glass-border);
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
     color: white;
     font-size: 16px;
     outline: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     width: 100%;
+    text-align: center;
+}
+
+#room-id-input {
+    letter-spacing: 4px;
+    font-weight: bold;
+    font-size: 20px;
 }
 
 input[type="text"]:focus {
@@ -100,16 +107,33 @@ input[type="text"]:focus {
 button {
     padding: 14px;
     border: none;
-    border-radius: 14px;
+    border-radius: 16px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     color: white;
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+button::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: 0.5s;
+}
+
+button:hover::after {
+    left: 100%;
 }
 
 button:active {
@@ -139,14 +163,20 @@ button:disabled {
 
 .btn-quit {
     position: absolute;
-    top: -10px;
-    left: 0;
-    padding: 6px 12px;
+    top: 0;
+    left: 10px;
+    padding: 8px 16px;
     font-size: 14px;
-    border-radius: 10px;
-    background: rgba(255, 75, 43, 0.2);
-    border: 1px solid rgba(255, 75, 43, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 75, 43, 0.3);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 75, 43, 0.4);
     z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.btn-quit:hover {
+    background: rgba(255, 75, 43, 0.5);
 }
 
 .btn-icon {
@@ -166,12 +196,26 @@ button:disabled {
 
 .room-info {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
-    background: rgba(0,0,0,0.2);
-    padding: 12px 18px;
-    border-radius: 15px;
-    font-size: 18px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    border-radius: 20px;
+    gap: 10px;
+}
+
+.room-id-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 24px;
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+
+#display-room-id {
+    color: #ffd54f;
+    text-shadow: 0 0 10px rgba(255, 213, 79, 0.4);
 }
 
 .toast {
