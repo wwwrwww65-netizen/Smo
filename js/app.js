@@ -1,11 +1,9 @@
 /**
- * لعبة اسم حيوان نبات - Agora RTM v2 مع Temp Token
+ * لعبة اسم حيوان نبات - Agora RTM v2
+ * مشروع جديد بدون Certificate
  */
 
-const APP_ID = "560000db55ef467f8da4f5075b7a979c";
-
-// ✅ الصق Temp Token هنا (من Agora Console):
-const TEMP_TOKEN = "007eJxTYFgT+kNQS73c/MKvgicscqzndp+u3fK6rU49ROiew85vxyQVGEzNDIAgJcnUNDXNxMw8zSIl0STN1MDcNMk80dLcMrkg/G5mQyAjw+c9c5gYGSAQxGdmcM/IYGAAAEpVH/M=";
+const APP_ID = "36713fd4db3d48919d8e393e71c78026";
 
 const SOUNDS = {
     click: 'https://www.soundjay.com/buttons/sounds/button-16.mp3',
@@ -65,17 +63,11 @@ class GameManager {
         this.btnQuit.addEventListener('click', () => this.quitGame());
     }
 
-    /**
-     * ✅ تهيئة RTM مع Temp Token
-     */
     async initRTM() {
         try {
-            console.log('🔄 Initializing RTM with Token...');
+            console.log('🔄 Initializing RTM...');
             
-            // ✅ استخدام Temp Token
-            this.rtmClient = new AgoraRTM.RTM(APP_ID, this.myId, { 
-                token: TEMP_TOKEN 
-            });
+            this.rtmClient = new AgoraRTM.RTM(APP_ID, this.myId);
             
             this.rtmClient.addEventListener('status', (event) => {
                 console.log('📡 RTM Status:', event.state);
@@ -92,7 +84,7 @@ class GameManager {
             
         } catch (error) {
             console.error("❌ RTM Init Error:", error);
-            this.showToast("فشل الاتصال: " + (error.message || "Token غير صالح"));
+            this.showToast("فشل الاتصال: " + error.message);
         }
     }
 
