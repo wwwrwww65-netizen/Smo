@@ -8,9 +8,13 @@
 </head>
 <body>
     <div class="container">
+        <!-- زر الانسحاب العالمي -->
         <button id="btn-quit" class="btn-quit hidden">خروج 🚪</button>
+
+        <!-- التنبيهات -->
         <div id="main-toast" class="toast hidden"></div>
 
+        <!-- قسم الصفحة الرئيسية -->
         <section id="section-home" class="active">
             <h1>لعبة اسم حيوان نبات</h1>
             <div class="card">
@@ -22,6 +26,7 @@
             </div>
         </section>
 
+        <!-- قسم الانتظار (اللوبي) -->
         <section id="section-lobby">
             <h2>غرفة الانتظار</h2>
             <div class="card">
@@ -33,13 +38,16 @@
                     </div>
                 </div>
                 <h3>اللاعبون المنضمون:</h3>
-                <ul id="player-list"></ul>
+                <ul id="player-list">
+                    <!-- قائمة اللاعبين تظهر هنا -->
+                </ul>
                 <div class="lobby-actions">
                     <button id="btn-ready" class="btn-success">أنا مستعد 👍</button>
                 </div>
             </div>
         </section>
 
+        <!-- قسم اللعبة -->
         <section id="section-game">
             <div class="game-header">
                 <div id="random-letter-display">؟</div>
@@ -70,6 +78,7 @@
             <button id="btn-stop" class="btn-stop">انتهيت! 🔔</button>
         </section>
 
+        <!-- قسم النتائج -->
         <section id="section-score">
             <h2>نتائج الجولة</h2>
             <div class="card">
@@ -86,7 +95,9 @@
                                 <th>المجموع</th>
                             </tr>
                         </thead>
-                        <tbody></tbody>
+                        <tbody>
+                            <!-- النتائج تظهر هنا -->
+                        </tbody>
                     </table>
                 </div>
                 <div id="host-controls" class="hidden">
@@ -97,19 +108,30 @@
         </section>
     </div>
 
-    <!-- ✅ الرابط الرسمي الصحيح لـ Agora RTM v1.4.4 -->
-    <script src="https://download.agora.io/sdk/release/AgoraRTM-1.4.4.min.js"></script>
+    <!-- ✅ Agora RTM SDK v1.4.4 (محلي - يحمّله الـ Workflow) -->
+    <script src="js/agora-rtm.min.js"></script>
     
-    <!-- ✅ التحقق من تحميل المكتبة -->
+    <!-- ✅ Fallback: إذا لم يوجد الملف المحلي، استخدم CDN -->
     <script>
         if (typeof AgoraRTM === 'undefined') {
-            console.error('❌ AgoraRTM failed to load!');
-            alert('فشل تحميل مكتبة Agora. يرجى تحديث الصفحة.');
-        } else {
-            console.log('✅ AgoraRTM loaded successfully:', AgoraRTM.VERSION);
+            console.warn('⚠️ Local SDK not found, loading from CDN...');
+            document.write('<script src="https://download.agora.io/sdk/release/AgoraRTM-1.4.4.min.js"><\/script>');
         }
     </script>
     
+    <!-- ✅ تحقق نهائي -->
+    <script>
+        window.addEventListener('load', function() {
+            if (typeof AgoraRTM === 'undefined') {
+                console.error('❌ AgoraRTM failed to load!');
+                document.body.innerHTML = '<div style="text-align:center;padding:50px;color:white;"><h2>❌ فشل تحميل المكتبة</h2><p>يرجى تحديث الصفحة أو التحقق من الاتصال</p></div>';
+            } else {
+                console.log('✅ AgoraRTM loaded:', AgoraRTM.VERSION);
+            }
+        });
+    </script>
+    
+    <!-- منطق اللعبة -->
     <script src="js/app.js"></script>
 </body>
 </html>
