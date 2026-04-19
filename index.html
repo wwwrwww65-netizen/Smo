@@ -7,6 +7,34 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- خلفية متحركة -->
+    <div class="bg-animated">
+        <div class="circle"></div>
+        <div class="circle"></div>
+        <div class="circle"></div>
+    </div>
+
+    <!-- شاشة بدء التشغيل (لتفعيل الصوت) -->
+    <div id="overlay-start" class="overlay">
+        <div class="overlay-content">
+            <h1>مرحباً بك في لعبة الأذكياء! 🧠</h1>
+            <p>اضغط للبدء وتفعيل المؤثرات الصوتية</p>
+            <button id="btn-start-app" class="btn-primary">ابدأ الآن 🚀</button>
+        </div>
+    </div>
+
+    <!-- مودال الموافقة على الجولة التالية -->
+    <div id="modal-next-round" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">🔄 جولة جديدة؟</div>
+            <div id="modal-message">صديقك مستعد للجولة التالية، هل أنت مستعد؟</div>
+            <div class="timeout-bar"><div id="modal-timeout-fill"></div></div>
+            <div class="modal-actions">
+                <button id="btn-modal-accept" class="btn-success">أنا جاهز! ✅</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- زر الانسحاب العالمي -->
         <button id="btn-quit" class="btn-quit hidden">خروج 🚪</button>
@@ -16,7 +44,7 @@
 
         <!-- قسم الصفحة الرئيسية -->
         <section id="section-home" class="active">
-            <h1>لعبة اسم حيوان نبات</h1>
+            <h1 class="glow-text">لعبة اسم حيوان نبات</h1>
             <div class="card">
                 <input type="text" id="player-name" placeholder="أدخل اسمك هنا..." aria-label="اسم اللاعب" maxlength="15">
                 <button id="btn-create-room" class="btn-primary">إنشاء غرفة ✨</button>
@@ -50,29 +78,45 @@
         <!-- قسم اللعبة -->
         <section id="section-game">
             <div class="game-header">
-                <div id="random-letter-display">؟</div>
-                <div id="timer-display"></div>
+                <!-- شريط تقدم المنافس -->
+                <div id="opponent-progress" class="opponent-progress hidden">
+                    <div class="opp-avatar">👤</div>
+                    <div class="opp-info">
+                        <div class="opp-name">المنافس...</div>
+                        <div class="opp-status">يكتب الآن...</div>
+                    </div>
+                    <div class="opp-counter">0/5</div>
+                </div>
+
+                <div class="status-row">
+                    <div id="random-letter-display">؟</div>
+                    <div id="timer-container">
+                        <div class="timer-icon">⏰</div>
+                        <div id="timer-display">40</div>
+                    </div>
+                </div>
             </div>
+
             <div class="card game-inputs">
                 <div class="input-group">
                     <label>اسم</label>
-                    <input type="text" id="input-name" class="game-field" autocomplete="off" placeholder="اسم...">
+                    <input type="text" id="input-name" class="game-field" data-field="name" autocomplete="off" placeholder="اسم...">
                 </div>
                 <div class="input-group">
                     <label>حيوان</label>
-                    <input type="text" id="input-animal" class="game-field" autocomplete="off" placeholder="حيوان...">
+                    <input type="text" id="input-animal" class="game-field" data-field="animal" autocomplete="off" placeholder="حيوان...">
                 </div>
                 <div class="input-group">
                     <label>نبات</label>
-                    <input type="text" id="input-plant" class="game-field" autocomplete="off" placeholder="نبات...">
+                    <input type="text" id="input-plant" class="game-field" data-field="plant" autocomplete="off" placeholder="نبات...">
                 </div>
                 <div class="input-group">
                     <label>جماد</label>
-                    <input type="text" id="input-object" class="game-field" autocomplete="off" placeholder="جماد...">
+                    <input type="text" id="input-object" class="game-field" data-field="object" autocomplete="off" placeholder="جماد...">
                 </div>
                 <div class="input-group">
                     <label>بلاد</label>
-                    <input type="text" id="input-country" class="game-field" autocomplete="off" placeholder="بلاد...">
+                    <input type="text" id="input-country" class="game-field" data-field="country" autocomplete="off" placeholder="بلاد...">
                 </div>
             </div>
             <button id="btn-stop" class="btn-stop">انتهيت! 🔔</button>
@@ -100,9 +144,11 @@
                         </tbody>
                     </table>
                 </div>
-                <div id="host-controls" class="hidden">
-                    <p class="host-hint">أنت المضيف: قم بتقييم الإجابات ثم اضغط الجولة التالية</p>
-                    <button id="btn-next-round" class="btn-primary">الجولة التالية 🔄</button>
+                <div id="score-actions" class="score-actions">
+                    <button id="btn-next-round-request" class="btn-primary">الجولة التالية 🔄</button>
+                </div>
+                <div id="host-eval-hint" class="host-hint hidden">
+                    أنت المضيف: قم بتقييم الإجابات
                 </div>
             </div>
         </section>
