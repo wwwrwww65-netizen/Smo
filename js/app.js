@@ -1,5 +1,5 @@
 /**
- * لعبة اسم حيوان نبات - Firebase Realtime Database Edition
+ * لعبة اسم حيوان نبات - النسخة المطورة
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -24,8 +24,12 @@ const SOUNDS = {
     start: 'https://www.soundjay.com/buttons/sounds/button-09.mp3',
     buzzer: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3',
     copy: 'https://www.soundjay.com/buttons/sounds/button-50.mp3',
-    quit: 'https://www.soundjay.com/buttons/sounds/button-10.mp3'
+    quit: 'https://www.soundjay.com/buttons/sounds/button-10.mp3',
+    timer: 'https://www.soundjay.com/clock/sounds/clock-ticking-2.mp3',
+    success: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.mp3'
 };
+
+const AVATARS = ["🦊", "🦁", "🐯", "🐼", "🐨", "🐸", "🐵", "🦄", "🐙", "🦋", "🦖", "🐧"];
 
 class GameManager {
     constructor() {
@@ -41,6 +45,11 @@ class GameManager {
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
         this.myId = null;
+        this.avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)];
+
+        this.gameTimer = null;
+        this.timeLeft = 40;
+        this.audioEnabled = false;
 
         this.initElements();
         this.initEvents();
@@ -60,33 +69,55 @@ class GameManager {
         this.displayRoomId = document.getElementById('display-room-id');
         this.playerList = document.getElementById('player-list');
         this.letterDisplay = document.getElementById('random-letter-display');
+        this.timerDisplay = document.getElementById('timer-display');
         this.scoreTableBody = document.querySelector('#score-table tbody');
-        this.hostControls = document.getElementById('host-controls');
         this.mainToast = document.getElementById('main-toast');
         this.btnJoinRoom = document.getElementById('btn-join-room');
         this.btnCreateRoom = document.getElementById('btn-create-room');
+        this.overlayStart = document.getElementById('overlay-start');
+
+        // Opponent progress
+        this.oppProgress = document.getElementById('opponent-progress');
+        this.oppAvatar = this.oppProgress.querySelector('.opp-avatar');
+        this.oppName = this.oppProgress.querySelector('.opp-name');
+        this.oppStatus = this.oppProgress.querySelector('.opp-status');
+        this.oppCounter = this.oppProgress.querySelector('.opp-counter');
+
+        // Modal
+        this.modalNextRound = document.getElementById('modal-next-round');
+        this.btnModalAccept = document.getElementById('btn-modal-accept');
+        this.modalTimeoutFill = document.getElementById('modal-timeout-fill');
     }
 
     initEvents() {
+        document.getElementById('btn-start-app').addEventListener('click', () => {
+            this.audioEnabled = true;
+            this.overlayStart.classList.add('hidden');
+            this.playSound('click');
+        });
+
         this.btnCreateRoom.addEventListener('click', () => this.createRoom());
         this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
         document.getElementById('btn-ready').addEventListener('click', () => this.setReady());
         document.getElementById('btn-stop').addEventListener('click', () => this.stopGame());
-        document.getElementById('btn-next-round').addEventListener('click', () => this.nextRound());
+        document.getElementById('btn-next-round-request').addEventListener('click', () => this.requestNextRound());
         document.getElementById('btn-copy-id').addEventListener('click', () => this.copyRoomId());
         this.btnQuit.addEventListener('click', () => this.quitGame());
+        this.btnModalAccept.addEventListener('click', () => this.acceptNextRound());
+
+        // Tracking inputs
+        document.querySelectorAll('.game-field').forEach(input => {
+            input.addEventListener('input', () => this.updateMyProgress(input));
+            input.addEventListener('focus', () => this.updateMyProgress(input));
+        });
     }
 
     async initAuth() {
         onAuthStateChanged(this.auth, (user) => {
             if (user) {
                 this.myId = user.uid;
-                console.log("✅ Authenticated as:", this.myId);
             } else {
-                signInAnonymously(this.auth).catch(err => {
-                    console.error("❌ Auth Error:", err);
-                    this.showToast("فشل الاتصال بـ Firebase");
-                });
+                signInAnonymously(this.auth).catch(() => this.showToast("فشل الاتصال بـ Firebase"));
             }
         });
     }
@@ -98,18 +129,22 @@ class GameManager {
             const data = snapshot.val();
             if (!data) return;
 
-            // Update players
+            // Handle Disconnects / Win condition if only 1 player left in active game
             if (data.players) {
+                const prevPlayersCount = this.players.length;
                 this.players = Object.entries(data.players).map(([id, p]) => ({ id, ...p }));
                 this.updatePlayerList();
 
-                // Check if all ready (only host does this)
+                if (prevPlayersCount > this.players.length && (data.config?.gameState === 'game')) {
+                    this.showToast("لقد خرج أحد اللاعبين!");
+                }
+
                 if (this.isHost && data.config?.gameState === 'lobby') {
                     this.checkAllReady();
                 }
             }
 
-            // Update game state
+            // Update Game State
             if (data.config) {
                 const state = data.config.gameState;
                 const letter = data.config.currentLetter;
@@ -117,47 +152,41 @@ class GameManager {
                 if (state === 'game' && !this.isSectionActive('game')) {
                     this.startGame(letter);
                 } else if (state === 'score' && !this.isSectionActive('score')) {
-                    this.showSection('score');
+                    this.goToScoreSection();
                 } else if (state === 'lobby' && !this.isSectionActive('lobby')) {
                     this.showSection('lobby');
-                    const btnReady = document.getElementById('btn-ready');
-                    if (btnReady) {
-                        btnReady.disabled = false;
-                        btnReady.innerHTML = 'أنا مستعد 👍';
-                    }
+                    this.resetLobbyUI();
                 }
 
                 this.currentLetter = letter;
                 if (this.letterDisplay) this.letterDisplay.textContent = letter || '؟';
 
-                // Host controls visibility
-                if (this.isHost && state === 'score') {
-                    this.hostControls.classList.remove('hidden');
-                } else {
-                    this.hostControls.classList.add('hidden');
+                if (data.config.stopTriggered && !this.inputsDisabled) {
+                    this.endRoundManually();
                 }
 
-                // If someone stopped the game
-                if (data.config.stopTriggered && !this.inputsDisabled) {
-                    this.disableInputs();
-                    this.submitAnswers();
-                    this.playSound('buzzer');
+                // Sync Timer
+                if (state === 'game' && data.config.timer !== undefined) {
+                    this.updateLocalTimer(data.config.timer);
                 }
             }
 
-            // Update results
+            // Progress Tracking
+            if (data.progress) {
+                this.updateOpponentProgressUI(data.progress);
+            }
+
+            // Handshake for Next Round
+            if (data.nextRoundRequest) {
+                this.handleNextRoundRequest(data.nextRoundRequest);
+            } else {
+                this.modalNextRound.classList.add('hidden');
+            }
+
+            // Update results & Host Evaluation
             if (data.results) {
                 this.results = Object.entries(data.results).map(([id, r]) => ({ playerId: id, ...r }));
                 this.renderScores();
-
-                // Auto transition to score state if all players submitted (Host only)
-                if (this.isHost && data.config?.gameState === 'game') {
-                    const resultsCount = Object.keys(data.results).length;
-                    const playersCount = Object.keys(data.players || {}).length;
-                    if (resultsCount >= playersCount && playersCount > 0) {
-                        update(ref(this.db, `rooms/${this.roomId}/config`), { gameState: 'score' });
-                    }
-                }
             } else {
                 this.results = [];
                 this.renderScores();
@@ -165,14 +194,45 @@ class GameManager {
         });
     }
 
+    async updateMyProgress(input) {
+        if (!this.roomId || !this.myId) return;
+        const fields = document.querySelectorAll('.game-field');
+        const filledCount = Array.from(fields).filter(f => f.value.trim().length > 0).length;
+        const currentFieldName = input.parentElement.querySelector('label').textContent;
+
+        await update(ref(this.db, `rooms/${this.roomId}/progress/${this.myId}`), {
+            name: this.playerName,
+            avatar: this.avatar,
+            currentField: currentFieldName,
+            count: filledCount,
+            lastUpdate: serverTimestamp()
+        });
+    }
+
+    updateOpponentProgressUI(progressData) {
+        const opponentId = Object.keys(progressData).find(id => id !== this.myId);
+        if (!opponentId || !this.isSectionActive('game')) {
+            this.oppProgress.classList.add('hidden');
+            return;
+        }
+
+        const opp = progressData[opponentId];
+        this.oppProgress.classList.remove('hidden');
+        this.oppAvatar.textContent = opp.avatar || '👤';
+        this.oppName.textContent = opp.name;
+        this.oppStatus.textContent = `يكتب في: ${opp.currentField}`;
+        this.oppCounter.textContent = `${opp.count}/5`;
+    }
+
     async joinRoomLogic(roomId) {
         const playerRef = ref(this.db, `rooms/${roomId}/players/${this.myId}`);
-
-        // Presence: Remove player when disconnected
         onDisconnect(playerRef).remove();
+        // Also remove progress on disconnect
+        onDisconnect(ref(this.db, `rooms/${roomId}/progress/${this.myId}`)).remove();
 
         await update(playerRef, {
             name: this.playerName,
+            avatar: this.avatar,
             ready: false,
             totalScore: 0,
             isOnline: true
@@ -184,18 +244,17 @@ class GameManager {
         this.playSound('join');
     }
 
-    getCurrentSection() {
-        if (this.sections.game.classList.contains('active')) return 'game';
-        if (this.sections.score.classList.contains('active')) return 'score';
-        return 'lobby';
-    }
-
     isSectionActive(name) {
         return this.sections[name].classList.contains('active');
     }
 
     playSound(name) {
-        try { const audio = new Audio(SOUNDS[name]); audio.volume = 0.4; audio.play().catch(() => {}); } catch(e) {}
+        if (!this.audioEnabled) return;
+        try {
+            const audio = new Audio(SOUNDS[name]);
+            audio.volume = (name === 'timer') ? 0.2 : 0.5;
+            audio.play().catch(() => {});
+        } catch(e) {}
     }
 
     showSection(name) {
@@ -210,154 +269,115 @@ class GameManager {
         this.mainToast.textContent = message;
         this.mainToast.classList.remove('hidden');
         if (this.toastTimeout) clearTimeout(this.toastTimeout);
-        this.toastTimeout = setTimeout(() => this.mainToast.classList.add('hidden'), 3000);
-    }
-
-    generateId() {
-        return Math.floor(100000000 + Math.random() * 900000000).toString();
+        this.toastTimeout = setTimeout(() => this.mainToast.classList.add('hidden'), 3500);
     }
 
     async createRoom() {
-        if (!this.myId) { this.showToast("⏳ جاري الاتصال... حاول مرة أخرى"); return; }
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
 
-        this.btnCreateRoom.disabled = true;
-        const originalText = this.btnCreateRoom.innerHTML;
-        this.btnCreateRoom.innerHTML = `<span>جارٍ الإنشاء...</span> <div class="spinner"></div>`;
-
         try {
             this.isHost = true;
-            this.roomId = this.generateId();
-
+            this.roomId = Math.floor(100000000 + Math.random() * 900000000).toString();
             const roomRef = ref(this.db, `rooms/${this.roomId}`);
             await set(roomRef, {
                 config: {
                     hostId: this.myId,
                     gameState: 'lobby',
                     currentLetter: '',
+                    timer: 40,
                     createdAt: serverTimestamp()
                 }
             });
-
             await this.joinRoomLogic(this.roomId);
-        } catch (error) {
-            console.error("Create Error:", error);
-            this.showToast("❌ فشل إنشاء الغرفة");
-            this.isHost = false;
-            this.roomId = "";
-        } finally {
-            this.btnCreateRoom.disabled = false;
-            this.btnCreateRoom.innerHTML = originalText;
-        }
+        } catch (e) { this.showToast("❌ فشل إنشاء الغرفة"); }
     }
 
     async joinRoom() {
-        if (!this.myId) { this.showToast("⏳ جاري الاتصال... حاول مرة أخرى"); return; }
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
-
-        if (!this.playerName) { this.showToast("⚠️ يرجى إدخال اسمك"); return; }
-        if (!this.roomId || this.roomId.length !== 9 || !/^\d{9}$/.test(this.roomId)) {
-            this.showToast("⚠️ رمز الغرفة يجب أن يكون 9 أرقام");
-            return;
-        }
-
-        this.btnJoinRoom.disabled = true;
-        const originalText = this.btnJoinRoom.innerHTML;
-        this.btnJoinRoom.innerHTML = `<span>جارٍ الانضمام...</span> <div class="spinner"></div>`;
+        if (!this.playerName || this.roomId.length !== 9) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
 
         try {
-            const roomSnapshot = await get(ref(this.db, `rooms/${this.roomId}`));
-            if (!roomSnapshot.exists()) {
-                this.showToast("❌ الغرفة غير موجودة");
-                return;
-            }
-
+            const snap = await get(ref(this.db, `rooms/${this.roomId}`));
+            if (!snap.exists()) { this.showToast("❌ الغرفة غير موجودة"); return; }
             this.isHost = false;
             await this.joinRoomLogic(this.roomId);
-        } catch (error) {
-            console.error("Join Error:", error);
-            this.showToast("❌ فشل الانضمام");
-        } finally {
-            this.btnJoinRoom.disabled = false;
-            this.btnJoinRoom.innerHTML = originalText;
-        }
+        } catch (e) { this.showToast("❌ فشل الانضمام"); }
     }
 
     updatePlayerList() {
         this.playerList.innerHTML = '';
-        if (this.players.length === 0) {
-            this.playerList.innerHTML = '<li style="text-align: center; opacity: 0.5;">لا يوجد لاعبين</li>';
-            return;
-        }
         this.players.forEach(p => {
             const li = document.createElement('li');
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = (p.name || "مجهول") + (p.id === this.myId ? " (أنت)" : "");
-            if (p.id === this.myId) nameSpan.style.color = '#ffd54f';
-            const statusSpan = document.createElement('span');
-            statusSpan.textContent = p.ready ? '✅ مستعد' : '⏳ ينتظر';
-            statusSpan.style.color = p.ready ? '#4caf50' : '#ff9800';
-            li.appendChild(nameSpan);
-            li.appendChild(statusSpan);
+            li.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.5rem">${p.avatar || '👤'}</span>
+                    <span>${p.name} ${p.id === this.myId ? '(أنت)' : ''}</span>
+                </div>
+                <span style="color: ${p.ready ? '#4caf50' : '#ff9800'}">${p.ready ? '✅ مستعد' : '⏳ ينتظر'}</span>
+            `;
             this.playerList.appendChild(li);
         });
     }
 
-    copyRoomId() {
-        if (!this.roomId) return;
-        navigator.clipboard.writeText(this.roomId).then(() => {
-            this.showToast("✅ تم نسخ الرمز!");
-            this.playSound('copy');
-        }).catch(() => {
-            const textArea = document.createElement("textarea");
-            textArea.value = this.roomId;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand("copy");
-            document.body.removeChild(textArea);
-            this.showToast("✅ تم نسخ الرمز!");
-            this.playSound('copy');
-        });
-    }
-
     async setReady() {
-        const btnReady = document.getElementById('btn-ready');
         await update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), { ready: true });
-        btnReady.disabled = true;
-        btnReady.innerHTML = '⏳ في انتظار البقية...';
+        const btn = document.getElementById('btn-ready');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ بانتظار الخصم...';
     }
 
     async checkAllReady() {
-        if (this.players.length < 1) return;
-        const allReady = this.players.every(p => p.ready);
-        if (allReady) {
+        if (this.players.length < 2) return; // Need at least 2 players
+        if (this.players.every(p => p.ready)) {
             const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
             await update(ref(this.db, `rooms/${this.roomId}/config`), {
                 gameState: 'game',
                 currentLetter: letter,
-                stopTriggered: false
+                stopTriggered: false,
+                timer: 40
             });
-            // Clear previous results
             await remove(ref(this.db, `rooms/${this.roomId}/results`));
+            await remove(ref(this.db, `rooms/${this.roomId}/progress`));
+            this.startHostTimerSync();
+        }
+    }
+
+    startHostTimerSync() {
+        if (this.gameInterval) clearInterval(this.gameInterval);
+        let time = 40;
+        this.gameInterval = setInterval(async () => {
+            time--;
+            if (time <= 0) {
+                clearInterval(this.gameInterval);
+                await update(ref(this.db, `rooms/${this.roomId}/config`), { stopTriggered: true, timer: 0 });
+            } else {
+                update(ref(this.db, `rooms/${this.roomId}/config`), { timer: time });
+            }
+        }, 1000);
+    }
+
+    updateLocalTimer(val) {
+        this.timeLeft = val;
+        this.timerDisplay.textContent = val;
+        if (val <= 5) {
+            this.timerDisplay.style.color = '#ff4b2b';
+            this.playSound('timer');
+        } else {
+            this.timerDisplay.style.color = '#fff';
         }
     }
 
     startGame(letter) {
         this.currentLetter = letter;
-        this.letterDisplay.textContent = letter;
-        this.results = [];
         this.hasSubmitted = false;
+        this.inputsDisabled = false;
         this.clearInputs();
         this.enableInputs();
         this.showSection('game');
         this.playSound('start');
-        this.hostControls.classList.add('hidden');
-        const btnReady = document.getElementById('btn-ready');
-        btnReady.disabled = false;
-        btnReady.innerHTML = 'أنا مستعد 👍';
-        this.inputsDisabled = false;
+        this.oppProgress.classList.add('hidden');
     }
 
     clearInputs() {
@@ -365,18 +385,25 @@ class GameManager {
     }
 
     enableInputs() {
-        document.querySelectorAll('.game-field').forEach(i => { i.disabled = false; i.value = ''; });
+        document.querySelectorAll('.game-field').forEach(i => i.disabled = false);
         document.getElementById('btn-stop').disabled = false;
+    }
+
+    async stopGame() {
+        await update(ref(this.db, `rooms/${this.roomId}/config`), { stopTriggered: true });
+    }
+
+    endRoundManually() {
+        this.disableInputs();
+        this.submitAnswers();
+        this.playSound('buzzer');
+        if (this.isHost && this.gameInterval) clearInterval(this.gameInterval);
     }
 
     disableInputs() {
         document.querySelectorAll('.game-field').forEach(i => i.disabled = true);
         document.getElementById('btn-stop').disabled = true;
         this.inputsDisabled = true;
-    }
-
-    async stopGame() {
-        await update(ref(this.db, `rooms/${this.roomId}/config`), { stopTriggered: true });
     }
 
     async submitAnswers() {
@@ -391,61 +418,72 @@ class GameManager {
             country: document.getElementById('input-country').value.trim()
         };
 
-        const player = this.players.find(p => p.id === this.myId);
         await set(ref(this.db, `rooms/${this.roomId}/results/${this.myId}`), {
-            playerName: player ? player.name : this.playerName,
+            playerName: this.playerName,
+            avatar: this.avatar,
             answers: answers,
             scores: { name: 0, animal: 0, plant: 0, object: 0, country: 0 },
             roundTotal: 0
         });
+
+        // If host, wait for all and transition
+        if (this.isHost) {
+            this.checkAllSubmitted();
+        }
+    }
+
+    async checkAllSubmitted() {
+        const check = setInterval(async () => {
+            const snap = await get(ref(this.db, `rooms/${this.roomId}/results`));
+            if (snap.exists() && Object.keys(snap.val()).length >= this.players.length) {
+                clearInterval(check);
+                update(ref(this.db, `rooms/${this.roomId}/config`), { gameState: 'score' });
+            }
+        }, 1000);
+    }
+
+    goToScoreSection() {
+        this.showSection('score');
+        const hint = document.getElementById('host-eval-hint');
+        if (this.isHost) hint.classList.remove('hidden');
+        else hint.classList.add('hidden');
     }
 
     renderScores() {
         this.scoreTableBody.innerHTML = '';
         if (this.results.length === 0) {
-            this.scoreTableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">لا توجد نتائج بعد...</td></tr>';
+            this.scoreTableBody.innerHTML = '<tr><td colspan="7">في انتظار النتائج...</td></tr>';
             return;
         }
+
         this.results.forEach(res => {
             const tr = document.createElement('tr');
-            const tdName = document.createElement('td');
-            tdName.textContent = res.playerName;
-            tdName.style.fontWeight = 'bold';
-            tr.appendChild(tdName);
+            tr.innerHTML = `<td><div style="font-size:1.2rem">${res.avatar || '👤'}</div>${res.playerName}</td>`;
+
             ['name', 'animal', 'plant', 'object', 'country'].forEach(field => {
                 const td = document.createElement('td');
-                const answerDiv = document.createElement('div');
-                answerDiv.textContent = res.answers[field] || '-';
-                answerDiv.style.marginBottom = '5px';
-                td.appendChild(answerDiv);
+                const val = res.answers[field] || '-';
+                const score = res.scores[field] || 0;
 
+                let html = `<div class="answer-val">${val}</div>`;
                 if (this.isHost) {
-                    const controls = document.createElement('div');
-                    controls.className = 'score-controls';
-                    [10, 5, 0].forEach(s => {
-                        const btn = document.createElement('button');
-                        btn.textContent = s;
-                        btn.className = `btn-score btn-score-${s}`;
-                        if (res.scores[field] === s) {
-                            btn.style.transform = 'scale(1.1)';
-                            btn.style.boxShadow = '0 0 10px rgba(255,255,255,0.5)';
-                        }
-                        btn.onclick = () => this.updateScore(res.playerId, field, s);
-                        controls.appendChild(btn);
-                    });
-                    td.appendChild(controls);
+                    html += `
+                        <div class="score-controls">
+                            <button class="btn-score btn-score-10" onclick="window.gameManager.updateScore('${res.playerId}','${field}',10)">10</button>
+                            <button class="btn-score btn-score-5" onclick="window.gameManager.updateScore('${res.playerId}','${field}',5)">5</button>
+                            <button class="btn-score btn-score-0" onclick="window.gameManager.updateScore('${res.playerId}','${field}',0)">0</button>
+                        </div>
+                    `;
                 } else {
-                    const scoreDiv = document.createElement('div');
-                    scoreDiv.innerHTML = `<span style="color: #ffd54f; font-size: 12px;">${res.scores[field]} نقطة</span>`;
-                    td.appendChild(scoreDiv);
+                    html += `<div style="color:var(--accent-color); font-size:0.8rem">${score} نقطة</div>`;
                 }
+                td.innerHTML = html;
                 tr.appendChild(td);
             });
-            const tdTotal = document.createElement('td');
+
             const player = this.players.find(p => p.id === res.playerId);
-            const totalScore = player ? player.totalScore : 0;
-            tdTotal.innerHTML = `<div style="font-size:12px;opacity:0.7;">جولة: ${res.roundTotal}</div><div style="font-size:16px;font-weight:bold;color:#4caf50;">${totalScore}</div>`;
-            tr.appendChild(tdTotal);
+            const total = player ? player.totalScore : 0;
+            tr.innerHTML += `<td><div style="font-size:0.8rem; opacity:0.7">${res.roundTotal}</div><div style="font-weight:bold; color:var(--success-color); font-size:1.1rem">${total}</div></td>`;
             this.scoreTableBody.appendChild(tr);
         });
     }
@@ -455,46 +493,107 @@ class GameManager {
         const player = this.players.find(p => p.id === playerId);
         if (!res || !player) return;
 
-        const oldScore = res.scores[field];
-        const diff = points - oldScore;
-
+        const diff = points - res.scores[field];
         const newRoundTotal = res.roundTotal + diff;
-        const newTotalScore = player.totalScore + diff;
+        const newTotalScore = (player.totalScore || 0) + diff;
 
-        // Update results
         await update(ref(this.db, `rooms/${this.roomId}/results/${playerId}/scores`), { [field]: points });
         await update(ref(this.db, `rooms/${this.roomId}/results/${playerId}`), { roundTotal: newRoundTotal });
-
-        // Update player total score
         await update(ref(this.db, `rooms/${this.roomId}/players/${playerId}`), { totalScore: newTotalScore });
     }
 
-    async nextRound() {
-        // Reset ready status for all players
+    // Next Round Handshake Logic
+    async requestNextRound() {
+        this.playSound('click');
+        await set(ref(this.db, `rooms/${this.roomId}/nextRoundRequest`), {
+            fromId: this.myId,
+            fromName: this.playerName,
+            timestamp: serverTimestamp()
+        });
+        this.showToast("تم إرسال طلب جولة جديدة لصديقك...");
+    }
+
+    handleNextRoundRequest(req) {
+        if (req.fromId === this.myId) {
+            this.modalNextRound.classList.add('hidden');
+            return;
+        }
+
+        this.modalNextRound.classList.remove('hidden');
+        document.getElementById('modal-message').textContent = `صديقك ${req.fromName} مستعد للجولة التالية، هل أنت مستعد؟`;
+
+        // 15s timeout
+        this.modalTimeoutFill.style.transition = 'none';
+        this.modalTimeoutFill.style.width = '100%';
+        setTimeout(() => {
+            this.modalTimeoutFill.style.transition = 'width 15s linear';
+            this.modalTimeoutFill.style.width = '0%';
+        }, 10);
+
+        if (this.handshakeTimeout) clearTimeout(this.handshakeTimeout);
+        this.handshakeTimeout = setTimeout(() => {
+            if (!this.modalNextRound.classList.contains('hidden')) {
+                this.modalNextRound.classList.add('hidden');
+                this.showToast("انتهى وقت الموافقة!");
+                if (this.isHost) {
+                    remove(ref(this.db, `rooms/${this.roomId}/nextRoundRequest`));
+                }
+            }
+        }, 15000);
+    }
+
+    async acceptNextRound() {
+        this.modalNextRound.classList.add('hidden');
+        if (this.handshakeTimeout) clearTimeout(this.handshakeTimeout);
+
+        // Reset game for next round
         const updates = {};
         this.players.forEach(p => {
             updates[`players/${p.id}/ready`] = false;
         });
         updates['config/gameState'] = 'lobby';
         updates['config/stopTriggered'] = false;
+        updates['nextRoundRequest'] = null;
 
         await update(ref(this.db, `rooms/${this.roomId}`), updates);
         await remove(ref(this.db, `rooms/${this.roomId}/results`));
+        await remove(ref(this.db, `rooms/${this.roomId}/progress`));
+    }
 
-        this.showSection('lobby');
+    resetLobbyUI() {
+        const btnReady = document.getElementById('btn-ready');
+        if (btnReady) {
+            btnReady.disabled = false;
+            btnReady.innerHTML = 'أنا مستعد 👍';
+        }
     }
 
     async quitGame() {
         this.playSound('quit');
-        this.showToast("🚪 جارٍ الخروج...");
         if (this.roomId && this.myId) {
             await remove(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`));
+            await remove(ref(this.db, `rooms/${this.roomId}/progress/${this.myId}`));
         }
-        setTimeout(() => location.reload(), 500);
+        location.reload();
+    }
+
+    copyRoomId() {
+        if (!this.roomId) return;
+        const el = document.createElement('textarea');
+        el.value = this.roomId;
+        document.body.appendChild(el);
+        el.select();
+        try {
+            document.execCommand('copy');
+            this.showToast("تم النسخ! ✅");
+        } catch (err) {
+            this.showToast("فشل النسخ");
+        }
+        document.body.removeChild(el);
+        this.playSound('copy');
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('🎮 Game initializing with Firebase...');
     window.gameManager = new GameManager();
 });
