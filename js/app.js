@@ -43,6 +43,7 @@ class GameManager {
         this.playerName = "";
         this.roomId = "";
         this.players = [];
+        this.chatMessages = [];
         this.results = [];
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
@@ -53,12 +54,36 @@ class GameManager {
         this.timeLeft = 40;
         this.audioEnabled = false;
 
+        // Voice/WebRTC properties
+        this.pc = null;
+        this.localStream = null;
+        this.micEnabled = false;
+        this.speakerEnabled = true;
+        this.remoteAudio = new Audio();
+        this.remoteAudio.autoplay = true;
+
         this.initElements();
         this.initEvents();
         this.initAuth();
     }
 
     initElements() {
+        // Chat elements
+        this.chatContainer = document.getElementById('global-chat-container');
+        this.chatMessagesEl = document.getElementById('chat-messages');
+        this.chatInput = document.getElementById('chat-input');
+        this.btnSendChat = document.getElementById('btn-send-chat');
+        this.btnEmoji = document.getElementById('btn-emoji');
+        this.emojiPicker = document.getElementById('emoji-picker');
+
+        // Voice Controls
+        this.btnMic = document.getElementById('btn-mic');
+        this.btnSpeaker = document.getElementById('btn-speaker');
+        this.micOnIcon = this.btnMic.querySelector('.mic-on');
+        this.micOffIcon = this.btnMic.querySelector('.mic-off');
+        this.speakerOnIcon = this.btnSpeaker.querySelector('.speaker-on');
+        this.speakerOffIcon = this.btnSpeaker.querySelector('.speaker-off');
+
         this.sections = {
             home: document.getElementById('section-home'),
             lobby: document.getElementById('section-lobby'),
@@ -98,6 +123,28 @@ class GameManager {
             this.playSound('click');
         });
 
+        // Chat Events
+        this.btnSendChat.addEventListener('click', () => this.sendChatMessage());
+        this.chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.sendChatMessage();
+        });
+        this.btnEmoji.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.emojiPicker.classList.toggle('hidden');
+        });
+        document.querySelectorAll('.emoji-list span').forEach(span => {
+            span.addEventListener('click', () => {
+                this.chatInput.value += span.textContent;
+                this.emojiPicker.classList.add('hidden');
+                this.chatInput.focus();
+            });
+        });
+        document.addEventListener('click', () => this.emojiPicker.classList.add('hidden'));
+
+        // Voice Events
+        this.btnMic.addEventListener('click', () => this.toggleMic());
+        this.btnSpeaker.addEventListener('click', () => this.toggleSpeaker());
+
         this.btnCreateRoom.addEventListener('click', () => this.createRoom());
         this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
         document.getElementById('btn-ready').addEventListener('click', () => this.setReady());
@@ -130,6 +177,11 @@ class GameManager {
         onValue(roomRef, (snapshot) => {
             const data = snapshot.val();
             if (!data) return;
+
+            // Chat sync
+            if (data.chat) {
+                this.updateChatUI(data.chat);
+            }
 
             // Handle Disconnects / Win condition if only 1 player left in active game
             if (data.players) {
@@ -185,6 +237,11 @@ class GameManager {
                 this.modalNextRound.classList.add('hidden');
             }
 
+            // WebRTC Signaling
+            if (data.signaling) {
+                this.handleSignaling(data.signaling);
+            }
+
             // Update results & Host Evaluation
             if (data.results) {
                 this.results = Object.entries(data.results).map(([id, r]) => ({ playerId: id, ...r }));
@@ -231,6 +288,9 @@ class GameManager {
         onDisconnect(playerRef).remove();
         // Also remove progress on disconnect
         onDisconnect(ref(this.db, `rooms/${roomId}/progress/${this.myId}`)).remove();
+
+        // Chat container should be visible once in a room
+        this.chatContainer.style.display = 'flex';
 
         await update(playerRef, {
             name: this.playerName,
@@ -714,6 +774,264 @@ class GameManager {
         }
         document.body.removeChild(el);
         this.playSound('copy');
+    }
+
+    // Chat Methods
+    async sendChatMessage() {
+        const msg = this.chatInput.value.trim();
+        if (!msg || !this.roomId) return;
+
+        const chatRef = ref(this.db, `rooms/${this.roomId}/chat`);
+        await push(chatRef, {
+            senderId: this.myId,
+            senderName: this.playerName,
+            text: msg,
+            timestamp: serverTimestamp()
+        });
+
+        this.chatInput.value = '';
+        this.playSound('click');
+    }
+
+    updateChatUI(chatData) {
+        const messages = Object.values(chatData).sort((a, b) => a.timestamp - b.timestamp);
+
+        // Only re-render if count changed to avoid flickering
+        if (messages.length === this.chatMessages.length) return;
+        this.chatMessages = messages;
+
+        this.chatMessagesEl.innerHTML = '';
+        messages.forEach(m => {
+            const div = document.createElement('div');
+            div.className = `message ${m.senderId === this.myId ? 'mine' : ''}`;
+            div.innerHTML = `
+                <span class="sender">${m.senderName}</span>
+                <span class="text">${this.escapeHtml(m.text)}</span>
+            `;
+            this.chatMessagesEl.appendChild(div);
+        });
+
+        // Auto-scroll
+        this.chatMessagesEl.scrollTop = this.chatMessagesEl.scrollHeight;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ==========================================
+    // Voice Chat (WebRTC) Methods
+    // ==========================================
+
+    async toggleMic() {
+        if (!this.micEnabled) {
+            try {
+                if (!this.localStream) {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    this.setupAudioLevelIndicator(this.localStream, true);
+                    if (this.pc) {
+                        this.localStream.getTracks().forEach(track => this.pc.addTrack(track, this.localStream));
+                        // If we already have a connection, we might need to re-negotiate
+                        if (!this.isHost) this.createAndSendOffer();
+                    } else {
+                        this.initWebRTC();
+                    }
+                } else {
+                    this.localStream.getAudioTracks().forEach(t => t.enabled = true);
+                }
+                this.micEnabled = true;
+                this.micOnIcon.classList.remove('hidden');
+                this.micOffIcon.classList.add('hidden');
+            } catch (err) {
+                console.error("Mic Error:", err);
+                this.showToast("⚠️ يجب السماح بالوصول للميكروفون");
+            }
+        } else {
+            if (this.localStream) {
+                this.localStream.getAudioTracks().forEach(t => t.enabled = false);
+            }
+            this.micEnabled = false;
+            this.micOnIcon.classList.add('hidden');
+            this.micOffIcon.classList.remove('hidden');
+        }
+    }
+
+    toggleSpeaker() {
+        this.speakerEnabled = !this.speakerEnabled;
+        this.remoteAudio.muted = !this.speakerEnabled;
+        if (this.speakerEnabled) {
+            this.speakerOnIcon.classList.remove('hidden');
+            this.speakerOffIcon.classList.add('hidden');
+        } else {
+            this.speakerOnIcon.classList.add('hidden');
+            this.speakerOffIcon.classList.remove('hidden');
+        }
+    }
+
+    async initWebRTC() {
+        if (this.pc) return;
+
+        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        this.pc = new RTCPeerConnection(configuration);
+
+        // Add local tracks
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => this.pc.addTrack(track, this.localStream));
+        }
+
+        // Handle remote tracks
+        this.pc.ontrack = (event) => {
+            this.remoteAudio.srcObject = event.streams[0];
+            this.setupAudioLevelIndicator(event.streams[0], false);
+        };
+
+        // Handle ICE candidates
+        this.pc.onicecandidate = (event) => {
+            if (event.candidate && this.roomId) {
+                const type = this.isHost ? 'host' : 'guest';
+                const candidateRef = push(ref(this.db, `rooms/${this.roomId}/signaling/iceCandidates/${type}`));
+                set(candidateRef, event.candidate.toJSON());
+            }
+        };
+
+        // If not host, initiate the call
+        if (!this.isHost) {
+            await this.createAndSendOffer();
+        }
+    }
+
+    async createAndSendOffer() {
+        const offer = await this.pc.createOffer();
+        await this.pc.setLocalDescription(offer);
+        await set(ref(this.db, `rooms/${this.roomId}/signaling/offer`), {
+            sdp: offer.sdp,
+            type: offer.type
+        });
+    }
+
+    async handleSignaling(signaling) {
+        if (!this.pc) await this.initWebRTC();
+
+        try {
+            // Host receives offer and sends answer
+            if (this.isHost && signaling.offer && !this.pc.remoteDescription) {
+                await this.pc.setRemoteDescription(new RTCSessionDescription(signaling.offer));
+                const answer = await this.pc.createAnswer();
+                await this.pc.setLocalDescription(answer);
+                await set(ref(this.db, `rooms/${this.roomId}/signaling/answer`), {
+                    sdp: answer.sdp,
+                    type: answer.type
+                });
+            }
+
+            // Guest receives answer
+            if (!this.isHost && signaling.answer && !this.pc.remoteDescription) {
+                await this.pc.setRemoteDescription(new RTCSessionDescription(signaling.answer));
+            }
+
+            // Handle ICE Candidates
+            const typeToListen = this.isHost ? 'guest' : 'host';
+            if (signaling.iceCandidates && signaling.iceCandidates[typeToListen]) {
+                const candidates = signaling.iceCandidates[typeToListen];
+                if (!this.addedCandidates) this.addedCandidates = new Set();
+
+                Object.entries(candidates).forEach(([id, candidate]) => {
+                    if (!this.addedCandidates.has(id)) {
+                        this.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+                        this.addedCandidates.add(id);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Signaling Error:", e);
+        }
+    }
+
+    setupAudioLevelIndicator(stream, isLocal) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioContext();
+        const analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        analyser.fftSize = 256;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const checkVolume = () => {
+            // Stop if stream is inactive or mic disabled (for local)
+            if (!stream.active || (isLocal && !this.micEnabled)) {
+                audioContext.close();
+                return;
+            }
+
+            analyser.getByteFrequencyData(dataArray);
+            let values = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                values += dataArray[i];
+            }
+            const average = values / bufferLength;
+            const isSpeaking = average > 15; // Threshold for speaking
+
+            this.updateSpeakingUI(isLocal ? this.myId : 'opponent', isSpeaking);
+            requestAnimationFrame(checkVolume);
+        };
+        checkVolume();
+    }
+
+    updateSpeakingUI(playerId, isSpeaking) {
+        // Update all possible avatar locations
+        let selector = '';
+        if (playerId === this.myId) {
+            // My avatar in lobby, game progress (if implemented), or results
+            // Note: For now, I'll use class-based selection
+            const myAvatars = document.querySelectorAll('.avatar, .opp-avatar'); // simplistic
+            // We need a more precise way to identify "My" avatars vs "Opponent" avatars
+        }
+
+        // Since it's 1vs1:
+        if (playerId === this.myId) {
+            // Local player is speaking
+            // 1. Lobby list (find my ID)
+            const lobbyPlayers = document.querySelectorAll('#player-list li');
+            lobbyPlayers.forEach(li => {
+                if (li.textContent.includes('(أنت)')) {
+                    const avatarSpan = li.querySelector('span[style*="font-size:1.5rem"]');
+                    if (avatarSpan) avatarSpan.classList.toggle('speaking-avatar', isSpeaking);
+                }
+            });
+            // 2. Results (if active)
+            const resultAvatars = document.querySelectorAll('.player-result-section .avatar');
+            resultAvatars.forEach(av => {
+                const nameNode = av.nextElementSibling;
+                if (nameNode && nameNode.textContent.includes('(أنت)')) {
+                    av.classList.toggle('speaking', isSpeaking);
+                }
+            });
+        } else {
+            // Opponent is speaking
+            // 1. Game progress
+            if (this.oppAvatar) this.oppAvatar.classList.toggle('speaking', isSpeaking);
+
+            // 2. Lobby list
+            const lobbyPlayers = document.querySelectorAll('#player-list li');
+            lobbyPlayers.forEach(li => {
+                if (!li.textContent.includes('(أنت)') && li.querySelector('span[style*="font-size:1.5rem"]')) {
+                    const avatarSpan = li.querySelector('span[style*="font-size:1.5rem"]');
+                    if (avatarSpan) avatarSpan.classList.toggle('speaking-avatar', isSpeaking);
+                }
+            });
+
+            // 3. Results
+            const resultAvatars = document.querySelectorAll('.player-result-section .avatar');
+            resultAvatars.forEach(av => {
+                const nameNode = av.nextElementSibling;
+                if (nameNode && !nameNode.textContent.includes('(أنت)')) {
+                    av.classList.toggle('speaking', isSpeaking);
+                }
+            });
+        }
     }
 }
 
