@@ -7,104 +7,17 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-        
-    - name: Install Agora RTM SDK from npm
-      run: |
-        npm init -y
-        npm install agora-rtm-sdk@2.2.3
-        
-    - name: Find and copy SDK file
-      run: |
-        mkdir -p js
-        # البحث عن أي ملف .min.js داخل الحزمة المثبتة
-        SDK_FILE=$(find node_modules/agora-rtm-sdk -name "*.min.js" | head -1)
-        if [ -z "$SDK_FILE" ]; then
-          echo "❌ Could not find any .min.js file in the package"
-          exit 1
-        fi
-        echo "✅ Found SDK file: $SDK_FILE"
-        cp "$SDK_FILE" js/agora-rtm.min.js
-        ls -la js/
-        
-    - name: Verify SDK file size
-      run: |
-        FILE_SIZE=$(stat -c%s "js/agora-rtm.min.js")
-        echo "📦 File size: $FILE_SIZE bytes"
-        if [ $FILE_SIZE -lt 100000 ]; then
-          echo "❌ SDK file too small ($FILE_SIZE bytes) - something wrong"
-          exit 1
-        fi
-        echo "✅ SDK file size OK"
-        
-    - name: Create compatibility layer (v1.4.4 to v2.x)
-      run: |
-        cat > js/compat.js << 'EOF'
-        (function() {
-            if (typeof AgoraRTM !== 'undefined') return;
-            const checkInterval = setInterval(() => {
-                if (typeof RTM !== 'undefined') {
-                    clearInterval(checkInterval);
-                    window.AgoraRTM = {
-                        VERSION: '2.2.3-compat',
-                        createInstance: (appId, config) => {
-                            const client = RTM.createInstance(appId, config);
-                            const origLogin = client.login;
-                            client.login = function(arg1, arg2) {
-                                if (arg1 && typeof arg1 === 'object') return origLogin.call(client, arg1);
-                                return origLogin.call(client, { token: arg1, uid: arg2 });
-                            };
-                            const origCreateChannel = client.createChannel;
-                            client.createChannel = function(name) {
-                                const channel = origCreateChannel.call(client, name);
-                                const origSend = channel.sendMessage;
-                                channel.sendMessage = (msg) => origSend.call(channel, { text: msg.text });
-                                const origOn = channel.on;
-                                channel.on = (event, cb) => {
-                                    if (event === 'ChannelMessage') return origOn.call(channel, 'message', (msg, pid) => cb(msg, pid));
-                                    return origOn.call(channel, event, cb);
-                                };
-                                return channel;
-                            };
-                            return client;
-                        }
-                    };
-                    console.log('✅ Compatibility layer ready');
-                }
-            }, 100);
-            setTimeout(() => {
-                clearInterval(checkInterval);
-                if (!window.AgoraRTM) console.error('❌ RTM SDK failed to load');
-            }, 5000);
-        })();
-        EOF
-        echo "✅ compat.js created"
-        
-    - name: Update index.html to use local SDK
-      run: |
-        # استبدال أي رابط CDN قديم بالملف المحلي
-        sed -i 's|https://cdn.agora.io/sdk/release/agora-rtm.sdk-.*.min.js|js/agora-rtm.min.js|g' index.html
-        sed -i 's|https://download.agora.io/sdk/release/AgoraRTM-.*.min.js|js/agora-rtm.min.js|g' index.html
-        # إضافة compat.js إذا لم تكن موجودة
-        if ! grep -q "compat.js" index.html; then
-          sed -i '/<script src="js\/agora-rtm.min.js"><\/script>/a \    <script src="js/compat.js"><\/script>' index.html
-        fi
-        echo "✅ index.html updated"
         
     - name: List files for verification
       run: |
+        ls -la
         ls -la js/
-        head -20 index.html
         
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
@@ -115,4 +28,4 @@ jobs:
         force_orphan: true
         user_name: 'github-actions[bot]'
         user_email: 'github-actions[bot]@users.noreply.github.com'
-        commit_message: 'Deploy with Agora RTM SDK from npm'
+        commit_message: 'Deploy with Firebase Backend'
