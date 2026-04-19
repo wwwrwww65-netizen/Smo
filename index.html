@@ -47,10 +47,16 @@
             <h1 class="glow-text">لعبة اسم حيوان نبات</h1>
             <div class="card">
                 <input type="text" id="player-name" placeholder="أدخل اسمك هنا..." aria-label="اسم اللاعب" maxlength="15">
-                <button id="btn-create-room" class="btn-primary">إنشاء غرفة ✨</button>
+                <button id="btn-create-room" class="btn-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    إنشاء غرفة
+                </button>
                 <div class="separator">أو</div>
                 <input type="text" id="room-id-input" placeholder="أدخل رمز الغرفة..." aria-label="رمز الغرفة" maxlength="9">
-                <button id="btn-join-room" class="btn-secondary">انضمام 🤝</button>
+                <button id="btn-join-room" class="btn-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    انضمام
+                </button>
             </div>
         </section>
 
@@ -62,7 +68,9 @@
                     <div class="room-id-container">
                         <span>رمز الغرفة:</span>
                         <strong id="display-room-id">...</strong>
-                        <button id="btn-copy-id" class="btn-icon" title="نسخ الرمز">📋</button>
+                        <button id="btn-copy-id" class="btn-icon" title="نسخ الرمز">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
                     </div>
                 </div>
                 <h3>اللاعبون المنضمون:</h3>
@@ -70,7 +78,10 @@
                     <!-- قائمة اللاعبين تظهر هنا -->
                 </ul>
                 <div class="lobby-actions">
-                    <button id="btn-ready" class="btn-success">أنا مستعد 👍</button>
+                    <button id="btn-ready" class="btn-success">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        أنا مستعد
+                    </button>
                 </div>
             </div>
         </section>
@@ -119,33 +130,25 @@
                     <input type="text" id="input-country" class="game-field" data-field="country" autocomplete="off" placeholder="بلاد...">
                 </div>
             </div>
-            <button id="btn-stop" class="btn-stop">انتهيت! 🔔</button>
+            <button id="btn-stop" class="btn-stop">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><rect x="9" y="9" width="6" height="6"></rect></svg>
+                انتهيت!
+            </button>
         </section>
 
         <!-- قسم النتائج -->
         <section id="section-score">
             <h2>نتائج الجولة</h2>
-            <div class="card">
-                <div class="table-container">
-                    <table id="score-table">
-                        <thead>
-                            <tr>
-                                <th>اللاعب</th>
-                                <th>اسم</th>
-                                <th>حيوان</th>
-                                <th>نبات</th>
-                                <th>جماد</th>
-                                <th>بلاد</th>
-                                <th>المجموع</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- النتائج تظهر هنا -->
-                        </tbody>
-                    </table>
-                </div>
+            <div id="results-split-container">
+                <!-- سيتم توليد محتوى اللاعبين هنا برمجياً -->
+            </div>
+
+            <div class="card score-footer-card">
                 <div id="score-actions" class="score-actions">
-                    <button id="btn-next-round-request" class="btn-primary">الجولة التالية 🔄</button>
+                    <button id="btn-next-round-request" class="btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        الجولة التالية
+                    </button>
                 </div>
                 <div id="host-eval-hint" class="host-hint hidden">
                     أنت المضيف: قم بتقييم الإجابات

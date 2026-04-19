@@ -26,7 +26,9 @@ const SOUNDS = {
     copy: 'https://www.soundjay.com/buttons/sounds/button-50.mp3',
     quit: 'https://www.soundjay.com/buttons/sounds/button-10.mp3',
     timer: 'https://www.soundjay.com/clock/sounds/clock-ticking-2.mp3',
-    success: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.mp3'
+    success: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.mp3',
+    win: 'https://www.soundjay.com/misc/sounds/success-fanfare-trumpets-1.mp3',
+    loss: 'https://www.soundjay.com/misc/sounds/fail-trombone-01.mp3'
 };
 
 const AVATARS = ["🦊", "🦁", "🐯", "🐼", "🐨", "🐸", "🐵", "🦄", "🐙", "🦋", "🦖", "🐧"];
@@ -70,7 +72,7 @@ class GameManager {
         this.playerList = document.getElementById('player-list');
         this.letterDisplay = document.getElementById('random-letter-display');
         this.timerDisplay = document.getElementById('timer-display');
-        this.scoreTableBody = document.querySelector('#score-table tbody');
+        this.resultsSplitContainer = document.getElementById('results-split-container');
         this.mainToast = document.getElementById('main-toast');
         this.btnJoinRoom = document.getElementById('btn-join-room');
         this.btnCreateRoom = document.getElementById('btn-create-room');
@@ -432,11 +434,55 @@ class GameManager {
         }
     }
 
+    async autoEvaluateAnswers() {
+        if (!this.isHost || this.results.length < 2) return;
+
+        const res1 = this.results[0];
+        const res2 = this.results[1];
+        const p1 = this.players.find(p => p.id === res1.playerId);
+        const p2 = this.players.find(p => p.id === res2.playerId);
+
+        const fields = ['name', 'animal', 'plant', 'object', 'country'];
+        const p1Updates = { scores: { ...res1.scores }, roundTotal: 0 };
+        const p2Updates = { scores: { ...res2.scores }, roundTotal: 0 };
+
+        fields.forEach(f => {
+            const ans1 = res1.answers[f]?.toLowerCase().trim();
+            const ans2 = res2.answers[f]?.toLowerCase().trim();
+
+            if (ans1 && ans2 && ans1 === ans2) {
+                p1Updates.scores[f] = 5;
+                p2Updates.scores[f] = 5;
+            }
+        });
+
+        p1Updates.roundTotal = Object.values(p1Updates.scores).reduce((a, b) => a + b, 0);
+        p2Updates.roundTotal = Object.values(p2Updates.scores).reduce((a, b) => a + b, 0);
+
+        await update(ref(this.db, `rooms/${this.roomId}/results/${res1.playerId}`), p1Updates);
+        await update(ref(this.db, `rooms/${this.roomId}/results/${res2.playerId}`), p2Updates);
+
+        // Update global cumulative scores with the auto-evaluated points
+        if (p1 && p1Updates.roundTotal > 0) {
+            await update(ref(this.db, `rooms/${this.roomId}/players/${res1.playerId}`), {
+                totalScore: (p1.totalScore || 0) + p1Updates.roundTotal
+            });
+        }
+        if (p2 && p2Updates.roundTotal > 0) {
+            await update(ref(this.db, `rooms/${this.roomId}/players/${res2.playerId}`), {
+                totalScore: (p2.totalScore || 0) + p2Updates.roundTotal
+            });
+        }
+    }
+
     async checkAllSubmitted() {
         const check = setInterval(async () => {
             const snap = await get(ref(this.db, `rooms/${this.roomId}/results`));
             if (snap.exists() && Object.keys(snap.val()).length >= this.players.length) {
                 clearInterval(check);
+                // Perform auto-evaluation before showing scores
+                this.results = Object.entries(snap.val()).map(([id, r]) => ({ playerId: id, ...r }));
+                await this.autoEvaluateAnswers();
                 update(ref(this.db, `rooms/${this.roomId}/config`), { gameState: 'score' });
             }
         }, 1000);
@@ -447,45 +493,115 @@ class GameManager {
         const hint = document.getElementById('host-eval-hint');
         if (this.isHost) hint.classList.remove('hidden');
         else hint.classList.add('hidden');
+
+        // Play result sound
+        setTimeout(() => {
+            const myStatus = this.getRoundWinStatus(this.myId);
+            if (myStatus.class === 'badge-win') this.playSound('win');
+            else if (myStatus.class === 'badge-loss') this.playSound('loss');
+        }, 500);
     }
 
     renderScores() {
-        this.scoreTableBody.innerHTML = '';
+        if (!this.resultsSplitContainer) return;
+        this.resultsSplitContainer.innerHTML = '';
+
         if (this.results.length === 0) {
-            this.scoreTableBody.innerHTML = '<tr><td colspan="7">في انتظار النتائج...</td></tr>';
+            this.resultsSplitContainer.innerHTML = '<div class="card" style="text-align:center">في انتظار النتائج...</div>';
             return;
         }
 
-        this.results.forEach(res => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td><div style="font-size:1.2rem">${res.avatar || '👤'}</div>${res.playerName}</td>`;
+        // Sort results: Mine first, then others
+        const sortedResults = [...this.results].sort((a, b) => {
+            if (a.playerId === this.myId) return -1;
+            if (b.playerId === this.myId) return 1;
+            return 0;
+        });
 
-            ['name', 'animal', 'plant', 'object', 'country'].forEach(field => {
-                const td = document.createElement('td');
-                const val = res.answers[field] || '-';
-                const score = res.scores[field] || 0;
+        sortedResults.forEach(res => {
+            const section = document.createElement('div');
+            section.className = 'player-result-section';
 
-                let html = `<div class="answer-val">${val}</div>`;
+            let rowsHtml = '';
+            const fields = [
+                { id: 'name', label: 'اسم' },
+                { id: 'animal', label: 'حيوان' },
+                { id: 'plant', label: 'نبات' },
+                { id: 'object', label: 'جماد' },
+                { id: 'country', label: 'بلاد' }
+            ];
+
+            fields.forEach(f => {
+                const answer = res.answers[f.id] || '-';
+                const score = res.scores[f.id] || 0;
+                const status = this.getFieldStatus(res.playerId, f.id);
+
+                let scoreActionHtml = '';
                 if (this.isHost) {
-                    html += `
-                        <div class="score-controls">
-                            <button class="btn-score btn-score-10" onclick="window.gameManager.updateScore('${res.playerId}','${field}',10)">10</button>
-                            <button class="btn-score btn-score-5" onclick="window.gameManager.updateScore('${res.playerId}','${field}',5)">5</button>
-                            <button class="btn-score btn-score-0" onclick="window.gameManager.updateScore('${res.playerId}','${field}',0)">0</button>
+                    scoreActionHtml = `
+                        <div class="score-btns">
+                            <button class="btn-small-score btn-score-10" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',10)">10</button>
+                            <button class="btn-small-score btn-score-5" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',5)">5</button>
+                            <button class="btn-small-score btn-score-0" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',0)">0</button>
                         </div>
                     `;
                 } else {
-                    html += `<div style="color:var(--accent-color); font-size:0.8rem">${score} نقطة</div>`;
+                    scoreActionHtml = `<div style="color:var(--accent-color); font-weight:bold">${score}</div>`;
                 }
-                td.innerHTML = html;
-                tr.appendChild(td);
+
+                rowsHtml += `
+                    <div class="grid-row">
+                        <div class="grid-cell cell-label">${f.label}</div>
+                        <div class="grid-cell cell-answer">${answer}</div>
+                        <div class="grid-cell">${scoreActionHtml}</div>
+                        <div class="grid-cell status-icon">${status.icon}</div>
+                    </div>
+                `;
             });
 
-            const player = this.players.find(p => p.id === res.playerId);
-            const total = player ? player.totalScore : 0;
-            tr.innerHTML += `<td><div style="font-size:0.8rem; opacity:0.7">${res.roundTotal}</div><div style="font-weight:bold; color:var(--success-color); font-size:1.1rem">${total}</div></td>`;
-            this.scoreTableBody.appendChild(tr);
+            const playerTotal = this.players.find(p => p.id === res.playerId)?.totalScore || 0;
+            const roundWinStatus = this.getRoundWinStatus(res.playerId);
+
+            section.innerHTML = `
+                <div class="player-header">
+                    <div class="avatar">${res.avatar || '👤'}</div>
+                    <div class="name">${res.playerName} ${res.playerId === this.myId ? '(أنت)' : ''}</div>
+                </div>
+                <div class="result-grid">
+                    <div class="grid-header">الفئة</div>
+                    <div class="grid-header">الإجابة</div>
+                    <div class="grid-header">النقاط</div>
+                    <div class="grid-header">الحالة</div>
+                    ${rowsHtml}
+                </div>
+                <div class="section-footer">
+                    <div class="total-score-badge">المجموع الكلي: ${playerTotal}</div>
+                    <div class="win-status-badge ${roundWinStatus.class}">${roundWinStatus.text}</div>
+                </div>
+            `;
+            this.resultsSplitContainer.appendChild(section);
         });
+    }
+
+    getFieldStatus(playerId, field) {
+        if (this.results.length < 2) return { text: '', icon: '-' };
+        const myScore = this.results.find(r => r.playerId === playerId)?.scores[field] || 0;
+        const oppScore = this.results.find(r => r.playerId !== playerId)?.scores[field] || 0;
+
+        if (myScore > oppScore) return { text: 'فاز', icon: '✅' };
+        if (myScore < oppScore) return { text: 'خسر', icon: '❌' };
+        if (myScore === 0 && oppScore === 0) return { text: '-', icon: '-' };
+        return { text: 'تعادل', icon: '🤝' };
+    }
+
+    getRoundWinStatus(playerId) {
+        if (this.results.length < 2) return { text: '', class: '' };
+        const myTotal = this.results.find(r => r.playerId === playerId)?.roundTotal || 0;
+        const oppTotal = this.results.find(r => r.playerId !== playerId)?.roundTotal || 0;
+
+        if (myTotal > oppTotal) return { text: 'فائز بالجولة 🏆', class: 'badge-win' };
+        if (myTotal < oppTotal) return { text: 'خاسر بالجولة 📉', class: 'badge-loss' };
+        return { text: 'تعادل في الجولة 🤝', class: 'badge-draw' };
     }
 
     async updateScore(playerId, field, points) {
@@ -546,18 +662,25 @@ class GameManager {
         this.modalNextRound.classList.add('hidden');
         if (this.handshakeTimeout) clearTimeout(this.handshakeTimeout);
 
-        // Reset game for next round
+        // Reset game and start directly
+        const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
         const updates = {};
         this.players.forEach(p => {
-            updates[`players/${p.id}/ready`] = false;
+            updates[`players/${p.id}/ready`] = true; // Stay ready for immediate start
         });
-        updates['config/gameState'] = 'lobby';
+        updates['config/gameState'] = 'game';
+        updates['config/currentLetter'] = letter;
         updates['config/stopTriggered'] = false;
+        updates['config/timer'] = 40;
         updates['nextRoundRequest'] = null;
 
         await update(ref(this.db, `rooms/${this.roomId}`), updates);
         await remove(ref(this.db, `rooms/${this.roomId}/results`));
         await remove(ref(this.db, `rooms/${this.roomId}/progress`));
+
+        if (this.isHost) {
+            this.startHostTimerSync();
+        }
     }
 
     resetLobbyUI() {
