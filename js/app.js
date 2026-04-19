@@ -1,8 +1,22 @@
 /**
- * لعبة اسم حيوان نبات - Agora RTM v1.4.4
+ * لعبة اسم حيوان نبات - Firebase Realtime Database Edition
  */
 
-const APP_ID = "36713fd4db3d48919d8e393e71c78026";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, child, remove, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDfcHB-d68R2Kf-jisYudWKIjHZ9lgjUdM",
+  authDomain: "smo1-5f999.firebaseapp.com",
+  projectId: "smo1-5f999",
+  storageBucket: "smo1-5f999.firebasestorage.app",
+  messagingSenderId: "376255463194",
+  appId: "1:376255463194:web:26bd4efe2d8f4c279f76a3",
+  measurementId: "G-T103PXE8LF"
+};
 
 const SOUNDS = {
     click: 'https://www.soundjay.com/buttons/sounds/button-16.mp3',
@@ -15,8 +29,10 @@ const SOUNDS = {
 
 class GameManager {
     constructor() {
-        this.client = null;
-        this.channel = null;
+        this.app = initializeApp(firebaseConfig);
+        this.db = getDatabase(this.app);
+        this.auth = getAuth(this.app);
+
         this.isHost = false;
         this.playerName = "";
         this.roomId = "";
@@ -24,18 +40,11 @@ class GameManager {
         this.results = [];
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
-        this.myId = Math.floor(Math.random() * 1000000000).toString();
+        this.myId = null;
 
         this.initElements();
         this.initEvents();
-        
-        if (typeof AgoraRTM === 'undefined') {
-            console.error('❌ AgoraRTM not loaded!');
-            this.showToast('❌ فشل تحميل المكتبة');
-            return;
-        }
-        
-        this.initRTM();
+        this.initAuth();
     }
 
     initElements() {
@@ -68,141 +77,111 @@ class GameManager {
         this.btnQuit.addEventListener('click', () => this.quitGame());
     }
 
-    async initRTM() {
-        try {
-            console.log('🔄 Initializing RTM v1.4.4...');
-            this.client = AgoraRTM.createInstance(APP_ID);
-            await this.client.login({ uid: this.myId });
-            console.log('✅ RTM Login Success');
-            this.client.on('ConnectionStateChanged', (newState, reason) => {
-                console.log('📡 Connection State:', newState, reason);
-            });
-        } catch (error) {
-            console.error("❌ RTM Error:", error);
-            this.showToast("فشل الاتصال: " + error.message);
-        }
-    }
-
-    async joinChannel(channelId) {
-        try {
-            if (!this.client) throw new Error("RTM not initialized");
-            this.roomId = channelId;
-            console.log('🔄 Joining channel:', channelId);
-            this.channel = this.client.createChannel(channelId);
-            
-            this.channel.on('ChannelMessage', (message, memberId) => {
-                try {
-                    const data = JSON.parse(message.text);
-                    this.handleMessage(memberId, data);
-                } catch (e) { console.error("Parse error:", e); }
-            });
-
-            this.channel.on('MemberJoined', (memberId) => {
-                if (memberId !== this.myId) {
-                    this.showToast(`👋 انضم لاعب جديد`);
-                    if (this.isHost) setTimeout(() => this.syncState(), 500);
-                }
-            });
-
-            this.channel.on('MemberLeft', (memberId) => {
-                this.handlePlayerLeave(memberId);
-            });
-
-            await this.channel.join();
-            console.log('✅ Joined channel:', channelId);
-            
-            setTimeout(() => {
-                this.channel.sendMessage({ 
-                    text: JSON.stringify({
-                        type: 'join',
-                        name: this.playerName,
-                        id: this.myId
-                    })
+    async initAuth() {
+        onAuthStateChanged(this.auth, (user) => {
+            if (user) {
+                this.myId = user.uid;
+                console.log("✅ Authenticated as:", this.myId);
+            } else {
+                signInAnonymously(this.auth).catch(err => {
+                    console.error("❌ Auth Error:", err);
+                    this.showToast("فشل الاتصال بـ Firebase");
                 });
-            }, 300);
-        } catch (error) {
-            console.error("❌ Join Error:", error);
-            this.showToast("فشل الانضمام: " + error.message);
-            throw error;
-        }
-    }
-
-    sendMessage(message) {
-        if (this.channel) {
-            this.channel.sendMessage({ text: JSON.stringify(message) })
-                .catch(err => console.error("Send error:", err));
-        }
-    }
-
-    handleMessage(publisher, data) {
-        if (publisher === this.myId && data.type !== 'sync-state') return;
-        switch (data.type) {
-            case 'join':
-                if (this.isHost && publisher !== this.myId) {
-                    if (!this.players.find(p => p.id === data.id)) {
-                        this.players.push({ id: data.id, name: data.name, ready: false, totalScore: 0 });
-                        this.updatePlayerList();
-                        setTimeout(() => this.syncState(), 200);
-                    }
-                }
-                break;
-            case 'sync-state':
-                if (!this.isHost) {
-                    this.players = data.players || [];
-                    this.updatePlayerList();
-                    if (data.gameState === 'game' && !this.isSectionActive('game')) this.startGame(data.letter);
-                    else if (data.gameState === 'score') {
-                        this.results = data.results || [];
-                        this.renderScores();
-                        this.showSection('score');
-                    }
-                }
-                break;
-            case 'ready':
-                if (this.isHost) {
-                    const p = this.players.find(p => p.id === data.id);
-                    if (p) { p.ready = true; this.updatePlayerList(); this.syncState(); this.checkAllReady(); }
-                }
-                break;
-            case 'start-game':
-                this.startGame(data.letter);
-                break;
-            case 'stop-game':
-                this.disableInputs();
-                this.submitAnswers();
-                this.playSound('buzzer');
-                break;
-            case 'submit-answers':
-                if (this.isHost) this.handleAnswers(data.id, data.answers);
-                break;
-            case 'results-update':
-                this.results = data.results || [];
-                this.players = data.players || [];
-                this.renderScores();
-                if (!this.isSectionActive('score')) this.showSection('score');
-                break;
-            case 'quit':
-                this.showToast(`🚪 انسحب اللاعب ${data.name}`);
-                this.handlePlayerLeave(data.id);
-                break;
-        }
-    }
-
-    handlePlayerLeave(id) {
-        this.players = this.players.filter(p => p.id !== id);
-        this.updatePlayerList();
-        if (this.isHost) this.syncState();
-    }
-
-    syncState() {
-        if (!this.isHost || !this.channel) return;
-        this.sendMessage({
-            type: 'sync-state',
-            players: this.players,
-            gameState: this.getCurrentSection(),
-            letter: this.currentLetter,
-            results: this.results
+            }
         });
+    }
+
+    async listenToRoom(roomId) {
+        const roomRef = ref(this.db, `rooms/${roomId}`);
+
+        onValue(roomRef, (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+
+            // Update players
+            if (data.players) {
+                this.players = Object.entries(data.players).map(([id, p]) => ({ id, ...p }));
+                this.updatePlayerList();
+
+                // Check if all ready (only host does this)
+                if (this.isHost && data.config?.gameState === 'lobby') {
+                    this.checkAllReady();
+                }
+            }
+
+            // Update game state
+            if (data.config) {
+                const state = data.config.gameState;
+                const letter = data.config.currentLetter;
+
+                if (state === 'game' && !this.isSectionActive('game')) {
+                    this.startGame(letter);
+                } else if (state === 'score' && !this.isSectionActive('score')) {
+                    this.showSection('score');
+                } else if (state === 'lobby' && !this.isSectionActive('lobby')) {
+                    this.showSection('lobby');
+                    const btnReady = document.getElementById('btn-ready');
+                    if (btnReady) {
+                        btnReady.disabled = false;
+                        btnReady.innerHTML = 'أنا مستعد 👍';
+                    }
+                }
+
+                this.currentLetter = letter;
+                if (this.letterDisplay) this.letterDisplay.textContent = letter || '؟';
+
+                // Host controls visibility
+                if (this.isHost && state === 'score') {
+                    this.hostControls.classList.remove('hidden');
+                } else {
+                    this.hostControls.classList.add('hidden');
+                }
+
+                // If someone stopped the game
+                if (data.config.stopTriggered && !this.inputsDisabled) {
+                    this.disableInputs();
+                    this.submitAnswers();
+                    this.playSound('buzzer');
+                }
+            }
+
+            // Update results
+            if (data.results) {
+                this.results = Object.entries(data.results).map(([id, r]) => ({ playerId: id, ...r }));
+                this.renderScores();
+
+                // Auto transition to score state if all players submitted (Host only)
+                if (this.isHost && data.config?.gameState === 'game') {
+                    const resultsCount = Object.keys(data.results).length;
+                    const playersCount = Object.keys(data.players || {}).length;
+                    if (resultsCount >= playersCount && playersCount > 0) {
+                        update(ref(this.db, `rooms/${this.roomId}/config`), { gameState: 'score' });
+                    }
+                }
+            } else {
+                this.results = [];
+                this.renderScores();
+            }
+        });
+    }
+
+    async joinRoomLogic(roomId) {
+        const playerRef = ref(this.db, `rooms/${roomId}/players/${this.myId}`);
+
+        // Presence: Remove player when disconnected
+        onDisconnect(playerRef).remove();
+
+        await update(playerRef, {
+            name: this.playerName,
+            ready: false,
+            totalScore: 0,
+            isOnline: true
+        });
+
+        this.listenToRoom(roomId);
+        this.showSection('lobby');
+        this.displayRoomId.textContent = roomId;
+        this.playSound('join');
     }
 
     getCurrentSection() {
@@ -239,20 +218,29 @@ class GameManager {
     }
 
     async createRoom() {
+        if (!this.myId) { this.showToast("⏳ جاري الاتصال... حاول مرة أخرى"); return; }
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
+
         this.btnCreateRoom.disabled = true;
         const originalText = this.btnCreateRoom.innerHTML;
         this.btnCreateRoom.innerHTML = `<span>جارٍ الإنشاء...</span> <div class="spinner"></div>`;
+
         try {
             this.isHost = true;
             this.roomId = this.generateId();
-            this.players = [{ id: this.myId, name: this.playerName, ready: false, totalScore: 0 }];
-            await this.joinChannel(this.roomId);
-            this.showSection('lobby');
-            this.displayRoomId.textContent = this.roomId;
-            this.updatePlayerList();
-            this.playSound('join');
+
+            const roomRef = ref(this.db, `rooms/${this.roomId}`);
+            await set(roomRef, {
+                config: {
+                    hostId: this.myId,
+                    gameState: 'lobby',
+                    currentLetter: '',
+                    createdAt: serverTimestamp()
+                }
+            });
+
+            await this.joinRoomLogic(this.roomId);
         } catch (error) {
             console.error("Create Error:", error);
             this.showToast("❌ فشل إنشاء الغرفة");
@@ -265,22 +253,29 @@ class GameManager {
     }
 
     async joinRoom() {
+        if (!this.myId) { this.showToast("⏳ جاري الاتصال... حاول مرة أخرى"); return; }
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
+
         if (!this.playerName) { this.showToast("⚠️ يرجى إدخال اسمك"); return; }
         if (!this.roomId || this.roomId.length !== 9 || !/^\d{9}$/.test(this.roomId)) {
             this.showToast("⚠️ رمز الغرفة يجب أن يكون 9 أرقام");
             return;
         }
-        this.isHost = false;
+
         this.btnJoinRoom.disabled = true;
         const originalText = this.btnJoinRoom.innerHTML;
         this.btnJoinRoom.innerHTML = `<span>جارٍ الانضمام...</span> <div class="spinner"></div>`;
+
         try {
-            await this.joinChannel(this.roomId);
-            this.showSection('lobby');
-            this.displayRoomId.textContent = this.roomId;
-            this.playSound('join');
+            const roomSnapshot = await get(ref(this.db, `rooms/${this.roomId}`));
+            if (!roomSnapshot.exists()) {
+                this.showToast("❌ الغرفة غير موجودة");
+                return;
+            }
+
+            this.isHost = false;
+            await this.joinRoomLogic(this.roomId);
         } catch (error) {
             console.error("Join Error:", error);
             this.showToast("❌ فشل الانضمام");
@@ -299,7 +294,7 @@ class GameManager {
         this.players.forEach(p => {
             const li = document.createElement('li');
             const nameSpan = document.createElement('span');
-            nameSpan.textContent = p.name + (p.id === this.myId ? " (أنت)" : "");
+            nameSpan.textContent = (p.name || "مجهول") + (p.id === this.myId ? " (أنت)" : "");
             if (p.id === this.myId) nameSpan.style.color = '#ffd54f';
             const statusSpan = document.createElement('span');
             statusSpan.textContent = p.ready ? '✅ مستعد' : '⏳ ينتظر';
@@ -327,28 +322,25 @@ class GameManager {
         });
     }
 
-    setReady() {
+    async setReady() {
         const btnReady = document.getElementById('btn-ready');
-        if (this.isHost) {
-            const p = this.players.find(p => p.id === this.myId);
-            if (p) p.ready = true;
-            this.updatePlayerList();
-            this.syncState();
-            this.checkAllReady();
-        } else {
-            this.sendMessage({ type: 'ready', id: this.myId });
-        }
+        await update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), { ready: true });
         btnReady.disabled = true;
         btnReady.innerHTML = '⏳ في انتظار البقية...';
     }
 
-    checkAllReady() {
+    async checkAllReady() {
         if (this.players.length < 1) return;
         const allReady = this.players.every(p => p.ready);
         if (allReady) {
             const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
-            this.sendMessage({ type: 'start-game', letter: letter });
-            this.startGame(letter);
+            await update(ref(this.db, `rooms/${this.roomId}/config`), {
+                gameState: 'game',
+                currentLetter: letter,
+                stopTriggered: false
+            });
+            // Clear previous results
+            await remove(ref(this.db, `rooms/${this.roomId}/results`));
         }
     }
 
@@ -356,6 +348,7 @@ class GameManager {
         this.currentLetter = letter;
         this.letterDisplay.textContent = letter;
         this.results = [];
+        this.hasSubmitted = false;
         this.clearInputs();
         this.enableInputs();
         this.showSection('game');
@@ -364,6 +357,7 @@ class GameManager {
         const btnReady = document.getElementById('btn-ready');
         btnReady.disabled = false;
         btnReady.innerHTML = 'أنا مستعد 👍';
+        this.inputsDisabled = false;
     }
 
     clearInputs() {
@@ -378,16 +372,17 @@ class GameManager {
     disableInputs() {
         document.querySelectorAll('.game-field').forEach(i => i.disabled = true);
         document.getElementById('btn-stop').disabled = true;
+        this.inputsDisabled = true;
     }
 
-    stopGame() {
-        this.sendMessage({ type: 'stop-game' });
-        this.disableInputs();
-        this.submitAnswers();
-        this.playSound('buzzer');
+    async stopGame() {
+        await update(ref(this.db, `rooms/${this.roomId}/config`), { stopTriggered: true });
     }
 
-    submitAnswers() {
+    async submitAnswers() {
+        if (this.hasSubmitted) return;
+        this.hasSubmitted = true;
+
         const answers = {
             name: document.getElementById('input-name').value.trim(),
             animal: document.getElementById('input-animal').value.trim(),
@@ -395,33 +390,20 @@ class GameManager {
             object: document.getElementById('input-object').value.trim(),
             country: document.getElementById('input-country').value.trim()
         };
-        if (this.isHost) this.handleAnswers(this.myId, answers);
-        else this.sendMessage({ type: 'submit-answers', id: this.myId, answers: answers });
-    }
 
-    handleAnswers(playerId, answers) {
-        if (this.results.find(r => r.playerId === playerId)) return;
-        const player = this.players.find(p => p.id === playerId);
-        if (!player) return;
-        this.results.push({
-            playerId: playerId,
-            playerName: player.name,
+        const player = this.players.find(p => p.id === this.myId);
+        await set(ref(this.db, `rooms/${this.roomId}/results/${this.myId}`), {
+            playerName: player ? player.name : this.playerName,
             answers: answers,
             scores: { name: 0, animal: 0, plant: 0, object: 0, country: 0 },
             roundTotal: 0
         });
-        if (this.results.length === this.players.length) {
-            this.renderScores();
-            this.sendMessage({ type: 'results-update', results: this.results, players: this.players });
-            this.showSection('score');
-            if (this.isHost) this.hostControls.classList.remove('hidden');
-        }
     }
 
     renderScores() {
         this.scoreTableBody.innerHTML = '';
         if (this.results.length === 0) {
-            this.scoreTableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">لا توجد نتائج</td></tr>';
+            this.scoreTableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">لا توجد نتائج بعد...</td></tr>';
             return;
         }
         this.results.forEach(res => {
@@ -436,6 +418,7 @@ class GameManager {
                 answerDiv.textContent = res.answers[field] || '-';
                 answerDiv.style.marginBottom = '5px';
                 td.appendChild(answerDiv);
+
                 if (this.isHost) {
                     const controls = document.createElement('div');
                     controls.className = 'score-controls';
@@ -467,46 +450,51 @@ class GameManager {
         });
     }
 
-    updateScore(playerId, field, points) {
+    async updateScore(playerId, field, points) {
         const res = this.results.find(r => r.playerId === playerId);
         const player = this.players.find(p => p.id === playerId);
         if (!res || !player) return;
-        res.roundTotal -= res.scores[field];
-        player.totalScore -= res.scores[field];
-        res.scores[field] = points;
-        res.roundTotal += points;
-        player.totalScore += points;
-        this.renderScores();
-        this.syncState();
+
+        const oldScore = res.scores[field];
+        const diff = points - oldScore;
+
+        const newRoundTotal = res.roundTotal + diff;
+        const newTotalScore = player.totalScore + diff;
+
+        // Update results
+        await update(ref(this.db, `rooms/${this.roomId}/results/${playerId}/scores`), { [field]: points });
+        await update(ref(this.db, `rooms/${this.roomId}/results/${playerId}`), { roundTotal: newRoundTotal });
+
+        // Update player total score
+        await update(ref(this.db, `rooms/${this.roomId}/players/${playerId}`), { totalScore: newTotalScore });
     }
 
-    nextRound() {
-        this.players.forEach(p => p.ready = false);
-        this.updatePlayerList();
-        const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
-        this.sendMessage({ type: 'start-game', letter: letter });
-        this.syncState();
-        this.startGame(letter);
+    async nextRound() {
+        // Reset ready status for all players
+        const updates = {};
+        this.players.forEach(p => {
+            updates[`players/${p.id}/ready`] = false;
+        });
+        updates['config/gameState'] = 'lobby';
+        updates['config/stopTriggered'] = false;
+
+        await update(ref(this.db, `rooms/${this.roomId}`), updates);
+        await remove(ref(this.db, `rooms/${this.roomId}/results`));
+
+        this.showSection('lobby');
     }
 
     async quitGame() {
         this.playSound('quit');
         this.showToast("🚪 جارٍ الخروج...");
-        try {
-            if (this.channel) { await this.channel.leave(); this.channel = null; }
-            if (this.client) { await this.client.logout(); this.client = null; }
-        } catch (error) { console.error("Quit Error:", error); }
+        if (this.roomId && this.myId) {
+            await remove(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`));
+        }
         setTimeout(() => location.reload(), 500);
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('🎮 Game initializing...');
-    if (typeof AgoraRTM === 'undefined') {
-        console.error('❌ AgoraRTM not loaded!');
-        document.getElementById('main-toast').textContent = '❌ فشل تحميل المكتبة';
-        document.getElementById('main-toast').classList.remove('hidden');
-    } else {
-        window.gameManager = new GameManager();
-    }
+    console.log('🎮 Game initializing with Firebase...');
+    window.gameManager = new GameManager();
 });
