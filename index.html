@@ -4,14 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>لعبة اسم حيوان نبات جماد بلاد</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
 </head>
 <body>
     <!-- خلفية متحركة -->
-    <div class="bg-animated">
-        <div class="circle"></div>
-        <div class="circle"></div>
-        <div class="circle"></div>
+    <div class="bg-animated" id="bg-animated">
+        <!-- سيتم إضافة الجزيئات برمجياً -->
     </div>
 
     <!-- شاشة بدء التشغيل (لتفعيل الصوت) -->
@@ -43,8 +45,8 @@
         <div class="chat-input-bar">
             <button id="btn-emoji" class="chat-icon-btn">😊</button>
             <button id="btn-mic" class="chat-icon-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mic-on"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mic-off hidden"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mic-on hidden"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mic-off"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
             </button>
             <button id="btn-speaker" class="chat-icon-btn">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="speaker-on"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
@@ -92,27 +94,69 @@
 
         <!-- قسم الانتظار (اللوبي) -->
         <section id="section-lobby">
-            <h2>غرفة الانتظار</h2>
-            <div class="card">
-                <div class="room-info">
-                    <div class="room-id-container">
-                        <span>رمز الغرفة:</span>
-                        <strong id="display-room-id">...</strong>
-                        <button id="btn-copy-id" class="btn-icon" title="نسخ الرمز">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                        </button>
-                    </div>
-                </div>
-                <h3>اللاعبون المنضمون:</h3>
-                <ul id="player-list">
-                    <!-- قائمة اللاعبين تظهر هنا -->
-                </ul>
-                <div class="lobby-actions">
-                    <button id="btn-ready" class="btn-success">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        أنا مستعد
+            <div class="lobby-header">
+                <div class="room-id-badge">
+                    <span>رمز الغرفة:</span>
+                    <strong id="display-room-id">...</strong>
+                    <button id="btn-copy-id" class="btn-icon-small">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     </button>
                 </div>
+            </div>
+
+            <div class="lobby-main">
+                <div class="players-circle-layout">
+                    <!-- 6 مقاعد -->
+                    <div class="seat" id="seat-0">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-1">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-2">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-3">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-4">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-5">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lobby-footer">
+                <button id="btn-ready" class="btn-success btn-pulse">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    أنا مستعد
+                </button>
             </div>
         </section>
 

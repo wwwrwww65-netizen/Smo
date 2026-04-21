@@ -55,16 +55,33 @@ class GameManager {
         this.audioEnabled = false;
 
         // Voice/WebRTC properties
-        this.pc = null;
+        this.pcs = {}; // remoteId -> RTCPeerConnection
         this.localStream = null;
         this.micEnabled = false;
         this.speakerEnabled = true;
-        this.remoteAudio = new Audio();
-        this.remoteAudio.autoplay = true;
+        this.remoteAudios = {}; // remoteId -> Audio object
 
         this.initElements();
+        this.initMicStatus();
         this.initEvents();
         this.initAuth();
+        this.createParticles();
+    }
+
+    createParticles() {
+        const bg = document.getElementById('bg-animated');
+        if (!bg) return;
+        for (let i = 0; i < 20; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = Math.random() * 20 + 5;
+            p.style.width = `${size}px`;
+            p.style.height = `${size}px`;
+            p.style.left = `${Math.random() * 100}%`;
+            p.style.animationDuration = `${Math.random() * 10 + 10}s`;
+            p.style.animationDelay = `${Math.random() * 10}s`;
+            bg.appendChild(p);
+        }
     }
 
     initElements() {
@@ -155,9 +172,23 @@ class GameManager {
         this.btnModalAccept.addEventListener('click', () => this.acceptNextRound());
 
         // Tracking inputs
-        document.querySelectorAll('.game-field').forEach(input => {
+        document.querySelectorAll('.game-field').forEach((input, index, array) => {
             input.addEventListener('input', () => this.updateMyProgress(input));
-            input.addEventListener('focus', () => this.updateMyProgress(input));
+            input.addEventListener('focus', () => {
+                this.updateMyProgress(input);
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const next = array[index + 1];
+                    if (next) {
+                        next.focus();
+                    } else {
+                        document.getElementById('btn-stop').click();
+                    }
+                }
+            });
         });
     }
 
@@ -269,13 +300,20 @@ class GameManager {
     }
 
     updateOpponentProgressUI(progressData) {
-        const opponentId = Object.keys(progressData).find(id => id !== this.myId);
-        if (!opponentId || !this.isSectionActive('game')) {
+        // Find most advanced opponent
+        const otherIds = Object.keys(progressData).filter(id => id !== this.myId);
+        if (otherIds.length === 0 || !this.isSectionActive('game')) {
             this.oppProgress.classList.add('hidden');
+            this.topOppId = null;
             return;
         }
 
-        const opp = progressData[opponentId];
+        // Show the one with the highest count, or the first one if all same
+        this.topOppId = otherIds.reduce((prev, curr) =>
+            (progressData[curr].count > progressData[prev].count) ? curr : prev
+        );
+
+        const opp = progressData[this.topOppId];
         this.oppProgress.classList.remove('hidden');
         this.oppAvatar.textContent = opp.avatar || '👤';
         this.oppName.textContent = opp.name;
@@ -334,10 +372,26 @@ class GameManager {
         this.toastTimeout = setTimeout(() => this.mainToast.classList.add('hidden'), 3500);
     }
 
+    setLoading(btnId, isLoading) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        if (isLoading) {
+            btn.classList.add('loading');
+            btn.disabled = true;
+            this._originalBtnContent = btn.innerHTML;
+            btn.innerHTML = `<span class="spinner"></span> جاري...`;
+        } else {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+            if (this._originalBtnContent) btn.innerHTML = this._originalBtnContent;
+        }
+    }
+
     async createRoom() {
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
 
+        this.setLoading('btn-create-room', true);
         try {
             this.isHost = true;
             this.roomId = Math.floor(100000000 + Math.random() * 900000000).toString();
@@ -352,7 +406,11 @@ class GameManager {
                 }
             });
             await this.joinRoomLogic(this.roomId);
-        } catch (e) { this.showToast("❌ فشل إنشاء الغرفة"); }
+        } catch (e) {
+            this.showToast("❌ فشل إنشاء الغرفة");
+        } finally {
+            this.setLoading('btn-create-room', false);
+        }
     }
 
     async joinRoom() {
@@ -360,26 +418,53 @@ class GameManager {
         this.roomId = this.roomIdInput.value.trim();
         if (!this.playerName || this.roomId.length !== 9) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
 
+        this.setLoading('btn-join-room', true);
         try {
             const snap = await get(ref(this.db, `rooms/${this.roomId}`));
             if (!snap.exists()) { this.showToast("❌ الغرفة غير موجودة"); return; }
             this.isHost = false;
             await this.joinRoomLogic(this.roomId);
-        } catch (e) { this.showToast("❌ فشل الانضمام"); }
+        } catch (e) {
+            this.showToast("❌ فشل الانضمام");
+        } finally {
+            this.setLoading('btn-join-room', false);
+        }
     }
 
     updatePlayerList() {
-        this.playerList.innerHTML = '';
-        this.players.forEach(p => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span style="font-size:1.5rem">${p.avatar || '👤'}</span>
-                    <span>${p.name} ${p.id === this.myId ? '(أنت)' : ''}</span>
-                </div>
-                <span style="color: ${p.ready ? '#4caf50' : '#ff9800'}">${p.ready ? '✅ مستعد' : '⏳ ينتظر'}</span>
-            `;
-            this.playerList.appendChild(li);
+        // Reset all seats to empty
+        for (let i = 0; i < 6; i++) {
+            const seat = document.getElementById(`seat-${i}`);
+            if (!seat) continue;
+            seat.removeAttribute('data-player-id');
+            const wrapper = seat.querySelector('.avatar-wrapper');
+            const img = seat.querySelector('.avatar-img');
+            const readyIcon = seat.querySelector('.ready-icon');
+            const label = seat.querySelector('.player-name-label');
+
+            wrapper.classList.add('empty');
+            wrapper.classList.remove('speaking');
+            img.textContent = '👤';
+            readyIcon.classList.add('hidden');
+            label.textContent = 'بانتظار...';
+        }
+
+        // Fill seats with current players
+        this.players.forEach((p, index) => {
+            if (index >= 6) return;
+            const seat = document.getElementById(`seat-${index}`);
+            if (!seat) return;
+            seat.setAttribute('data-player-id', p.id);
+            const wrapper = seat.querySelector('.avatar-wrapper');
+            const img = seat.querySelector('.avatar-img');
+            const readyIcon = seat.querySelector('.ready-icon');
+            const label = seat.querySelector('.player-name-label');
+
+            wrapper.classList.remove('empty');
+            img.textContent = p.avatar || '👤';
+            if (p.ready) readyIcon.classList.remove('hidden');
+            else readyIcon.classList.add('hidden');
+            label.textContent = p.name + (p.id === this.myId ? ' (أنت)' : '');
         });
     }
 
@@ -387,11 +472,12 @@ class GameManager {
         await update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), { ready: true });
         const btn = document.getElementById('btn-ready');
         btn.disabled = true;
-        btn.innerHTML = '⏳ بانتظار الخصم...';
+        btn.classList.remove('btn-pulse');
+        btn.innerHTML = `<span class="spinner"></span> بانتظار البقية...`;
     }
 
     async checkAllReady() {
-        if (this.players.length < 2) return; // Need at least 2 players
+        if (this.players.length < 2) return;
         if (this.players.every(p => p.ready)) {
             const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
             await update(ref(this.db, `rooms/${this.roomId}/config`), {
@@ -435,6 +521,7 @@ class GameManager {
         this.currentLetter = letter;
         this.hasSubmitted = false;
         this.inputsDisabled = false;
+        this._winCelebrated = false;
         this.clearInputs();
         this.enableInputs();
         this.showSection('game');
@@ -495,44 +582,61 @@ class GameManager {
     }
 
     async autoEvaluateAnswers() {
-        if (!this.isHost || this.results.length < 2) return;
-
-        const res1 = this.results[0];
-        const res2 = this.results[1];
-        const p1 = this.players.find(p => p.id === res1.playerId);
-        const p2 = this.players.find(p => p.id === res2.playerId);
+        if (!this.isHost || this.results.length === 0) return;
 
         const fields = ['name', 'animal', 'plant', 'object', 'country'];
-        const p1Updates = { scores: { ...res1.scores }, roundTotal: 0 };
-        const p2Updates = { scores: { ...res2.scores }, roundTotal: 0 };
+        const resultUpdates = {};
+        const playerUpdates = {};
 
-        fields.forEach(f => {
-            const ans1 = res1.answers[f]?.toLowerCase().trim();
-            const ans2 = res2.answers[f]?.toLowerCase().trim();
-
-            if (ans1 && ans2 && ans1 === ans2) {
-                p1Updates.scores[f] = 5;
-                p2Updates.scores[f] = 5;
-            }
+        // 1. Initial assignment
+        this.results.forEach(res => {
+            resultUpdates[res.playerId] = {
+                scores: { name: 0, animal: 0, plant: 0, object: 0, country: 0 },
+                roundTotal: 0
+            };
         });
 
-        p1Updates.roundTotal = Object.values(p1Updates.scores).reduce((a, b) => a + b, 0);
-        p2Updates.roundTotal = Object.values(p2Updates.scores).reduce((a, b) => a + b, 0);
+        // 2. Cross-check for duplicate answers and validity
+        fields.forEach(f => {
+            const answerGroups = {};
+            this.results.forEach(res => {
+                const ans = (res.answers[f] || '').trim();
+                const valid = ans.length > 0 && ans.toLowerCase().startsWith(this.currentLetter.toLowerCase());
 
-        await update(ref(this.db, `rooms/${this.roomId}/results/${res1.playerId}`), p1Updates);
-        await update(ref(this.db, `rooms/${this.roomId}/results/${res2.playerId}`), p2Updates);
+                if (valid) {
+                    const normalized = ans.toLowerCase();
+                    if (!answerGroups[normalized]) answerGroups[normalized] = [];
+                    answerGroups[normalized].push(res.playerId);
+                    // Default to 10 for valid answers
+                    resultUpdates[res.playerId].scores[f] = 10;
+                } else {
+                    resultUpdates[res.playerId].scores[f] = 0;
+                }
+            });
 
-        // Update global cumulative scores with the auto-evaluated points
-        if (p1 && p1Updates.roundTotal > 0) {
-            await update(ref(this.db, `rooms/${this.roomId}/players/${res1.playerId}`), {
-                totalScore: (p1.totalScore || 0) + p1Updates.roundTotal
+            // If more than one person has the same answer, they get 5 points
+            Object.values(answerGroups).forEach(pIds => {
+                if (pIds.length > 1) {
+                    pIds.forEach(pId => {
+                        resultUpdates[pId].scores[f] = 5;
+                    });
+                }
             });
+        });
+
+        // 3. Finalize roundTotal and update cumulative totalScore
+        for (const res of this.results) {
+            const pId = res.playerId;
+            const p = this.players.find(p => p.id === pId);
+            const roundTotal = Object.values(resultUpdates[pId].scores).reduce((a, b) => a + b, 0);
+
+            const prevTotal = p?.totalScore || 0;
+            playerUpdates[`players/${pId}/totalScore`] = prevTotal + roundTotal;
+            playerUpdates[`results/${pId}/scores`] = resultUpdates[pId].scores;
+            playerUpdates[`results/${pId}/roundTotal`] = roundTotal;
         }
-        if (p2 && p2Updates.roundTotal > 0) {
-            await update(ref(this.db, `rooms/${this.roomId}/players/${res2.playerId}`), {
-                totalScore: (p2.totalScore || 0) + p2Updates.roundTotal
-            });
-        }
+
+        await update(ref(this.db, `rooms/${this.roomId}`), playerUpdates);
     }
 
     async checkAllSubmitted() {
@@ -581,6 +685,7 @@ class GameManager {
         sortedResults.forEach(res => {
             const section = document.createElement('div');
             section.className = 'player-result-section';
+            section.setAttribute('data-player-id', res.playerId);
 
             let rowsHtml = '';
             const fields = [
@@ -599,6 +704,7 @@ class GameManager {
                 let scoreActionHtml = '';
                 if (this.isHost) {
                     scoreActionHtml = `
+                        <div style="color:var(--accent-color); font-weight:bold; margin-bottom:4px">${score}</div>
                         <div class="score-btns">
                             <button class="btn-small-score btn-score-10" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',10)">10</button>
                             <button class="btn-small-score btn-score-5" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',5)">5</button>
@@ -622,6 +728,15 @@ class GameManager {
             const playerTotal = this.players.find(p => p.id === res.playerId)?.totalScore || 0;
             const roundWinStatus = this.getRoundWinStatus(res.playerId);
 
+            // Winner celebration for current user
+            if (res.playerId === this.myId && roundWinStatus.class === 'badge-win' && !this._winCelebrated) {
+                this.showLottieCelebration('win');
+                this._winCelebrated = true;
+            } else if (res.playerId === this.myId && roundWinStatus.class === 'badge-loss' && !this._winCelebrated) {
+                this.showLottieCelebration('loss');
+                this._winCelebrated = true;
+            }
+
             section.innerHTML = `
                 <div class="player-header">
                     <div class="avatar">${res.avatar || '👤'}</div>
@@ -643,25 +758,43 @@ class GameManager {
         });
     }
 
+    showLottieCelebration(type) {
+        const overlay = document.createElement('div');
+        overlay.className = 'lottie-overlay';
+        const url = type === 'win'
+            ? 'https://assets10.lottiefiles.com/packages/lf20_u4yrau.json' // Confetti
+            : 'https://assets1.lottiefiles.com/packages/lf20_0yfs9vly.json'; // Sad face or similar
+
+        overlay.innerHTML = `<lottie-player src="${url}" background="transparent" speed="1" style="width: 300px; height: 300px;" autoplay></lottie-player>`;
+        document.body.appendChild(overlay);
+        setTimeout(() => overlay.remove(), 4000);
+    }
+
     getFieldStatus(playerId, field) {
         if (this.results.length < 2) return { text: '', icon: '-' };
+        const scores = this.results.map(r => r.scores[field] || 0);
+        const maxScore = Math.max(...scores);
         const myScore = this.results.find(r => r.playerId === playerId)?.scores[field] || 0;
-        const oppScore = this.results.find(r => r.playerId !== playerId)?.scores[field] || 0;
 
-        if (myScore > oppScore) return { text: 'فاز', icon: '✅' };
-        if (myScore < oppScore) return { text: 'خسر', icon: '❌' };
-        if (myScore === 0 && oppScore === 0) return { text: '-', icon: '-' };
-        return { text: 'تعادل', icon: '🤝' };
+        if (myScore === 0 && maxScore === 0) return { text: '-', icon: '-' };
+        if (myScore === maxScore) {
+            const winners = this.results.filter(r => r.scores[field] === maxScore);
+            return winners.length > 1 ? { text: 'تعادل', icon: '🤝' } : { text: 'فاز', icon: '✅' };
+        }
+        return { text: 'خسر', icon: '❌' };
     }
 
     getRoundWinStatus(playerId) {
         if (this.results.length < 2) return { text: '', class: '' };
+        const totals = this.results.map(r => r.roundTotal || 0);
+        const maxTotal = Math.max(...totals);
         const myTotal = this.results.find(r => r.playerId === playerId)?.roundTotal || 0;
-        const oppTotal = this.results.find(r => r.playerId !== playerId)?.roundTotal || 0;
 
-        if (myTotal > oppTotal) return { text: 'فائز بالجولة 🏆', class: 'badge-win' };
-        if (myTotal < oppTotal) return { text: 'خاسر بالجولة 📉', class: 'badge-loss' };
-        return { text: 'تعادل في الجولة 🤝', class: 'badge-draw' };
+        if (myTotal === maxTotal) {
+            const winners = this.results.filter(r => r.roundTotal === maxTotal);
+            return winners.length > 1 ? { text: 'تعادل 🤝', class: 'badge-draw' } : { text: 'فائز بالجولة 🏆', class: 'badge-win' };
+        }
+        return { text: 'خاسر بالجولة 📉', class: 'badge-loss' };
     }
 
     async updateScore(playerId, field, points) {
@@ -681,12 +814,19 @@ class GameManager {
     // Next Round Handshake Logic
     async requestNextRound() {
         this.playSound('click');
-        await set(ref(this.db, `rooms/${this.roomId}/nextRoundRequest`), {
-            fromId: this.myId,
-            fromName: this.playerName,
-            timestamp: serverTimestamp()
-        });
-        this.showToast("تم إرسال طلب جولة جديدة لصديقك...");
+        this.setLoading('btn-next-round-request', true);
+        try {
+            await set(ref(this.db, `rooms/${this.roomId}/nextRoundRequest`), {
+                fromId: this.myId,
+                fromName: this.playerName,
+                timestamp: serverTimestamp()
+            });
+            this.showToast("تم إرسال طلب جولة جديدة لصديقك...");
+        } catch (e) {
+            this.showToast("❌ فشل إرسال الطلب");
+        } finally {
+            this.setLoading('btn-next-round-request', false);
+        }
     }
 
     handleNextRoundRequest(req) {
@@ -822,8 +962,14 @@ class GameManager {
     }
 
     // ==========================================
-    // Voice Chat (WebRTC) Methods
+    // Voice Chat (WebRTC Multi-Peer Mesh) Methods
     // ==========================================
+
+    initMicStatus() {
+        this.micEnabled = false;
+        this.micOnIcon.classList.add('hidden');
+        this.micOffIcon.classList.remove('hidden');
+    }
 
     async toggleMic() {
         if (!this.micEnabled) {
@@ -831,13 +977,10 @@ class GameManager {
                 if (!this.localStream) {
                     this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                     this.setupAudioLevelIndicator(this.localStream, true);
-                    if (this.pc) {
-                        this.localStream.getTracks().forEach(track => this.pc.addTrack(track, this.localStream));
-                        // If we already have a connection, we might need to re-negotiate
-                        if (!this.isHost) this.createAndSendOffer();
-                    } else {
-                        this.initWebRTC();
-                    }
+                    // Connect to all existing players
+                    this.players.forEach(p => {
+                        if (p.id !== this.myId) this.initPeerConnection(p.id, true);
+                    });
                 } else {
                     this.localStream.getAudioTracks().forEach(t => t.enabled = true);
                 }
@@ -860,7 +1003,7 @@ class GameManager {
 
     toggleSpeaker() {
         this.speakerEnabled = !this.speakerEnabled;
-        this.remoteAudio.muted = !this.speakerEnabled;
+        Object.values(this.remoteAudios).forEach(audio => audio.muted = !this.speakerEnabled);
         if (this.speakerEnabled) {
             this.speakerOnIcon.classList.remove('hidden');
             this.speakerOffIcon.classList.add('hidden');
@@ -870,86 +1013,97 @@ class GameManager {
         }
     }
 
-    async initWebRTC() {
-        if (this.pc) return;
+    async initPeerConnection(remoteId, isOfferer) {
+        if (this.pcs[remoteId]) return this.pcs[remoteId];
 
         const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-        this.pc = new RTCPeerConnection(configuration);
+        const pc = new RTCPeerConnection(configuration);
+        this.pcs[remoteId] = pc;
 
-        // Add local tracks
         if (this.localStream) {
-            this.localStream.getTracks().forEach(track => this.pc.addTrack(track, this.localStream));
+            this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream));
         }
 
-        // Handle remote tracks
-        this.pc.ontrack = (event) => {
-            this.remoteAudio.srcObject = event.streams[0];
-            this.setupAudioLevelIndicator(event.streams[0], false);
+        pc.ontrack = (event) => {
+            if (!this.remoteAudios[remoteId]) {
+                const audio = new Audio();
+                audio.autoplay = true;
+                audio.muted = !this.speakerEnabled;
+                this.remoteAudios[remoteId] = audio;
+            }
+            this.remoteAudios[remoteId].srcObject = event.streams[0];
+            this.setupAudioLevelIndicator(event.streams[0], false, remoteId);
         };
 
-        // Handle ICE candidates
-        this.pc.onicecandidate = (event) => {
+        pc.onicecandidate = (event) => {
             if (event.candidate && this.roomId) {
-                const type = this.isHost ? 'host' : 'guest';
-                const candidateRef = push(ref(this.db, `rooms/${this.roomId}/signaling/iceCandidates/${type}`));
-                set(candidateRef, event.candidate.toJSON());
+                const candidatePath = `rooms/${this.roomId}/signaling/${this.getPairId(remoteId)}/ice/${this.myId}`;
+                push(ref(this.db, candidatePath), event.candidate.toJSON());
             }
         };
 
-        // If not host, initiate the call
-        if (!this.isHost) {
-            await this.createAndSendOffer();
+        if (isOfferer) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await set(ref(this.db, `rooms/${this.roomId}/signaling/${this.getPairId(remoteId)}/offer`), {
+                sdp: offer.sdp,
+                type: offer.type,
+                from: this.myId
+            });
         }
+
+        return pc;
     }
 
-    async createAndSendOffer() {
-        const offer = await this.pc.createOffer();
-        await this.pc.setLocalDescription(offer);
-        await set(ref(this.db, `rooms/${this.roomId}/signaling/offer`), {
-            sdp: offer.sdp,
-            type: offer.type
-        });
+    getPairId(remoteId) {
+        return [this.myId, remoteId].sort().join('_');
     }
 
     async handleSignaling(signaling) {
-        if (!this.pc) await this.initWebRTC();
+        for (const [pairId, data] of Object.entries(signaling)) {
+            if (!pairId.includes(this.myId)) continue;
+            const remoteId = pairId.split('_').find(id => id !== this.myId);
+            if (!remoteId) continue;
 
-        try {
-            // Host receives offer and sends answer
-            if (this.isHost && signaling.offer && !this.pc.remoteDescription) {
-                await this.pc.setRemoteDescription(new RTCSessionDescription(signaling.offer));
-                const answer = await this.pc.createAnswer();
-                await this.pc.setLocalDescription(answer);
-                await set(ref(this.db, `rooms/${this.roomId}/signaling/answer`), {
-                    sdp: answer.sdp,
-                    type: answer.type
-                });
+            const pc = this.pcs[remoteId] || await this.initPeerConnection(remoteId, false);
+
+            try {
+                // Receive Offer
+                if (data.offer && data.offer.from !== this.myId && !pc.remoteDescription) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    await set(ref(this.db, `rooms/${this.roomId}/signaling/${pairId}/answer`), {
+                        sdp: answer.sdp,
+                        type: answer.type,
+                        from: this.myId
+                    });
+                }
+
+                // Receive Answer
+                if (data.answer && data.answer.from !== this.myId && !pc.remoteDescription) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                }
+
+                // Receive ICE
+                if (data.ice && data.ice[remoteId]) {
+                    if (!this._addedIce) this._addedIce = {};
+                    if (!this._addedIce[remoteId]) this._addedIce[remoteId] = new Set();
+
+                    Object.entries(data.ice[remoteId]).forEach(([iceId, candidate]) => {
+                        if (!this._addedIce[remoteId].has(iceId)) {
+                            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+                            this._addedIce[remoteId].add(iceId);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Signaling Error:", e);
             }
-
-            // Guest receives answer
-            if (!this.isHost && signaling.answer && !this.pc.remoteDescription) {
-                await this.pc.setRemoteDescription(new RTCSessionDescription(signaling.answer));
-            }
-
-            // Handle ICE Candidates
-            const typeToListen = this.isHost ? 'guest' : 'host';
-            if (signaling.iceCandidates && signaling.iceCandidates[typeToListen]) {
-                const candidates = signaling.iceCandidates[typeToListen];
-                if (!this.addedCandidates) this.addedCandidates = new Set();
-
-                Object.entries(candidates).forEach(([id, candidate]) => {
-                    if (!this.addedCandidates.has(id)) {
-                        this.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
-                        this.addedCandidates.add(id);
-                    }
-                });
-            }
-        } catch (e) {
-            console.error("Signaling Error:", e);
         }
     }
 
-    setupAudioLevelIndicator(stream, isLocal) {
+    setupAudioLevelIndicator(stream, isLocal, remoteId = null) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioContext = new AudioContext();
         const analyser = audioContext.createAnalyser();
@@ -974,63 +1128,30 @@ class GameManager {
             const average = values / bufferLength;
             const isSpeaking = average > 15; // Threshold for speaking
 
-            this.updateSpeakingUI(isLocal ? this.myId : 'opponent', isSpeaking);
+            const targetId = isLocal ? this.myId : remoteId;
+            this.updateSpeakingUI(targetId, isSpeaking);
             requestAnimationFrame(checkVolume);
         };
         checkVolume();
     }
 
     updateSpeakingUI(playerId, isSpeaking) {
-        // Update all possible avatar locations
-        let selector = '';
-        if (playerId === this.myId) {
-            // My avatar in lobby, game progress (if implemented), or results
-            // Note: For now, I'll use class-based selection
-            const myAvatars = document.querySelectorAll('.avatar, .opp-avatar'); // simplistic
-            // We need a more precise way to identify "My" avatars vs "Opponent" avatars
+        if (!playerId) return;
+
+        // 1. Lobby avatars
+        const seat = document.querySelector(`.seat[data-player-id="${playerId}"] .avatar-wrapper`);
+        if (seat) seat.classList.toggle('speaking', isSpeaking);
+
+        // 2. Result avatars
+        const resSection = document.querySelector(`.player-result-section[data-player-id="${playerId}"]`);
+        if (resSection) {
+            const av = resSection.querySelector('.avatar');
+            if (av) av.classList.toggle('speaking', isSpeaking);
         }
 
-        // Since it's 1vs1:
-        if (playerId === this.myId) {
-            // Local player is speaking
-            // 1. Lobby list (find my ID)
-            const lobbyPlayers = document.querySelectorAll('#player-list li');
-            lobbyPlayers.forEach(li => {
-                if (li.textContent.includes('(أنت)')) {
-                    const avatarSpan = li.querySelector('span[style*="font-size:1.5rem"]');
-                    if (avatarSpan) avatarSpan.classList.toggle('speaking-avatar', isSpeaking);
-                }
-            });
-            // 2. Results (if active)
-            const resultAvatars = document.querySelectorAll('.player-result-section .avatar');
-            resultAvatars.forEach(av => {
-                const nameNode = av.nextElementSibling;
-                if (nameNode && nameNode.textContent.includes('(أنت)')) {
-                    av.classList.toggle('speaking', isSpeaking);
-                }
-            });
-        } else {
-            // Opponent is speaking
-            // 1. Game progress
-            if (this.oppAvatar) this.oppAvatar.classList.toggle('speaking', isSpeaking);
-
-            // 2. Lobby list
-            const lobbyPlayers = document.querySelectorAll('#player-list li');
-            lobbyPlayers.forEach(li => {
-                if (!li.textContent.includes('(أنت)') && li.querySelector('span[style*="font-size:1.5rem"]')) {
-                    const avatarSpan = li.querySelector('span[style*="font-size:1.5rem"]');
-                    if (avatarSpan) avatarSpan.classList.toggle('speaking-avatar', isSpeaking);
-                }
-            });
-
-            // 3. Results
-            const resultAvatars = document.querySelectorAll('.player-result-section .avatar');
-            resultAvatars.forEach(av => {
-                const nameNode = av.nextElementSibling;
-                if (nameNode && !nameNode.textContent.includes('(أنت)')) {
-                    av.classList.toggle('speaking', isSpeaking);
-                }
-            });
+        // 3. Opponent progress (if this player is currently featured in the progress banner)
+        if (playerId === this.topOppId && this.oppAvatar) {
+            this.oppAvatar.classList.toggle('speaking', isSpeaking);
         }
     }
 }
