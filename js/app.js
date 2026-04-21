@@ -111,6 +111,8 @@ class GameManager {
         this.playerNameInput = document.getElementById('player-name');
         this.roomIdInput = document.getElementById('room-id-input');
         this.displayRoomId = document.getElementById('display-room-id');
+        this.lobbyCountdownContainer = document.getElementById('lobby-countdown-container');
+        this.lobbyCountdownTimer = document.getElementById('lobby-countdown-timer');
         this.playerList = document.getElementById('player-list');
         this.letterDisplay = document.getElementById('random-letter-display');
         this.timerDisplay = document.getElementById('timer-display');
@@ -225,7 +227,7 @@ class GameManager {
                 }
 
                 if (this.isHost && data.config?.gameState === 'lobby') {
-                    this.checkAllReady();
+                    this.handleLobbyCountdown();
                 }
             }
 
@@ -253,6 +255,12 @@ class GameManager {
                 // Sync Timer
                 if (state === 'game' && data.config.timer !== undefined) {
                     this.updateLocalTimer(data.config.timer);
+                }
+
+                if (state === 'lobby' && data.config.lobbyCountdown !== undefined) {
+                    this.updateLobbyTimerUI(data.config.lobbyCountdown);
+                } else {
+                    this.lobbyCountdownContainer.classList.add('hidden');
                 }
             }
 
@@ -476,19 +484,73 @@ class GameManager {
         btn.innerHTML = `<span class="spinner"></span> بانتظار البقية...`;
     }
 
-    async checkAllReady() {
-        if (this.players.length < 2) return;
-        if (this.players.every(p => p.ready)) {
-            const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
-            await update(ref(this.db, `rooms/${this.roomId}/config`), {
-                gameState: 'game',
-                currentLetter: letter,
-                stopTriggered: false,
-                timer: 40
-            });
-            await remove(ref(this.db, `rooms/${this.roomId}/results`));
-            await remove(ref(this.db, `rooms/${this.roomId}/progress`));
-            this.startHostTimerSync();
+    async handleLobbyCountdown() {
+        const readyPlayers = this.players.filter(p => p.ready);
+        const playerCount = this.players.length;
+
+        // Reset countdown if new player joins ("ظهر ثالث")
+        if (this._lastPlayerCount !== undefined && playerCount > this._lastPlayerCount && readyPlayers.length >= 2) {
+            this.startLobbyCountdown();
+        }
+        this._lastPlayerCount = playerCount;
+
+        if (readyPlayers.length >= 2) {
+            if (!this.lobbyInterval) {
+                this.startLobbyCountdown();
+            }
+        } else {
+            if (this.lobbyInterval) {
+                clearInterval(this.lobbyInterval);
+                this.lobbyInterval = null;
+                await update(ref(this.db, `rooms/${this.roomId}/config`), { lobbyCountdown: null });
+            }
+        }
+    }
+
+    startLobbyCountdown() {
+        if (this.lobbyInterval) clearInterval(this.lobbyInterval);
+        let count = 15;
+
+        const syncCountdown = async () => {
+            await update(ref(this.db, `rooms/${this.roomId}/config`), { lobbyCountdown: count });
+            if (count <= 0) {
+                clearInterval(this.lobbyInterval);
+                this.lobbyInterval = null;
+                this.triggerStartGame();
+            }
+            count--;
+        };
+
+        syncCountdown();
+        this.lobbyInterval = setInterval(syncCountdown, 1000);
+    }
+
+    async triggerStartGame() {
+        const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
+        await update(ref(this.db, `rooms/${this.roomId}/config`), {
+            gameState: 'game',
+            currentLetter: letter,
+            stopTriggered: false,
+            timer: 40,
+            lobbyCountdown: null
+        });
+        await remove(ref(this.db, `rooms/${this.roomId}/results`));
+        await remove(ref(this.db, `rooms/${this.roomId}/progress`));
+        this.startHostTimerSync();
+    }
+
+    updateLobbyTimerUI(val) {
+        if (val === null || val === undefined) {
+            this.lobbyCountdownContainer.classList.add('hidden');
+            return;
+        }
+        this.lobbyCountdownContainer.classList.remove('hidden');
+        this.lobbyCountdownTimer.textContent = val;
+        if (val <= 5) {
+            this.lobbyCountdownTimer.style.color = '#ff4b2b';
+            this.playSound('timer');
+        } else {
+            this.lobbyCountdownTimer.style.color = '#fff';
         }
     }
 
