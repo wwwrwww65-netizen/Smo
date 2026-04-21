@@ -261,6 +261,29 @@ button.loading {
     overflow-y: hidden;
 }
 
+.lobby-countdown-container {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 15px;
+    text-align: center;
+    margin-bottom: 20px;
+    border: 1px solid var(--glass-border);
+    animation: fadeIn 0.5s ease;
+}
+
+.countdown-text {
+    font-size: 0.9rem;
+    color: var(--secondary-color);
+    margin-bottom: 5px;
+}
+
+#lobby-countdown-timer {
+    font-size: 2.5rem;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
+
 #section-lobby {
     height: 75vh;
     display: flex;
