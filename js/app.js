@@ -120,6 +120,7 @@ class GameManager {
         this.mainToast = document.getElementById('main-toast');
         this.btnJoinRoom = document.getElementById('btn-join-room');
         this.btnCreateRoom = document.getElementById('btn-create-room');
+        this.btnCreateViewingRoom = document.getElementById('btn-create-viewing-room');
         this.overlayStart = document.getElementById('overlay-start');
 
         // Opponent progress
@@ -164,7 +165,8 @@ class GameManager {
         this.btnMic.addEventListener('click', () => this.toggleMic());
         this.btnSpeaker.addEventListener('click', () => this.toggleSpeaker());
 
-        this.btnCreateRoom.addEventListener('click', () => this.createRoom());
+        this.btnCreateRoom.addEventListener('click', () => this.createRoom('game'));
+        this.btnCreateViewingRoom.addEventListener('click', () => this.createRoom('viewing'));
         this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
         document.getElementById('btn-ready').addEventListener('click', () => this.setReady());
         document.getElementById('btn-stop').addEventListener('click', () => this.stopGame());
@@ -402,16 +404,32 @@ class GameManager {
         }
     }
 
-    async createRoom() {
+    async createRoom(type = 'game') {
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
 
-        this.setLoading('btn-create-room', true);
+        const btnId = type === 'game' ? 'btn-create-room' : 'btn-create-viewing-room';
+        this.setLoading(btnId, true);
         try {
             this.isHost = true;
             this.roomId = Math.floor(100000000 + Math.random() * 900000000).toString();
+
+            if (type === 'viewing') {
+                const roomRef = ref(this.db, `rooms/${this.roomId}`);
+                await set(roomRef, {
+                    roomType: 'viewing',
+                    config: {
+                        hostId: this.myId,
+                        createdAt: serverTimestamp()
+                    }
+                });
+                window.location.href = `./live/?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=owner`;
+                return;
+            }
+
             const roomRef = ref(this.db, `rooms/${this.roomId}`);
             await set(roomRef, {
+                roomType: 'game',
                 config: {
                     hostId: this.myId,
                     gameState: 'lobby',
@@ -424,7 +442,7 @@ class GameManager {
         } catch (e) {
             this.showToast("❌ فشل إنشاء الغرفة");
         } finally {
-            this.setLoading('btn-create-room', false);
+            this.setLoading(btnId, false);
         }
     }
 
@@ -437,6 +455,13 @@ class GameManager {
         try {
             const snap = await get(ref(this.db, `rooms/${this.roomId}`));
             if (!snap.exists()) { this.showToast("❌ الغرفة غير موجودة"); return; }
+            const roomData = snap.val();
+
+            if (roomData.roomType === 'viewing') {
+                window.location.href = `./live/?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=guest`;
+                return;
+            }
+
             this.isHost = false;
             await this.joinRoomLogic(this.roomId);
         } catch (e) {
