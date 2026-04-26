@@ -319,47 +319,92 @@ class LiveManager {
         }
     }
 
-    ownerLoadVideo() {
-        let val = this.ytUrlInput.value.trim();
+    extractYoutubeInfo(url) {
         let videoId = '';
-        if (val.includes('v=')) {
-            videoId = val.split('v=')[1].split('&')[0];
-        } else if (val.includes('youtu.be/')) {
-            videoId = val.split('youtu.be/')[1].split('?')[0];
-        } else {
-            videoId = val;
+        let startSeconds = 0;
+
+        // Extract ID
+        const idRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = url.match(idRegex);
+        if (match) {
+            videoId = match[1];
+        } else if (url.length === 11) {
+            videoId = url;
         }
+
+        // Extract Time (t=123 or t=1m20s)
+        const timeMatch = url.match(/[?&]t=([^&]+)/);
+        if (timeMatch) {
+            const timeStr = timeMatch[1];
+            if (/^\d+$/.test(timeStr)) {
+                startSeconds = parseInt(timeStr);
+            } else {
+                const m = timeStr.match(/(\d+)m/);
+                const s = timeStr.match(/(\d+)s/);
+                if (m) startSeconds += parseInt(m[1]) * 60;
+                if (s) startSeconds += parseInt(s[1]);
+            }
+        }
+
+        return { videoId, startSeconds };
+    }
+
+    ownerLoadVideo() {
+        const val = this.ytUrlInput.value.trim();
+        const { videoId, startSeconds } = this.extractYoutubeInfo(val);
 
         if (videoId) {
             this.ytState.videoId = videoId;
-            this.ytState.state = 1; // Play
-            this.ytState.currentTime = 0;
+            this.ytState.state = 5; // Cued
+            this.ytState.currentTime = startSeconds;
             this.ownerUpdateFirebase();
             this.modalYT.classList.add('hidden');
+
+            // Local update to show the player immediately for the owner
+            this.ytPlayerContainer.classList.remove('hidden');
+            this.vidPlaceholder.classList.add('hidden');
+            if (this.player && this.player.cueVideoById) {
+                this.player.cueVideoById({
+                    videoId: videoId,
+                    startSeconds: startSeconds
+                });
+                this.vidMiniThumb.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+            }
         }
     }
 
     ownerChangeState(state) {
+        if (!this.player || !this.ytState.videoId) return;
+
         this.ytState.state = state;
         this.ytState.currentTime = this.player.getCurrentTime();
+
+        if (state === 1) this.player.playVideo();
+        if (state === 2) this.player.pauseVideo();
+
         this.ownerUpdateFirebase();
     }
 
     ownerUpdateFirebase() {
-        if (!this.roomId) return;
+        if (!this.roomId || !this.player) return;
+
+        const time = (typeof this.player.getCurrentTime === 'function') ? this.player.getCurrentTime() : 0;
+
         update(ref(this.db, `rooms/${this.roomId}/youtube_state`), {
             videoId: this.ytState.videoId,
             state: this.ytState.state,
-            currentTime: this.player.getCurrentTime(),
+            currentTime: time,
             updatedAt: serverTimestamp()
         });
     }
 
     syncYouTube(state) {
-        if (this.role === 'owner' && this.ytState.videoId === state.videoId) {
-            // Owner already has the state, just update local ref if needed
-            this.ytState = state;
-            return;
+        if (this.role === 'owner') {
+            // Owner is the source of truth, don't sync from DB unless it's a completely new video
+            // Or if we just joined and need the initial state
+            if (this.ytState.videoId && this.ytState.videoId === state.videoId) {
+                return;
+            }
         }
 
         this.ytState = state;
@@ -397,6 +442,11 @@ class LiveManager {
                 this.player.playVideo();
             } else if (state.state === 2) { // Paused
                 this.player.pauseVideo();
+            } else if (state.state === 5) { // Cued
+                this.player.cueVideoById({
+                    videoId: state.videoId,
+                    startSeconds: state.currentTime || 0
+                });
             }
         }
     }
