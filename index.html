@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>لعبة اسم حيوان نبات جماد بلاد</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+</head>
+<body>
+    <!-- خلفية متحركة -->
+    <div class="bg-animated" id="bg-animated">
+        <!-- سيتم إضافة الجزيئات برمجياً -->
+    </div>
+
+    <!-- شاشة بدء التشغيل (لتفعيل الصوت) -->
+    <div id="overlay-start" class="overlay">
+        <div class="overlay-content">
+            <h1>مرحباً بك في لعبة الأذكياء! 🧠</h1>
+            <p>اضغط للبدء وتفعيل المؤثرات الصوتية</p>
+            <button id="btn-start-app" class="btn-primary">ابدأ الآن 🚀</button>
+        </div>
+    </div>
+
+    <!-- مودال الموافقة على الجولة التالية -->
+    <div id="modal-next-round" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">🔄 جولة جديدة؟</div>
+            <div id="modal-message">صديقك مستعد للجولة التالية، هل أنت مستعد؟</div>
+            <div class="timeout-bar"><div id="modal-timeout-fill"></div></div>
+            <div class="modal-actions">
+                <button id="btn-modal-accept" class="btn-success">أنا جاهز! ✅</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- مكون الدردشة العالمي -->
+    <div id="global-chat-container" class="chat-container">
+        <div id="chat-messages" class="chat-messages">
+            <!-- الرسائل تظهر هنا -->
+        </div>
+        <div class="chat-input-bar">
+            <button id="btn-emoji" class="chat-icon-btn">😊</button>
+            <button id="btn-mic" class="chat-icon-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mic-on hidden"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mic-off"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+            <button id="btn-speaker" class="chat-icon-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="speaker-on"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="speaker-off hidden"><path d="M11 5L6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"></path></svg>
+            </button>
+            <input type="text" id="chat-input" placeholder="اكتب رسالة..." maxlength="100">
+            <button id="btn-send-chat" class="chat-send-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+        </div>
+
+        <!-- قائمة الإيموجي -->
+        <div id="emoji-picker" class="emoji-picker hidden">
+            <div class="emoji-list">
+                <span>😊</span><span>😂</span><span>😍</span><span>🤣</span><span>👍</span><span>🙌</span><span>🔥</span><span>❤️</span>
+                <span>👋</span><span>🎉</span><span>🤔</span><span>😢</span><span>😡</span><span>🤯</span><span>👏</span><span>💪</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- زر الانسحاب العالمي -->
+        <button id="btn-quit" class="btn-quit hidden">خروج 🚪</button>
+
+        <!-- التنبيهات -->
+        <div id="main-toast" class="toast hidden"></div>
+
+        <!-- قسم الصفحة الرئيسية -->
+        <section id="section-home" class="active">
+            <h1 class="glow-text">لعبة اسم حيوان نبات</h1>
+            <div class="card">
+                <input type="text" id="player-name" placeholder="أدخل اسمك هنا..." aria-label="اسم اللاعب" maxlength="15">
+                <button id="btn-create-room" class="btn-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    إنشاء غرفة
+                </button>
+                <button id="btn-create-viewing-room" class="btn-viewing">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
+                    إنشاء غرفة مشاهدة
+                </button>
+                <div class="separator">أو</div>
+                <input type="text" id="room-id-input" placeholder="أدخل رمز الغرفة..." aria-label="رمز الغرفة" maxlength="9">
+                <button id="btn-join-room" class="btn-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    انضمام
+                </button>
+                <div class="separator">أو استكشف</div>
+                <button id="btn-go-to-live" class="btn-watch">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
+                    الانتقال للمشاهدة
+                </button>
+            </div>
+        </section>
+
+        <!-- قسم الانتظار (اللوبي) -->
+        <section id="section-lobby">
+            <div id="lobby-countdown-container" class="lobby-countdown-container hidden">
+                <div class="countdown-text">سيبدأ اللعب خلال:</div>
+                <div id="lobby-countdown-timer">15</div>
+            </div>
+
+            <div class="lobby-header">
+                <div class="room-id-badge">
+                    <span>رمز الغرفة:</span>
+                    <strong id="display-room-id">...</strong>
+                    <button id="btn-copy-id" class="btn-icon-small">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="lobby-main">
+                <div class="players-circle-layout">
+                    <!-- 6 مقاعد -->
+                    <div class="seat" id="seat-0">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-1">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-2">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-3">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-4">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                    <div class="seat" id="seat-5">
+                        <div class="avatar-wrapper empty">
+                            <div class="avatar-img">👤</div>
+                            <div class="ready-icon hidden">✅</div>
+                        </div>
+                        <div class="player-name-label">بانتظار...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lobby-footer">
+                <button id="btn-ready" class="btn-success btn-pulse">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    أنا مستعد
+                </button>
+            </div>
+        </section>
+
+        <!-- قسم اللعبة -->
+        <section id="section-game">
+            <div class="game-header">
+                <!-- شريط تقدم المنافس -->
+                <div id="opponent-progress" class="opponent-progress hidden">
+                    <div class="opp-avatar">👤</div>
+                    <div class="opp-info">
+                        <div class="opp-name">المنافس...</div>
+                        <div class="opp-status">يكتب الآن...</div>
+                    </div>
+                    <div class="opp-counter">0/5</div>
+                </div>
+
+                <div class="status-row">
+                    <div id="random-letter-display">؟</div>
+                    <div id="timer-container">
+                        <div class="timer-icon">⏰</div>
+                        <div id="timer-display">40</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card game-inputs">
+                <div class="input-group">
+                    <label>اسم</label>
+                    <input type="text" id="input-name" class="game-field" data-field="name" autocomplete="off" placeholder="اسم...">
+                </div>
+                <div class="input-group">
+                    <label>حيوان</label>
+                    <input type="text" id="input-animal" class="game-field" data-field="animal" autocomplete="off" placeholder="حيوان...">
+                </div>
+                <div class="input-group">
+                    <label>نبات</label>
+                    <input type="text" id="input-plant" class="game-field" data-field="plant" autocomplete="off" placeholder="نبات...">
+                </div>
+                <div class="input-group">
+                    <label>جماد</label>
+                    <input type="text" id="input-object" class="game-field" data-field="object" autocomplete="off" placeholder="جماد...">
+                </div>
+                <div class="input-group">
+                    <label>بلاد</label>
+                    <input type="text" id="input-country" class="game-field" data-field="country" autocomplete="off" placeholder="بلاد...">
+                </div>
+            </div>
+            <button id="btn-stop" class="btn-stop">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><rect x="9" y="9" width="6" height="6"></rect></svg>
+                انتهيت!
+            </button>
+        </section>
+
+        <!-- قسم النتائج -->
+        <section id="section-score">
+            <h2>نتائج الجولة</h2>
+            <div id="results-split-container">
+                <!-- سيتم توليد محتوى اللاعبين هنا برمجياً -->
+            </div>
+
+            <div class="card score-footer-card">
+                <div id="score-actions" class="score-actions">
+                    <button id="btn-next-round-request" class="btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        الجولة التالية
+                    </button>
+                </div>
+                <div id="host-eval-hint" class="host-hint hidden">
+                    أنت المضيف: قم بتقييم الإجابات
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- منطق اللعبة (app.js) كـ Module لاستخدام Firebase الحديث -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
