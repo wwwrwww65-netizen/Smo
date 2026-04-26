@@ -1,10 +1,10 @@
 /**
  * Live Broadcast (هــَــش Fyo) Logic
- * Updated for Absolute Sync, Agora Voice, and Professional UI
+ * Updated for Absolute Sync, PeerJS Voice Chat, and Professional UI
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, serverTimestamp }
+import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, serverTimestamp, remove }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -18,9 +18,6 @@ const firebaseConfig = {
   appId: "1:376255463194:web:26bd4efe2d8f4c279f76a3",
   measurementId: "G-T103PXE8LF"
 };
-
-// Agora Configuration
-const AGORA_APP_ID = "YOUR_AGORA_APP_ID";
 
 class LiveManager {
     constructor() {
@@ -44,16 +41,17 @@ class LiveManager {
         this.isMutedByPolicy = true;
         this.guestRevertInterval = null;
 
-        // Agora State
-        this.agoraClient = null;
-        this.localAudioTrack = null;
+        // PeerJS Voice State
+        this.peer = null;
+        this.myStream = null;
         this.isMicOn = false;
-        this.remoteUsers = {};
+        this.activeCalls = {}; // peerId -> call object
+        this.audioContext = null;
+        this.analysers = {}; // uid -> analyser node
 
         this.initElements();
         this.initAuth();
         this.setupYouTube();
-        this.initAgora();
         this.calculateServerOffset();
     }
 
@@ -112,7 +110,6 @@ class LiveManager {
             this.tapForward.onclick = (e) => { e.stopPropagation(); this.ownerHandleDoubleTap('forward'); };
             this.vidTouchZone.onclick = () => this.ownerToggleCentralUI();
         } else {
-            // Guest click to unmute if needed or just toggle UI visibility (like volume)
             this.vidTouchZone.onclick = () => {
                 if (this.isMutedByPolicy) this.handleUserUnmute();
             };
@@ -164,6 +161,7 @@ class LiveManager {
             lastSeen: serverTimestamp()
         });
         this.listenToRoom();
+        this.listenToVoicePeers();
     }
 
     listenToRoom() {
@@ -217,7 +215,6 @@ class LiveManager {
         });
 
         if (this.role !== 'owner') {
-            // Start guest check interval to prevent seeking
             this.guestRevertInterval = setInterval(() => this.guestEnforceSync(), 2000);
         }
     }
@@ -236,10 +233,9 @@ class LiveManager {
             this.ownerUpdateFirebase();
             this.updateCentralIconButton(event.data);
         } else {
-            // Guest tried to change state
             const targetState = this.ytState.state;
             if (event.data !== targetState && targetState !== -1) {
-                if (event.data === 3) return; // Buffering is fine
+                if (event.data === 3) return;
                 this.showToast("التحكم مقتصر على المالك فقط");
                 if (targetState === 1) this.player.playVideo();
                 if (targetState === 2) this.player.pauseVideo();
@@ -271,7 +267,6 @@ class LiveManager {
             return;
         }
 
-        // Calculate absolute time
         const now = Date.now() + this.serverOffset;
         let targetTime = state.currentTime;
         if (state.state === 1 && state.updatedAt) {
@@ -303,7 +298,6 @@ class LiveManager {
             }
             this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
 
-            // Try to get title after load
             const checkTitle = setInterval(() => {
                 if (this.player.getVideoData && this.player.getVideoData().title) {
                     const data = this.player.getVideoData();
@@ -315,14 +309,12 @@ class LiveManager {
             setTimeout(() => clearInterval(checkTitle), 10000);
         }
 
-        // Sync Time
         const currentLocalTime = this.player.getCurrentTime();
         const diff = Math.abs(currentLocalTime - targetTime);
         if (diff > 3) {
             this.player.seekTo(targetTime, true);
         }
 
-        // Sync State
         const currentLocalState = this.player.getPlayerState();
         if (state.state === 1 && currentLocalState !== 1) this.player.playVideo();
         if (state.state === 2 && currentLocalState !== 2) this.player.pauseVideo();
@@ -358,8 +350,6 @@ class LiveManager {
             };
             this.ownerUpdateFirebase();
             this.modalYT.classList.add('hidden');
-
-            // Immediate local feedback
             this.player.loadVideoById({ videoId: videoId });
             this.ytPlayerContainer.classList.remove('hidden');
             this.vidPlaceholder.classList.add('hidden');
@@ -434,6 +424,7 @@ class LiveManager {
 
     toggleFullscreen() {
         const container = document.getElementById('main-video-container');
+        if (!container) return;
         if (!document.fullscreenElement) {
             container.requestFullscreen().catch(err => console.log(err));
         } else {
@@ -441,68 +432,168 @@ class LiveManager {
         }
     }
 
-    // ================== AGORA VOICE ==================
+    // ================== PEERJS VOICE CHAT ==================
 
-    async initAgora() {
-        if (AGORA_APP_ID === "YOUR_AGORA_APP_ID") return;
-        this.agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    async initPeer() {
+        if (this.peer) return;
 
-        this.agoraClient.on("user-published", async (user, mediaType) => {
-            await this.agoraClient.subscribe(user, mediaType);
-            if (mediaType === "audio") {
-                user.audioTrack.play();
-                this.remoteUsers[user.uid] = user;
-            }
-        });
+        return new Promise((resolve) => {
+            // Using a simple numeric hash of myId for Peer ID to ensure compatibility
+            this.peer = new Peer(this.myId);
 
-        this.agoraClient.on("user-unpublished", (user) => {
-            delete this.remoteUsers[user.uid];
-        });
+            this.peer.on('open', (id) => {
+                console.log('Peer connected with ID:', id);
+                this.setupPeerListeners();
+                resolve();
+            });
 
-        AgoraRTC.setParameter("AUDIO_VOLUME_INDICATION_INTERVAL", 200);
-        this.agoraClient.on("volume-indicator", (volumes) => {
-            volumes.forEach((volume) => {
-                const isSpeaking = volume.level > 5;
-                this.updateSpeakingUI(volume.uid, isSpeaking);
+            this.peer.on('error', (err) => {
+                console.error('PeerJS Error:', err);
+                if (err.type === 'unavailable-id') {
+                    // Try with a random ID if myId is taken
+                    this.peer = new Peer();
+                    this.peer.on('open', (id) => resolve());
+                }
             });
         });
-        this.agoraClient.enableAudioVolumeIndicator();
+    }
+
+    setupPeerListeners() {
+        this.peer.on('call', (call) => {
+            console.log('Incoming call from:', call.peer);
+            if (this.isMicOn && this.myStream) {
+                call.answer(this.myStream);
+                this.handleCallStream(call);
+            } else {
+                // We can still answer with empty stream to hear others
+                call.answer();
+                this.handleCallStream(call);
+            }
+        });
+    }
+
+    handleCallStream(call) {
+        call.on('stream', (remoteStream) => {
+            const audio = document.createElement('audio');
+            audio.srcObject = remoteStream;
+            audio.play();
+            this.activeCalls[call.peer] = call;
+            this.startVolumeDetection(remoteStream, call.peer);
+        });
+
+        call.on('close', () => {
+            delete this.activeCalls[call.peer];
+            if (this.analysers[call.peer]) delete this.analysers[call.peer];
+        });
     }
 
     async toggleMic() {
-        if (AGORA_APP_ID === "YOUR_AGORA_APP_ID") {
-            this.showToast("يرجى إعداد Agora App ID أولاً");
-            return;
-        }
-
         try {
             if (!this.isMicOn) {
-                if (!this.localAudioTrack) {
-                    this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                // Request Permission
+                if (!this.myStream) {
+                    this.myStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 }
-                if (this.agoraClient.connectionState === "DISCONNECTED") {
-                    await this.agoraClient.join(AGORA_APP_ID, this.roomId, null, this.myId);
-                }
-                await this.agoraClient.publish([this.localAudioTrack]);
+
+                await this.initPeer();
+
+                // Add to signaling node
+                const voiceRef = ref(this.db, `rooms/${this.roomId}/voice_peers/${this.myId}`);
+                onDisconnect(voiceRef).remove();
+                await set(voiceRef, {
+                    peerId: this.myId,
+                    name: this.username,
+                    active: true
+                });
+
+                // Call existing peers
+                this.callExistingPeers();
+
                 this.isMicOn = true;
                 this.micOnIcon.classList.remove('hidden');
                 this.micOffIcon.classList.add('hidden');
                 this.btnToggleMic.classList.remove('muted');
                 this.showToast("الميكروفون قيد التشغيل");
+                this.startVolumeDetection(this.myStream, this.myId);
+
             } else {
-                if (this.localAudioTrack) {
-                    await this.agoraClient.unpublish([this.localAudioTrack]);
+                // Disable Mic
+                if (this.myStream) {
+                    this.myStream.getTracks().forEach(t => t.stop());
+                    this.myStream = null;
                 }
+
+                // Remove from signaling
+                const voiceRef = ref(this.db, `rooms/${this.roomId}/voice_peers/${this.myId}`);
+                await remove(voiceRef);
+
+                // Close all calls
+                Object.values(this.activeCalls).forEach(call => call.close());
+                this.activeCalls = {};
+
                 this.isMicOn = false;
                 this.micOnIcon.classList.add('hidden');
                 this.micOffIcon.classList.remove('hidden');
                 this.btnToggleMic.classList.add('muted');
                 this.showToast("تم كتم الميكروفون");
+                this.updateSpeakingUI(this.myId, false);
             }
         } catch (err) {
             console.error(err);
             this.showToast("خطأ في الوصول للميكروفون");
         }
+    }
+
+    async callExistingPeers() {
+        const snap = await get(ref(this.db, `rooms/${this.roomId}/voice_peers`));
+        const peers = snap.val() || {};
+        Object.keys(peers).forEach(pid => {
+            if (pid !== this.myId && !this.activeCalls[pid]) {
+                const call = this.peer.call(pid, this.myStream);
+                if (call) this.handleCallStream(call);
+            }
+        });
+    }
+
+    listenToVoicePeers() {
+        const voicePeersRef = ref(this.db, `rooms/${this.roomId}/voice_peers`);
+        onValue(voicePeersRef, (snap) => {
+            if (!this.isMicOn || !this.peer) return;
+            const peers = snap.val() || {};
+            Object.keys(peers).forEach(pid => {
+                if (pid !== this.myId && !this.activeCalls[pid]) {
+                    const call = this.peer.call(pid, this.myStream);
+                    if (call) this.handleCallStream(call);
+                }
+            });
+        });
+    }
+
+    startVolumeDetection(stream, uid) {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const source = this.audioContext.createMediaStreamSource(stream);
+        const analyser = this.audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        this.analysers[uid] = analyser;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const checkVolume = () => {
+            if (!this.analysers[uid]) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+            const average = sum / bufferLength;
+
+            this.updateSpeakingUI(uid, average > 30);
+            requestAnimationFrame(checkVolume);
+        };
+        checkVolume();
     }
 
     updateSpeakingUI(uid, isSpeaking) {
