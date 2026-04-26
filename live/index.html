@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>غرفة TopTop - بث مباشر</title>
+    <title>غرفة هــَــش Fyo - بث مباشر</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
     <!-- 1) الخلفية العامة -->
     <div class="theatrical-bg">
         <div class="curtain left"></div>
@@ -42,19 +45,17 @@
                 </button>
             </div>
 
-            <!-- اليسار: الرجوع والمستخدمين -->
+            <!-- اليسار: الرجوع والبراند -->
             <div class="top-left">
-                <div class="back-and-users">
-                    <div class="user-circles">
-                        <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=50&h=50&fit=crop" alt="u1">
-                        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=50&h=50&fit=crop" alt="u2">
-                        <img src="https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=50&h=50&fit=crop" alt="u3">
-                    </div>
+                <div class="back-and-brand">
                     <button class="btn-back" onclick="window.location.href='../'">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                     </button>
+                    <div class="brand-text">
+                        <span class="brand-hash">هــَــش</span>
+                        <span class="brand-fyo">Fyo</span>
+                    </div>
                 </div>
-                <div class="toptop-tag">TopTop</div>
                 <div class="room-rank-area">
                     <div class="rank-badge-icon"></div>
                     <span>رتبة الغرفة</span>
@@ -64,22 +65,41 @@
 
         <!-- 3) المنطقة الرئيسية لمحتوى الفيديو (الحاوية الموحدة) -->
         <main class="main-area">
-            <div class="video-container">
+            <div class="video-container" id="main-video-container">
                 <!-- الجزء العلوي: العنوان -->
                 <div class="vid-header-top">
                     <div class="video-ornament">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFD700"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
                     </div>
-                    <h2 id="vid-title" class="vid-title-main">شرح برمجة الواجهات الاحترافية</h2>
-                    <p id="vid-owner" class="vid-owner-name">بواسطة: كودر إكس</p>
+                    <h2 id="vid-title" class="vid-title-main">بث مباشر</h2>
+                    <p id="vid-owner" class="vid-owner-name">بواسطة: ...</p>
                 </div>
 
                 <!-- الجزء الأوسط: المشغل أو حالة الإيقاف -->
-                <div class="vid-content-middle">
+                <div class="vid-content-middle" id="vid-touch-zone">
                     <div id="youtube-player-container" class="hidden">
                         <div id="player"></div>
-                        <!-- طبقة حماية للمشاهدين -->
+                        <!-- مناطق النقر المزدوج -->
+                        <div class="double-tap-area left" id="tap-back"></div>
+                        <div class="double-tap-area right" id="tap-forward"></div>
+                        <!-- طبقة حماية للمشاهدين (تظهر برمجياً) -->
                         <div id="player-overlay" class="player-overlay"></div>
+
+                        <!-- زر التشغيل المركزي -->
+                        <div id="central-play-pause" class="central-control hidden">
+                            <button id="btn-central-toggle">
+                                <svg id="icon-central-play" width="60" height="60" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+                                <svg id="icon-central-pause" class="hidden" width="60" height="60" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                            </button>
+                        </div>
+
+                        <!-- تغطية كتم الصوت للمتأخرين -->
+                        <div id="unmute-overlay" class="unmute-overlay hidden">
+                            <button id="btn-unmute-tap">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                                <span>انقر لتفعيل الصوت 🔊</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div id="vid-placeholder" class="vid-placeholder-box">
@@ -96,7 +116,7 @@
 
                 <!-- الجزء السفلي: العلامة والأيقونات -->
                 <div class="vid-footer-row">
-                    <!-- الأيقونات على اليمين (في RTL الحاوية الأولى تكون على اليمين) -->
+                    <!-- الأيقونات على اليمين -->
                     <div class="footer-actions-right">
                         <img id="vid-mini-thumb" class="mini-preview" src="https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=60&h=40&fit=crop" alt="thumb">
                         <button id="btn-fullscreen" class="share-arrow-btn">
@@ -107,7 +127,7 @@
                         </button>
                     </div>
 
-                    <!-- الشعار على اليسار (في RTL الحاوية الأخيرة تكون على اليسار) -->
+                    <!-- الشعار على اليسار -->
                     <div class="yt-brand">
                         <div style="display: flex; align-items: center; gap: 5px;">
                             <svg width="28" height="20" viewBox="0 0 28 20" fill="red">
@@ -176,8 +196,9 @@
         <!-- 8) الشريط السفلي -->
         <footer class="footer-nav">
             <div class="nav-group">
-                <button class="nav-btn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                <button id="btn-toggle-mic" class="nav-btn mic-btn muted">
+                    <svg id="mic-on-icon" class="hidden" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                    <svg id="mic-off-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="red" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line><line x1="1" y1="1" x2="23" y2="23"></line></svg>
                 </button>
                 <button class="nav-btn">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FF69B4" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
@@ -222,7 +243,9 @@
         </div>
     </div>
 
+    <!-- SDKs -->
     <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="app.js"></script>
 </body>
 </html>
