@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>غرفة TopTop - بث مباشر</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 1) الخلفية العامة -->
+    <div class="theatrical-bg">
+        <div class="curtain left"></div>
+        <div class="curtain right"></div>
+        <div class="stage-light"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- 2) الشريط العلوي -->
+        <header class="top-bar">
+            <!-- اليمين: معلومات المستخدم -->
+            <div class="top-right">
+                <div class="user-main-info">
+                    <div class="arrow-r-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </div>
+                    <img class="profile-square" src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100&h=100&fit=crop" alt="me">
+                    <div class="name-id-box">
+                        <span class="user-display-name">أحمد المطور</span>
+                        <span class="user-display-id">ID: 987654321</span>
+                    </div>
+                </div>
+                <div class="lv-green-badge">Lv.6</div>
+            </div>
+
+            <!-- المنتصف: زر الزائد -->
+            <div class="top-center">
+                <button class="btn-plus-glow">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </div>
+
+            <!-- اليسار: الرجوع والمستخدمين -->
+            <div class="top-left">
+                <div class="back-and-users">
+                    <div class="user-circles">
+                        <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=50&h=50&fit=crop" alt="u1">
+                        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=50&h=50&fit=crop" alt="u2">
+                        <img src="https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=50&h=50&fit=crop" alt="u3">
+                    </div>
+                    <button class="btn-back" onclick="window.location.href='../'">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                </div>
+                <div class="toptop-tag">TopTop</div>
+                <div class="room-rank-area">
+                    <div class="rank-badge-icon"></div>
+                    <span>رتبة الغرفة</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 3) المنطقة الرئيسية لمحتوى الفيديو -->
+        <main class="main-area">
+            <div class="video-container">
+                <div class="video-ornament">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFD700"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                </div>
+                <h2 class="vid-title-main">شرح برمجة الواجهات الاحترافية</h2>
+                <p class="vid-owner-name">بواسطة: كودر إكس</p>
+
+                <div class="vid-placeholder-box">
+                    <div class="vid-icon-big">
+                        <svg width="80" height="80" viewBox="0 0 24 24" fill="rgba(255,255,255,0.1)" stroke="white" stroke-width="1"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                    </div>
+                    <p class="vid-stopped-text">أوقف المالك الفيديو حالياً</p>
+                </div>
+
+                <div class="vid-footer-row">
+                    <div class="yt-brand">
+                        <svg width="60" height="20" viewBox="0 0 100 24" fill="red"><path d="M96.73 2.52c-1.12-.42-8.32-.42-11.23-.42s-10.11 0-11.23.42c-1 .37-1.78 1.14-2.15 2.14-.38 1.05-.38 5.42-.38 5.42s0 4.38.38 5.43c.37 1 1.15 1.77 2.15 2.14 1.12.42 8.32.42 11.23.42s10.11 0 11.23-.42c1-.37 1.78-1.14 2.15-2.14.38-1.05.38-5.43.38-5.43s0-4.37-.38-5.42c-.37-1-1.15-1.77-2.15-2.14z"/><polygon fill="white" points="80 14.5 86 11 80 7.5 80 14.5"/></svg>
+                    </div>
+                    <img class="mini-preview" src="https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=60&h=40&fit=crop" alt="thumb">
+                    <button class="share-arrow-btn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 4) شريط المقاعد -->
+            <div class="seats-row">
+                <div class="seat-box">
+                    <span class="lock-seat">🔒</span>
+                    <span class="seat-label-num">5</span>
+                </div>
+                <div class="seat-box">
+                    <span class="lock-seat">🔒</span>
+                    <span class="seat-label-num">6</span>
+                </div>
+                <div class="seat-box">
+                    <div class="avatar-circle-frame">
+                        <img src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=60&h=60&fit=crop" alt="p1">
+                    </div>
+                    <button class="btn-join-small">انضم</button>
+                </div>
+                <div class="seat-box">
+                    <div class="avatar-circle-frame green-border">
+                        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60&h=60&fit=crop" alt="p2">
+                        <div class="seat-badges">
+                            <span class="mini-lvl">VIP</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5) شريط التحكم -->
+            <div class="info-bar">
+                <div class="count-pill">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                    <span>0</span>
+                </div>
+                <div class="right-controls">
+                    <div class="filter-pill">
+                        <span>ALL</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    <button class="expand-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 6) منطقة الدردشة والأزرار الجانبية -->
+            <div class="chat-section">
+                <!-- الدردشة على اليمين -->
+                <div class="chat-log">
+                    <p class="chat-intro">افتحوا نشوف</p>
+                    <div class="chat-msg">
+                        <img class="chat-avatar" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=40&h=40&fit=crop" alt="u">
+                        <div class="chat-body">
+                            <span class="chat-user-name">سارة</span>
+                            <div class="chat-bubble-new">السلام عليكم، الغرفة رائعة! ✨</div>
+                        </div>
+                    </div>
+                    <div class="chat-msg">
+                        <img class="chat-avatar" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop" alt="u">
+                        <div class="chat-body">
+                            <span class="chat-user-name">محمد</span>
+                            <div class="chat-badges">
+                                <span class="badge-s">Lv.12</span>
+                            </div>
+                            <div class="chat-bubble-new">أهلاً بالجميع، متى يبدأ البث؟</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7) الأزرار العمودية على اليسار -->
+                <div class="side-actions-v">
+                    <div class="action-item">
+                        <div class="action-circle">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                        </div>
+                        <span class="action-text">0%</span>
+                    </div>
+                    <div class="action-item">
+                        <div class="action-circle">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                        </div>
+                        <span class="action-text">حدث</span>
+                    </div>
+                    <div class="action-item">
+                        <div class="action-circle">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="#FFD700"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v12M6 12h12"></path></svg>
+                        </div>
+                        <span class="action-text">مكافأة</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 8) الشريط السفلي -->
+        <footer class="footer-nav">
+            <div class="nav-group">
+                <button class="nav-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                </button>
+                <button class="nav-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FF69B4" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+                </button>
+                <button class="nav-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="nav-group">
+                <span class="msg-input-fake">قل شيئاً...</span>
+                <button class="nav-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                </button>
+            </div>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

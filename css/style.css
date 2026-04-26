@@ -222,6 +222,16 @@ button:active { transform: scale(0.95); }
     box-shadow: 0 0 0 #1565c0;
 }
 
+.btn-watch {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    box-shadow: 0 4px 0 #b8860b, 0 8px 15px rgba(0,0,0,0.3);
+    color: #000;
+}
+.btn-watch:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #b8860b;
+}
+
 .btn-stop { background: var(--danger-color); margin-top: 15px; font-size: 1.2rem; box-shadow: 0 4px 0 #b71c1c; }
 .btn-stop:active { transform: translateY(4px); box-shadow: 0 0 0 #b71c1c; }
 
