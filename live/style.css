@@ -220,75 +220,117 @@ body {
 .main-area::-webkit-scrollbar { display: none; }
 
 .video-container {
-    width: 94%;
-    background: rgba(10, 10, 20, 0.95);
-    border-radius: 24px;
-    padding: 20px 15px;
+    width: 95%;
+    background: #0d0d0d;
+    border-radius: 28px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    align-items: center;
     position: relative;
     margin-bottom: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.vid-header-top {
+    text-align: center;
+    margin-bottom: 15px;
+    position: relative;
 }
 
 .video-ornament {
     position: absolute;
-    right: 15px;
-    top: 15px;
+    right: 0;
+    top: 0;
 }
 
 .vid-title-main {
-    font-size: 18px;
-    font-weight: bold;
-    text-align: center;
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 4px;
 }
 
 .vid-owner-name {
-    font-size: 13px;
-    color: var(--text-gray);
-    margin-bottom: 20px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+}
+
+.vid-content-middle {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    position: relative;
+    background: #000;
+    border-radius: 15px;
+    overflow: hidden;
 }
 
 .vid-placeholder-box {
     width: 100%;
-    height: 200px;
-    background: #050505;
-    border-radius: 18px;
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 12px;
+    gap: 15px;
+    background: #000;
+}
+
+.vid-icon-big {
+    opacity: 0.8;
 }
 
 .vid-stopped-text {
-    font-size: 14px;
-    color: var(--text-gray);
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+    font-weight: bold;
+}
+
+.player-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    z-index: 10;
+    display: none;
 }
 
 .vid-footer-row {
     width: 100%;
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
+    align-items: center;
     margin-top: 15px;
 }
 
+.footer-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .yt-brand {
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
 .mini-preview {
-    width: 50px;
-    height: 32px;
-    border-radius: 6px;
+    width: 52px;
+    height: 34px;
+    border-radius: 8px;
     object-fit: cover;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1.5px solid rgba(255,255,255,0.15);
 }
 
 .share-arrow-btn {
-    background: none;
+    background: rgba(255,255,255,0.1);
     border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 /* 4) شريط المقاعد */
@@ -594,13 +636,16 @@ body {
 
 #youtube-player-container {
     width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #000;
-    border-radius: 18px;
-    overflow: hidden;
-    position: relative;
-    z-index: 1;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
 }
+
+#youtube-player-container.hidden {
+    display: none;
+}
+
 #player {
     width: 100%;
     height: 100%;
