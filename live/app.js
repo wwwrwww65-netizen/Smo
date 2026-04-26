@@ -37,7 +37,6 @@ class LiveManager {
         this.ytState = { videoId: '', state: -1, currentTime: 0, updatedAt: 0 };
         this.isSyncing = false;
         this.serverOffset = 0;
-        this.lastTapTime = 0;
         this.isMutedByPolicy = true;
         this.guestRevertInterval = null;
 
@@ -50,9 +49,6 @@ class LiveManager {
         this.analysers = {}; // uid -> analyser node
         this.isPeerInitialized = false;
 
-        // HUD State
-        this.hudTimeout = null;
-
         this.initElements();
         this.initAuth();
         this.setupYouTube();
@@ -60,6 +56,19 @@ class LiveManager {
     }
 
     initElements() {
+        // Unmute logic - connect to button/overlay
+        const unmuteOverlay = document.getElementById('unmute-overlay');
+        const btnUnmuteTap = document.getElementById('btn-unmute-tap');
+        if (unmuteOverlay) {
+            unmuteOverlay.onclick = () => this.handleUserUnmute();
+        }
+        if (btnUnmuteTap) {
+            btnUnmuteTap.onclick = (e) => {
+                e.stopPropagation();
+                this.handleUserUnmute();
+            };
+        }
+
         // UI Refs
         this.onlineCountEl = document.getElementById('online-count');
         this.chatLogEl = document.getElementById('chat-log');
@@ -71,16 +80,8 @@ class LiveManager {
         // YouTube
         this.ytPlayerContainer = document.getElementById('youtube-player-container');
         this.vidPlaceholder = document.getElementById('vid-placeholder');
-        this.playerOverlay = document.getElementById('player-overlay');
         this.unmuteOverlay = document.getElementById('unmute-overlay');
         this.btnUnmuteTap = document.getElementById('btn-unmute-tap');
-        this.centralControl = document.getElementById('central-play-pause');
-        this.btnCentralToggle = document.getElementById('btn-central-toggle');
-        this.iconCentralPlay = document.getElementById('icon-central-play');
-        this.iconCentralPause = document.getElementById('icon-central-pause');
-        this.tapBack = document.getElementById('tap-back');
-        this.tapForward = document.getElementById('tap-forward');
-        this.vidTouchZone = document.getElementById('vid-touch-zone');
         this.vidMiniThumb = document.getElementById('vid-mini-thumb');
         this.vidTitle = document.getElementById('vid-title');
         this.vidOwner = document.getElementById('vid-owner');
@@ -108,27 +109,7 @@ class LiveManager {
         if (this.role === 'owner') {
             this.btnOpenControl.classList.remove('hidden');
             this.btnOpenControl.onclick = () => this.modalYT.classList.remove('hidden');
-            this.btnCentralToggle.onclick = (e) => {
-                e.stopPropagation();
-                this.ownerTogglePlayPause();
-                this.resetHUDTimer();
-            };
-            this.tapBack.onclick = (e) => { e.stopPropagation(); this.ownerHandleDoubleTap('back'); };
-            this.tapForward.onclick = (e) => { e.stopPropagation(); this.ownerHandleDoubleTap('forward'); };
         }
-
-        // HUD interactions for everyone
-        this.vidTouchZone.addEventListener('click', () => {
-            if (this.role !== 'owner' && this.isMutedByPolicy) {
-                this.handleUserUnmute();
-            }
-            this.toggleHUD();
-        });
-
-        this.vidTouchZone.addEventListener('mousemove', () => this.resetHUDTimer());
-        this.vidTouchZone.addEventListener('touchstart', () => this.resetHUDTimer());
-
-        this.resetHUDTimer();
 
         this.btnLoadVid.onclick = () => this.ownerLoadVideo();
         this.btnPlayVid.onclick = () => this.ownerChangeState(1);
@@ -218,7 +199,7 @@ class LiveManager {
             width: '100%',
             playerVars: {
                 'autoplay': 1,
-                'controls': 1,
+                'controls': 1, // Explicitly ensure controls are on
                 'rel': 0,
                 'showinfo': 0,
                 'modestbranding': 1,
@@ -248,8 +229,6 @@ class LiveManager {
         if (this.role === 'owner') {
             this.ytState.state = event.data;
             this.ownerUpdateFirebase();
-            this.updateCentralIconButton(event.data);
-            this.resetHUDTimer();
         } else {
             const targetState = this.ytState.state;
             if (event.data !== targetState && targetState !== -1) {
@@ -318,7 +297,9 @@ class LiveManager {
             // For guests, always start muted and show overlay
             if (this.role !== 'owner' && this.isMutedByPolicy) {
                 this.player.mute();
-                this.unmuteOverlay.classList.remove('hidden');
+                if (this.unmuteOverlay) {
+                    this.unmuteOverlay.classList.remove('hidden');
+                }
             }
             this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
 
@@ -342,8 +323,6 @@ class LiveManager {
         const currentLocalState = this.player.getPlayerState();
         if (state.state === 1 && currentLocalState !== 1) this.player.playVideo();
         if (state.state === 2 && currentLocalState !== 2) this.player.pauseVideo();
-
-        this.updateCentralIconButton(state.state);
     }
 
     handleUserUnmute() {
@@ -351,7 +330,10 @@ class LiveManager {
             this.player.unMute();
             this.player.setVolume(100);
             this.isMutedByPolicy = false;
-            this.unmuteOverlay.classList.add('hidden');
+            if (this.unmuteOverlay) {
+                this.unmuteOverlay.remove();
+                this.unmuteOverlay = null;
+            }
             this.showToast("تم تفعيل الصوت بنجاح");
         }
     }
@@ -397,12 +379,6 @@ class LiveManager {
         });
     }
 
-    ownerTogglePlayPause() {
-        const currentState = this.player.getPlayerState();
-        if (currentState === 1) this.ownerChangeState(2);
-        else this.ownerChangeState(1);
-    }
-
     ownerChangeState(state) {
         if (state === 1) this.player.playVideo();
         else this.player.pauseVideo();
@@ -410,65 +386,6 @@ class LiveManager {
         this.ownerUpdateFirebase();
     }
 
-    ownerHandleDoubleTap(dir) {
-        const now = Date.now();
-        if (now - this.lastTapTime < 350) {
-            const current = this.player.getCurrentTime();
-            const seek = (dir === 'forward') ? current + 10 : current - 10;
-            this.player.seekTo(seek, true);
-            this.showToast(dir === 'forward' ? "تقديم 10 ثوانٍ" : "تأخير 10 ثوانٍ");
-            setTimeout(() => this.ownerUpdateFirebase(), 100);
-        }
-        this.lastTapTime = now;
-    }
-
-    // ================== HUD LOGIC ==================
-
-    resetHUDTimer() {
-        this.showHUD();
-        if (this.hudTimeout) clearTimeout(this.hudTimeout);
-
-        // Only auto-hide if video is playing
-        if (this.player && this.player.getPlayerState && this.player.getPlayerState() === 1) {
-            this.hudTimeout = setTimeout(() => this.hideHUD(), 3000);
-        }
-    }
-
-    showHUD() {
-        this.vidHeaderTop.classList.remove('hud-hidden');
-        this.vidFooterRow.classList.remove('hud-hidden');
-        this.centralControl.classList.remove('hud-hidden');
-    }
-
-    hideHUD() {
-        // Don't hide if paused
-        if (this.player && this.player.getPlayerState && this.player.getPlayerState() !== 1) return;
-
-        this.vidHeaderTop.classList.add('hud-hidden');
-        this.vidFooterRow.classList.add('hud-hidden');
-        this.centralControl.classList.add('hud-hidden');
-    }
-
-    toggleHUD() {
-        const isHidden = this.vidHeaderTop.classList.contains('hud-hidden');
-        if (isHidden) {
-            this.resetHUDTimer();
-        } else {
-            this.hideHUD();
-            if (this.hudTimeout) clearTimeout(this.hudTimeout);
-        }
-    }
-
-    updateCentralIconButton(state) {
-        if (state === 1) {
-            this.iconCentralPlay.classList.add('hidden');
-            this.iconCentralPause.classList.remove('hidden');
-        } else {
-            this.iconCentralPlay.classList.remove('hidden');
-            this.iconCentralPause.classList.add('hidden');
-            this.centralControl.classList.remove('hidden');
-        }
-    }
 
     toggleFullscreen() {
         const container = document.getElementById('main-video-container');
@@ -550,15 +467,17 @@ class LiveManager {
         call.on('stream', (remoteStream) => {
             console.log('Receiving stream from:', call.peer);
 
-            // Check if we already have an active audio element for this peer
+            // Hidden audio element for playback
             let audio = document.getElementById(`audio-${call.peer}`);
             if (!audio) {
                 audio = document.createElement('audio');
                 audio.id = `audio-${call.peer}`;
                 audio.autoplay = true;
+                audio.style.display = 'none';
                 document.body.appendChild(audio);
             }
             audio.srcObject = remoteStream;
+            audio.play().catch(e => console.error("Audio playback blocked:", e));
 
             this.activeCalls[call.peer] = call;
             this.startVolumeDetection(remoteStream, call.peer);
@@ -805,7 +724,9 @@ class LiveManager {
             `;
             this.chatLogEl.appendChild(div);
         });
-        this.chatLogEl.scrollTo({ top: this.chatLogEl.scrollHeight, behavior: 'smooth' });
+
+        // Auto-scroll logic as requested by user
+        this.chatLogEl.scrollTop = this.chatLogEl.scrollHeight;
     }
 
     escapeHtml(t) {

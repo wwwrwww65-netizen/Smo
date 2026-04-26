@@ -305,50 +305,6 @@ body {
     height: 100%;
 }
 
-.player-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: transparent;
-    z-index: 50; /* Lower than before to allow some interaction but high enough to be caught if needed */
-    display: none;
-    pointer-events: none; /* Crucial: allow clicks to pass to iframe */
-}
-
-/* Double Tap Areas */
-.double-tap-area {
-    position: absolute;
-    top: 0;
-    width: 25%;
-    height: 70%; /* Don't cover bottom part where YouTube controls might be */
-    z-index: 150;
-    pointer-events: auto;
-}
-.double-tap-area.left { left: 0; }
-.double-tap-area.right { right: 0; }
-
-/* Central Controls */
-.central-control {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 200;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-.central-control button {
-    background: rgba(0,0,0,0.5);
-    border: none;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    backdrop-filter: blur(5px);
-}
 
 /* Unmute Overlay */
 .unmute-overlay {
@@ -597,11 +553,13 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    max-height: 100%;
+    height: 100%;
     overflow-y: auto;
-    scrollbar-width: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
 }
-.chat-log::-webkit-scrollbar { display: none; }
+.chat-log::-webkit-scrollbar { width: 4px; }
+.chat-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
 
 .chat-intro {
     font-size: 11px;
@@ -789,12 +747,9 @@ body {
 }
 
 #main-video-container:fullscreen .vid-header-top {
-    position: absolute;
-    top: 20px;
-    left: 0;
-    right: 0;
+    position: relative;
     z-index: 500;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+    background: rgba(0,0,0,0.8);
     padding: 10px;
 }
 
@@ -806,14 +761,12 @@ body {
 }
 
 #main-video-container:fullscreen .vid-footer-row {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    right: 0;
+    position: relative;
     z-index: 500;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    background: rgba(0,0,0,0.8);
     padding: 10px;
-    height: 70px;
+    height: auto;
+    min-height: 50px;
 }
 
 /* Responsive adjustments */
