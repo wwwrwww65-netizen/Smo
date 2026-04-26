@@ -173,6 +173,13 @@ class GameManager {
         this.btnQuit.addEventListener('click', () => this.quitGame());
         this.btnModalAccept.addEventListener('click', () => this.acceptNextRound());
 
+        const btnGoToLive = document.getElementById('btn-go-to-live');
+        if (btnGoToLive) {
+            btnGoToLive.addEventListener('click', () => {
+                window.location.href = './live/';
+            });
+        }
+
         // Tracking inputs
         document.querySelectorAll('.game-field').forEach((input, index, array) => {
             input.addEventListener('input', () => this.updateMyProgress(input));
