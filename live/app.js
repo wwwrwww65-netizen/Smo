@@ -50,6 +50,9 @@ class LiveManager {
         this.analysers = {}; // uid -> analyser node
         this.isPeerInitialized = false;
 
+        // HUD State
+        this.hudTimeout = null;
+
         this.initElements();
         this.initAuth();
         this.setupYouTube();
@@ -81,6 +84,8 @@ class LiveManager {
         this.vidMiniThumb = document.getElementById('vid-mini-thumb');
         this.vidTitle = document.getElementById('vid-title');
         this.vidOwner = document.getElementById('vid-owner');
+        this.vidHeaderTop = document.querySelector('.vid-header-top');
+        this.vidFooterRow = document.querySelector('.vid-footer-row');
 
         // Modals
         this.btnOpenControl = document.getElementById('btn-open-control');
@@ -106,15 +111,24 @@ class LiveManager {
             this.btnCentralToggle.onclick = (e) => {
                 e.stopPropagation();
                 this.ownerTogglePlayPause();
+                this.resetHUDTimer();
             };
             this.tapBack.onclick = (e) => { e.stopPropagation(); this.ownerHandleDoubleTap('back'); };
             this.tapForward.onclick = (e) => { e.stopPropagation(); this.ownerHandleDoubleTap('forward'); };
-            this.vidTouchZone.onclick = () => this.ownerToggleCentralUI();
-        } else {
-            this.vidTouchZone.onclick = () => {
-                if (this.isMutedByPolicy) this.handleUserUnmute();
-            };
         }
+
+        // HUD interactions for everyone
+        this.vidTouchZone.addEventListener('click', () => {
+            if (this.role !== 'owner' && this.isMutedByPolicy) {
+                this.handleUserUnmute();
+            }
+            this.toggleHUD();
+        });
+
+        this.vidTouchZone.addEventListener('mousemove', () => this.resetHUDTimer());
+        this.vidTouchZone.addEventListener('touchstart', () => this.resetHUDTimer());
+
+        this.resetHUDTimer();
 
         this.btnLoadVid.onclick = () => this.ownerLoadVideo();
         this.btnPlayVid.onclick = () => this.ownerChangeState(1);
@@ -209,7 +223,7 @@ class LiveManager {
                 'showinfo': 0,
                 'modestbranding': 1,
                 'playsinline': 1,
-                'disablekb': (this.role === 'owner' ? 0 : 1)
+                'disablekb': 0
             },
             events: {
                 'onReady': () => this.onPlayerReady(),
@@ -235,13 +249,18 @@ class LiveManager {
             this.ytState.state = event.data;
             this.ownerUpdateFirebase();
             this.updateCentralIconButton(event.data);
+            this.resetHUDTimer();
         } else {
             const targetState = this.ytState.state;
             if (event.data !== targetState && targetState !== -1) {
                 if (event.data === 3) return;
-                this.showToast("التحكم مقتصر على المالك فقط");
-                if (targetState === 1) this.player.playVideo();
-                if (targetState === 2) this.player.pauseVideo();
+
+                // Allow buffering/ready, but enforce play/pause sync
+                if (targetState === 1 && event.data !== 1) {
+                    this.player.playVideo();
+                } else if (targetState === 2 && event.data !== 2) {
+                    this.player.pauseVideo();
+                }
             }
         }
     }
@@ -295,7 +314,9 @@ class LiveManager {
                 videoId: state.videoId,
                 startSeconds: targetTime
             });
-            if (this.isMutedByPolicy) {
+
+            // For guests, always start muted and show overlay
+            if (this.role !== 'owner' && this.isMutedByPolicy) {
                 this.player.mute();
                 this.unmuteOverlay.classList.remove('hidden');
             }
@@ -401,16 +422,40 @@ class LiveManager {
         this.lastTapTime = now;
     }
 
-    ownerToggleCentralUI() {
-        this.centralControl.classList.toggle('hidden');
-        if (!this.centralControl.classList.contains('hidden')) {
-            if (this.player.getPlayerState() === 1) {
-                setTimeout(() => {
-                    if (this.player.getPlayerState() === 1) {
-                        this.centralControl.classList.add('hidden');
-                    }
-                }, 3000);
-            }
+    // ================== HUD LOGIC ==================
+
+    resetHUDTimer() {
+        this.showHUD();
+        if (this.hudTimeout) clearTimeout(this.hudTimeout);
+
+        // Only auto-hide if video is playing
+        if (this.player && this.player.getPlayerState && this.player.getPlayerState() === 1) {
+            this.hudTimeout = setTimeout(() => this.hideHUD(), 3000);
+        }
+    }
+
+    showHUD() {
+        this.vidHeaderTop.classList.remove('hud-hidden');
+        this.vidFooterRow.classList.remove('hud-hidden');
+        this.centralControl.classList.remove('hud-hidden');
+    }
+
+    hideHUD() {
+        // Don't hide if paused
+        if (this.player && this.player.getPlayerState && this.player.getPlayerState() !== 1) return;
+
+        this.vidHeaderTop.classList.add('hud-hidden');
+        this.vidFooterRow.classList.add('hud-hidden');
+        this.centralControl.classList.add('hud-hidden');
+    }
+
+    toggleHUD() {
+        const isHidden = this.vidHeaderTop.classList.contains('hud-hidden');
+        if (isHidden) {
+            this.resetHUDTimer();
+        } else {
+            this.hideHUD();
+            if (this.hudTimeout) clearTimeout(this.hudTimeout);
         }
     }
 
@@ -429,9 +474,21 @@ class LiveManager {
         const container = document.getElementById('main-video-container');
         if (!container) return;
         if (!document.fullscreenElement) {
-            container.requestFullscreen().catch(err => console.log(err));
+            if (container.requestFullscreen) {
+                container.requestFullscreen().catch(err => console.log(err));
+            } else if (container.webkitRequestFullscreen) { /* Safari */
+                container.webkitRequestFullscreen();
+            } else if (container.msRequestFullscreen) { /* IE11 */
+                container.msRequestFullscreen();
+            }
         } else {
-            document.exitFullscreen();
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
         }
     }
 
