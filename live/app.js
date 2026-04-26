@@ -48,6 +48,7 @@ class LiveManager {
         this.activeCalls = {}; // peerId -> call object
         this.audioContext = null;
         this.analysers = {}; // uid -> analyser node
+        this.isPeerInitialized = false;
 
         this.initElements();
         this.initAuth();
@@ -161,7 +162,9 @@ class LiveManager {
             lastSeen: serverTimestamp()
         });
         this.listenToRoom();
-        this.listenToVoicePeers();
+
+        // Initialize Peer immediately on room entry
+        this.initPeer();
     }
 
     listenToRoom() {
@@ -435,108 +438,133 @@ class LiveManager {
     // ================== PEERJS VOICE CHAT ==================
 
     async initPeer() {
-        if (this.peer) return;
+        if (this.isPeerInitialized) return;
+        this.isPeerInitialized = true;
 
-        return new Promise((resolve) => {
-            // Using a simple numeric hash of myId for Peer ID to ensure compatibility
-            this.peer = new Peer(this.myId);
+        // Create a silent track initially so we can connect before mic access
+        this.myStream = this.createSilentAudioStream();
 
-            this.peer.on('open', (id) => {
-                console.log('Peer connected with ID:', id);
-                this.setupPeerListeners();
-                resolve();
-            });
+        this.peer = new Peer(this.myId);
 
-            this.peer.on('error', (err) => {
-                console.error('PeerJS Error:', err);
-                if (err.type === 'unavailable-id') {
-                    // Try with a random ID if myId is taken
-                    this.peer = new Peer();
-                    this.peer.on('open', (id) => resolve());
-                }
-            });
+        this.peer.on('open', (id) => {
+            console.log('Peer connected with ID:', id);
+            this.registerVoicePeer();
+            this.setupPeerListeners();
+            this.listenToVoicePeers();
+        });
+
+        this.peer.on('error', (err) => {
+            console.error('PeerJS Error:', err);
+            this.isPeerInitialized = false; // Allow retry
+        });
+    }
+
+    createSilentAudioStream() {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        const oscillator = this.audioContext.createOscillator();
+        const dst = oscillator.connect(this.audioContext.createMediaStreamDestination());
+        oscillator.start();
+        const track = dst.stream.getAudioTracks()[0];
+        track.enabled = false; // Truly silent
+        return new MediaStream([track]);
+    }
+
+    async registerVoicePeer() {
+        const voiceRef = ref(this.db, `rooms/${this.roomId}/voice_peers/${this.myId}`);
+        onDisconnect(voiceRef).remove();
+        await set(voiceRef, {
+            peerId: this.myId,
+            name: this.username,
+            active: true
         });
     }
 
     setupPeerListeners() {
         this.peer.on('call', (call) => {
             console.log('Incoming call from:', call.peer);
-            if (this.isMicOn && this.myStream) {
-                call.answer(this.myStream);
-                this.handleCallStream(call);
-            } else {
-                // We can still answer with empty stream to hear others
-                call.answer();
-                this.handleCallStream(call);
-            }
+            call.answer(this.myStream);
+            this.handleCallStream(call);
         });
     }
 
     handleCallStream(call) {
         call.on('stream', (remoteStream) => {
-            const audio = document.createElement('audio');
+            console.log('Receiving stream from:', call.peer);
+
+            // Check if we already have an active audio element for this peer
+            let audio = document.getElementById(`audio-${call.peer}`);
+            if (!audio) {
+                audio = document.createElement('audio');
+                audio.id = `audio-${call.peer}`;
+                audio.autoplay = true;
+                document.body.appendChild(audio);
+            }
             audio.srcObject = remoteStream;
-            audio.play();
+
             this.activeCalls[call.peer] = call;
             this.startVolumeDetection(remoteStream, call.peer);
         });
 
         call.on('close', () => {
+            console.log('Call closed with:', call.peer);
+            const audio = document.getElementById(`audio-${call.peer}`);
+            if (audio) audio.remove();
             delete this.activeCalls[call.peer];
             if (this.analysers[call.peer]) delete this.analysers[call.peer];
+        });
+
+        call.on('error', (err) => {
+            console.error('Call error:', err);
+            call.close();
         });
     }
 
     async toggleMic() {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+
         try {
-            if (!this.isMicOn) {
-                // Request Permission
-                if (!this.myStream) {
-                    this.myStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                }
+            if (!this.realMicTrack) {
+                // First time: Request Permission and get real stream
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.realMicTrack = stream.getAudioTracks()[0];
 
-                await this.initPeer();
+                // Replace silent track with real mic track in all active calls
+                this.replaceTrackInActiveCalls(this.realMicTrack);
 
-                // Add to signaling node
-                const voiceRef = ref(this.db, `rooms/${this.roomId}/voice_peers/${this.myId}`);
-                onDisconnect(voiceRef).remove();
-                await set(voiceRef, {
-                    peerId: this.myId,
-                    name: this.username,
-                    active: true
-                });
-
-                // Call existing peers
-                this.callExistingPeers();
+                // Update local stream reference
+                const currentTrack = this.myStream.getAudioTracks()[0];
+                this.myStream.removeTrack(currentTrack);
+                this.myStream.addTrack(this.realMicTrack);
 
                 this.isMicOn = true;
                 this.micOnIcon.classList.remove('hidden');
                 this.micOffIcon.classList.add('hidden');
                 this.btnToggleMic.classList.remove('muted');
                 this.showToast("الميكروفون قيد التشغيل");
+
+                // Start detecting my volume
                 this.startVolumeDetection(this.myStream, this.myId);
-
             } else {
-                // Disable Mic
-                if (this.myStream) {
-                    this.myStream.getTracks().forEach(t => t.stop());
-                    this.myStream = null;
+                // Toggle mute (disable track)
+                this.isMicOn = !this.isMicOn;
+                this.realMicTrack.enabled = this.isMicOn;
+
+                if (this.isMicOn) {
+                    this.micOnIcon.classList.remove('hidden');
+                    this.micOffIcon.classList.add('hidden');
+                    this.btnToggleMic.classList.remove('muted');
+                    this.showToast("الميكروفون قيد التشغيل");
+                } else {
+                    this.micOnIcon.classList.add('hidden');
+                    this.micOffIcon.classList.remove('hidden');
+                    this.btnToggleMic.classList.add('muted');
+                    this.showToast("تم كتم الميكروفون");
+                    this.updateSpeakingUI(this.myId, false);
                 }
-
-                // Remove from signaling
-                const voiceRef = ref(this.db, `rooms/${this.roomId}/voice_peers/${this.myId}`);
-                await remove(voiceRef);
-
-                // Close all calls
-                Object.values(this.activeCalls).forEach(call => call.close());
-                this.activeCalls = {};
-
-                this.isMicOn = false;
-                this.micOnIcon.classList.add('hidden');
-                this.micOffIcon.classList.remove('hidden');
-                this.btnToggleMic.classList.add('muted');
-                this.showToast("تم كتم الميكروفون");
-                this.updateSpeakingUI(this.myId, false);
             }
         } catch (err) {
             console.error(err);
@@ -544,13 +572,29 @@ class LiveManager {
         }
     }
 
-    async callExistingPeers() {
-        const snap = await get(ref(this.db, `rooms/${this.roomId}/voice_peers`));
-        const peers = snap.val() || {};
+    replaceTrackInActiveCalls(newTrack) {
+        Object.values(this.activeCalls).forEach(call => {
+            const peerConnection = call.peerConnection;
+            if (peerConnection) {
+                const senders = peerConnection.getSenders();
+                const sender = senders.find(s => s.track && s.track.kind === 'audio');
+                if (sender) {
+                    sender.replaceTrack(newTrack);
+                }
+            }
+        });
+    }
+
+    async callExistingPeers(peers) {
         Object.keys(peers).forEach(pid => {
-            if (pid !== this.myId && !this.activeCalls[pid]) {
+            // Rule: Only call peers with "smaller" ID string to avoid duplicate calls
+            if (pid !== this.myId && !this.activeCalls[pid] && this.myId < pid) {
+                console.log('Calling peer:', pid);
                 const call = this.peer.call(pid, this.myStream);
-                if (call) this.handleCallStream(call);
+                if (call) {
+                    this.activeCalls[pid] = call;
+                    this.handleCallStream(call);
+                }
             }
         });
     }
@@ -558,14 +602,9 @@ class LiveManager {
     listenToVoicePeers() {
         const voicePeersRef = ref(this.db, `rooms/${this.roomId}/voice_peers`);
         onValue(voicePeersRef, (snap) => {
-            if (!this.isMicOn || !this.peer) return;
+            if (!this.peer) return;
             const peers = snap.val() || {};
-            Object.keys(peers).forEach(pid => {
-                if (pid !== this.myId && !this.activeCalls[pid]) {
-                    const call = this.peer.call(pid, this.myStream);
-                    if (call) this.handleCallStream(call);
-                }
-            });
+            this.callExistingPeers(peers);
         });
     }
 
@@ -574,26 +613,42 @@ class LiveManager {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        const source = this.audioContext.createMediaStreamSource(stream);
-        const analyser = this.audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        this.analysers[uid] = analyser;
+        // Always resume audioContext if it's suspended (browser policy)
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        try {
+            const source = this.audioContext.createMediaStreamSource(stream);
+            const analyser = this.audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            this.analysers[uid] = { analyser, source }; // Keep source to prevent GC
 
-        const checkVolume = () => {
-            if (!this.analysers[uid]) return;
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
-            const average = sum / bufferLength;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
 
-            this.updateSpeakingUI(uid, average > 30);
-            requestAnimationFrame(checkVolume);
-        };
-        checkVolume();
+            const checkVolume = () => {
+                if (!this.analysers[uid]) return;
+
+                // Check if track is actually enabled and active
+                const track = stream.getAudioTracks()[0];
+                if (!track || !track.enabled || track.readyState === 'ended') {
+                    this.updateSpeakingUI(uid, false);
+                } else {
+                    analyser.getByteFrequencyData(dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+                    const average = sum / bufferLength;
+                    this.updateSpeakingUI(uid, average > 15);
+                }
+
+                requestAnimationFrame(checkVolume);
+            };
+            checkVolume();
+        } catch (e) {
+            console.error("Volume detection error for", uid, e);
+        }
     }
 
     updateSpeakingUI(uid, isSpeaking) {
