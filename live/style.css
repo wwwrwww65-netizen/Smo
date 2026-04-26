@@ -223,17 +223,18 @@ body {
     width: 95%;
     background: #0d0d0d;
     border-radius: 28px;
-    padding: 20px;
+    padding: 15px;
     display: flex;
     flex-direction: column;
     position: relative;
     margin-bottom: 15px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    overflow: hidden;
 }
 
 .vid-header-top {
     text-align: center;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     position: relative;
 }
 
@@ -299,38 +300,48 @@ body {
 .vid-footer-row {
     width: 100%;
     display: flex;
+    flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    margin-top: 15px;
+    padding: 10px;
+    height: 50px;
+    overflow: hidden;
+    margin-top: 5px;
+    white-space: nowrap;
 }
 
-.footer-actions-left {
+.footer-actions-right {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    flex-wrap: nowrap;
 }
 
 .yt-brand {
     opacity: 0.9;
+    flex-shrink: 0;
 }
 
 .mini-preview {
-    width: 52px;
-    height: 34px;
-    border-radius: 8px;
+    width: 45px;
+    height: 30px;
+    border-radius: 6px;
     object-fit: cover;
     border: 1.5px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
 }
 
 .share-arrow-btn {
     background: rgba(255,255,255,0.1);
     border: none;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-shrink: 0;
 }
 
 /* 4) شريط المقاعد */
