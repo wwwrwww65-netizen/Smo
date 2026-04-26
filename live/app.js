@@ -1,9 +1,10 @@
 /**
- * Live Broadcast (TopTop Clone) Logic
+ * Live Broadcast (هــَــش Fyo) Logic
+ * Updated for Absolute Sync, Agora Voice, and Professional UI
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, serverTimestamp, remove }
+import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -18,6 +19,9 @@ const firebaseConfig = {
   measurementId: "G-T103PXE8LF"
 };
 
+// Agora Configuration
+const AGORA_APP_ID = "YOUR_AGORA_APP_ID";
+
 class LiveManager {
     constructor() {
         this.app = initializeApp(firebaseConfig);
@@ -31,23 +35,55 @@ class LiveManager {
         this.myId = null;
         this.userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.username}_${Math.random()}`;
 
-        this.player = null; // YouTube Player
-        this.ytState = { videoId: '', state: -1, currentTime: 0 };
+        // YouTube State
+        this.player = null;
+        this.ytState = { videoId: '', state: -1, currentTime: 0, updatedAt: 0 };
         this.isSyncing = false;
+        this.serverOffset = 0;
+        this.lastTapTime = 0;
+        this.isMutedByPolicy = true;
+        this.guestRevertInterval = null;
+
+        // Agora State
+        this.agoraClient = null;
+        this.localAudioTrack = null;
+        this.isMicOn = false;
+        this.remoteUsers = {};
 
         this.initElements();
         this.initAuth();
         this.setupYouTube();
+        this.initAgora();
+        this.calculateServerOffset();
     }
 
     initElements() {
+        // UI Refs
         this.onlineCountEl = document.getElementById('online-count');
         this.chatLogEl = document.getElementById('chat-log');
         this.chatInput = document.getElementById('chat-input');
         this.btnSendChat = document.getElementById('btn-send-chat');
         this.seatsContainer = document.getElementById('seats-container');
+        this.toastContainer = document.getElementById('toast-container');
 
-        // YouTube Control Modal
+        // YouTube
+        this.ytPlayerContainer = document.getElementById('youtube-player-container');
+        this.vidPlaceholder = document.getElementById('vid-placeholder');
+        this.playerOverlay = document.getElementById('player-overlay');
+        this.unmuteOverlay = document.getElementById('unmute-overlay');
+        this.btnUnmuteTap = document.getElementById('btn-unmute-tap');
+        this.centralControl = document.getElementById('central-play-pause');
+        this.btnCentralToggle = document.getElementById('btn-central-toggle');
+        this.iconCentralPlay = document.getElementById('icon-central-play');
+        this.iconCentralPause = document.getElementById('icon-central-pause');
+        this.tapBack = document.getElementById('tap-back');
+        this.tapForward = document.getElementById('tap-forward');
+        this.vidTouchZone = document.getElementById('vid-touch-zone');
+        this.vidMiniThumb = document.getElementById('vid-mini-thumb');
+        this.vidTitle = document.getElementById('vid-title');
+        this.vidOwner = document.getElementById('vid-owner');
+
+        // Modals
         this.btnOpenControl = document.getElementById('btn-open-control');
         this.modalYT = document.getElementById('modal-yt-control');
         this.ytUrlInput = document.getElementById('yt-url-input');
@@ -56,47 +92,48 @@ class LiveManager {
         this.btnPauseVid = document.getElementById('btn-pause-vid');
         this.btnCloseModal = document.getElementById('btn-close-modal');
 
-        // Seat Admin Modal
-        this.modalSeat = document.getElementById('modal-seat-admin');
-        this.seatAdminInfo = document.getElementById('seat-admin-info');
-        this.btnLockSeat = document.getElementById('btn-lock-seat');
-        this.btnKickPlayer = document.getElementById('btn-kick-player');
-        this.btnCloseSeatModal = document.getElementById('btn-close-seat-modal');
+        // Mic
+        this.btnToggleMic = document.getElementById('btn-toggle-mic');
+        this.micOnIcon = document.getElementById('mic-on-icon');
+        this.micOffIcon = document.getElementById('mic-off-icon');
 
-        this.vidPlaceholder = document.getElementById('vid-placeholder');
-        this.vidStoppedMessage = document.getElementById('vid-stopped-message');
-        this.ytPlayerContainer = document.getElementById('youtube-player-container');
-        this.playerOverlay = document.getElementById('player-overlay');
-        this.vidMiniThumb = document.getElementById('vid-mini-thumb');
-        this.vidTitle = document.getElementById('vid-title');
-        this.vidOwner = document.getElementById('vid-owner');
-        this.btnFullscreen = document.getElementById('btn-fullscreen');
+        // Events
+        this.btnSendChat.onclick = () => this.sendChatMessage();
+        this.chatInput.onkeypress = (e) => { if (e.key === 'Enter') this.sendChatMessage(); };
 
-        // Event Listeners
         if (this.role === 'owner') {
             this.btnOpenControl.classList.remove('hidden');
-            this.btnOpenControl.addEventListener('click', () => this.modalYT.classList.remove('hidden'));
+            this.btnOpenControl.onclick = () => this.modalYT.classList.remove('hidden');
+            this.btnCentralToggle.onclick = (e) => {
+                e.stopPropagation();
+                this.ownerTogglePlayPause();
+            };
+            this.tapBack.onclick = (e) => { e.stopPropagation(); this.ownerHandleDoubleTap('back'); };
+            this.tapForward.onclick = (e) => { e.stopPropagation(); this.ownerHandleDoubleTap('forward'); };
+            this.vidTouchZone.onclick = () => this.ownerToggleCentralUI();
+        } else {
+            // Guest click to unmute if needed or just toggle UI visibility (like volume)
+            this.vidTouchZone.onclick = () => {
+                if (this.isMutedByPolicy) this.handleUserUnmute();
+            };
         }
 
-        this.btnSendChat.addEventListener('click', () => this.sendChatMessage());
-        this.chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.sendChatMessage();
-        });
+        this.btnLoadVid.onclick = () => this.ownerLoadVideo();
+        this.btnPlayVid.onclick = () => this.ownerChangeState(1);
+        this.btnPauseVid.onclick = () => this.ownerChangeState(2);
+        this.btnCloseModal.onclick = () => this.modalYT.classList.add('hidden');
+        this.btnUnmuteTap.onclick = () => this.handleUserUnmute();
+        this.btnToggleMic.onclick = () => this.toggleMic();
 
-        this.btnCloseModal.addEventListener('click', () => this.modalYT.classList.add('hidden'));
-        this.btnLoadVid.addEventListener('click', () => this.ownerLoadVideo());
-        this.btnPlayVid.addEventListener('click', () => this.ownerChangeState(1)); // Playing
-        this.btnPauseVid.addEventListener('click', () => this.ownerChangeState(2)); // Paused
+        document.getElementById('btn-fullscreen').onclick = () => this.toggleFullscreen();
 
-        this.btnCloseSeatModal.addEventListener('click', () => this.modalSeat.classList.add('hidden'));
-
-        this.btnFullscreen.addEventListener('click', () => this.toggleFullscreen());
-
-        // Update UI with Room ID & Username
+        // Profile UI
         document.querySelector('.user-display-name').textContent = this.username;
         document.querySelector('.user-display-id').textContent = `ID: ${this.roomId}`;
         document.querySelector('.profile-square').src = this.userAvatar;
     }
+
+    // ================== CORE / AUTH ==================
 
     async initAuth() {
         onAuthStateChanged(this.auth, (user) => {
@@ -109,19 +146,23 @@ class LiveManager {
         });
     }
 
+    async calculateServerOffset() {
+        const offsetRef = ref(this.db, ".info/serverTimeOffset");
+        onValue(offsetRef, (snap) => {
+            this.serverOffset = snap.val() || 0;
+        });
+    }
+
     async joinRoom() {
         if (!this.roomId) return;
-        const roomRef = ref(this.db, `rooms/${this.roomId}`);
         const userRef = ref(this.db, `rooms/${this.roomId}/users/${this.myId}`);
-
-        // Presence System
         onDisconnect(userRef).remove();
         await update(userRef, {
             name: this.username,
             avatar: this.userAvatar,
-            isOnline: true
+            isOnline: true,
+            lastSeen: serverTimestamp()
         });
-
         this.listenToRoom();
     }
 
@@ -131,145 +172,22 @@ class LiveManager {
             const data = snapshot.val();
             if (!data) return;
 
-            // 1. Online Users Count
-            if (data.users) {
-                this.onlineCountEl.textContent = Object.keys(data.users).length;
-            }
-
-            // 2. Chat
-            if (data.messages) {
-                this.updateChatUI(data.messages);
-            }
-
-            // 3. Seats
+            if (data.users) this.onlineCountEl.textContent = Object.keys(data.users).length;
+            if (data.messages) this.updateChatUI(data.messages);
             this.updateSeatsUI(data.seats || {});
-
-            // 4. YouTube Sync
-            if (data.youtube_state) {
-                this.syncYouTube(data.youtube_state);
-            }
+            if (data.youtube_state) this.syncYouTube(data.youtube_state);
         });
     }
 
-    // ================== SEATS LOGIC ==================
-
-    updateSeatsUI(seats) {
-        this.seatsContainer.innerHTML = '';
-        for (let i = 1; i <= 6; i++) {
-            const seat = seats[i] || { status: 'empty' };
-            const seatBox = document.createElement('div');
-            seatBox.className = 'seat-box';
-
-            let content = '';
-            if (seat.status === 'locked') {
-                content = `
-                    <span class="lock-seat">🔒</span>
-                    <span class="seat-label-num">${i}</span>
-                `;
-                seatBox.classList.add('seat-locked');
-            } else if (seat.status === 'occupied') {
-                content = `
-                    <div class="avatar-circle-frame ${seat.userId === this.myId ? 'green-border' : ''}">
-                        <img src="${seat.avatar}" alt="${seat.name}">
-                    </div>
-                    <span class="seat-label-num" style="font-size: 9px; color: #fff;">${seat.name}</span>
-                `;
-            } else {
-                content = `
-                    <div class="avatar-circle-frame seat-empty">
-                        <span style="font-size: 20px; color: rgba(255,255,255,0.3);">+</span>
-                    </div>
-                    <button class="btn-join-small" onclick="window.liveManager.joinSeat(${i})">انضم</button>
-                    <span class="seat-label-num">${i}</span>
-                `;
-            }
-
-            seatBox.innerHTML = content;
-
-            // Owner click listener
-            if (this.role === 'owner') {
-                seatBox.style.cursor = 'pointer';
-                seatBox.addEventListener('click', () => this.openSeatAdmin(i, seat));
-            }
-
-            this.seatsContainer.appendChild(seatBox);
-        }
+    showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'glass-toast';
+        toast.textContent = message;
+        this.toastContainer.appendChild(toast);
+        setTimeout(() => toast.remove(), 3500);
     }
 
-    async joinSeat(index) {
-        const seatRef = ref(this.db, `rooms/${this.roomId}/seats/${index}`);
-        const snap = await get(seatRef);
-        if (snap.exists() && snap.val().status !== 'empty') return;
-
-        // Check if user is already in another seat
-        const seatsSnap = await get(ref(this.db, `rooms/${this.roomId}/seats`));
-        const currentSeats = seatsSnap.val() || {};
-        for (const [idx, s] of Object.entries(currentSeats)) {
-            if (s.userId === this.myId) {
-                await update(ref(this.db, `rooms/${this.roomId}/seats/${idx}`), {
-                    status: 'empty',
-                    userId: null,
-                    name: null,
-                    avatar: null
-                });
-            }
-        }
-
-        await update(seatRef, {
-            status: 'occupied',
-            userId: this.myId,
-            name: this.username,
-            avatar: this.userAvatar
-        });
-
-        onDisconnect(seatRef).update({
-            status: 'empty',
-            userId: null,
-            name: null,
-            avatar: null
-        });
-    }
-
-    openSeatAdmin(index, seat) {
-        this.selectedSeatIndex = index;
-        this.selectedSeatData = seat;
-
-        this.seatAdminInfo.textContent = `إدارة المقعد رقم ${index}`;
-        this.modalSeat.classList.remove('hidden');
-
-        this.btnLockSeat.onclick = () => this.ownerToggleLock(index, seat);
-        this.btnKickPlayer.onclick = () => this.ownerKickPlayer(index, seat);
-
-        if (seat.status === 'occupied') {
-            this.btnKickPlayer.classList.remove('hidden');
-        } else {
-            this.btnKickPlayer.classList.add('hidden');
-        }
-    }
-
-    async ownerToggleLock(index, seat) {
-        const newStatus = seat.status === 'locked' ? 'empty' : 'locked';
-        await update(ref(this.db, `rooms/${this.roomId}/seats/${index}`), {
-            status: newStatus,
-            userId: null,
-            name: null,
-            avatar: null
-        });
-        this.modalSeat.classList.add('hidden');
-    }
-
-    async ownerKickPlayer(index, seat) {
-        if (seat.status !== 'occupied') return;
-        await update(ref(this.db, `rooms/${this.roomId}/seats/${index}`), {
-            status: 'empty',
-            userId: null,
-            name: null,
-            avatar: null
-        });
-        this.modalSeat.classList.add('hidden');
-    }
-
-    // ================== YOUTUBE LOGIC ==================
+    // ================== YOUTUBE SYNC ==================
 
     setupYouTube() {
         if (window.YT && window.YT.Player) {
@@ -285,188 +203,379 @@ class LiveManager {
             width: '100%',
             playerVars: {
                 'autoplay': 1,
-                'controls': 0,
-                'disablekb': 1,
-                'modestbranding': 1,
+                'controls': 1,
                 'rel': 0,
-                'iv_load_policy': 3,
                 'showinfo': 0,
-                'fs': 1,
-                'playsinline': 1
+                'modestbranding': 1,
+                'playsinline': 1,
+                'disablekb': (this.role === 'owner' ? 0 : 1)
             },
             events: {
-                'onReady': (event) => this.onPlayerReady(event),
-                'onStateChange': (event) => this.onPlayerStateChange(event),
-                'onError': (event) => console.error("YT Player Error:", event.data)
+                'onReady': () => this.onPlayerReady(),
+                'onStateChange': (e) => this.onPlayerStateChange(e)
             }
         });
 
-        // Apply guest overlay
         if (this.role !== 'owner') {
-            this.playerOverlay.style.display = 'block';
+            // Start guest check interval to prevent seeking
+            this.guestRevertInterval = setInterval(() => this.guestEnforceSync(), 2000);
         }
     }
 
-    onPlayerReady(event) {
-        if (this.role === 'owner') {
-            // Owner can start by syncing current state if exists
+    onPlayerReady() {
+        if (this.ytState.videoId) {
+            this.syncYouTube(this.ytState);
         }
     }
 
     onPlayerStateChange(event) {
-        if (this.role === 'owner' && !this.isSyncing) {
+        if (this.isSyncing) return;
+
+        if (this.role === 'owner') {
+            this.ytState.state = event.data;
             this.ownerUpdateFirebase();
-        }
-    }
-
-    extractYoutubeInfo(url) {
-        let videoId = '';
-        let startSeconds = 0;
-
-        // Extract ID
-        const idRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-        const match = url.match(idRegex);
-        if (match) {
-            videoId = match[1];
-        } else if (url.length === 11) {
-            videoId = url;
-        }
-
-        // Extract Time (t=123 or t=1m20s)
-        const timeMatch = url.match(/[?&]t=([^&]+)/);
-        if (timeMatch) {
-            const timeStr = timeMatch[1];
-            if (/^\d+$/.test(timeStr)) {
-                startSeconds = parseInt(timeStr);
-            } else {
-                const m = timeStr.match(/(\d+)m/);
-                const s = timeStr.match(/(\d+)s/);
-                if (m) startSeconds += parseInt(m[1]) * 60;
-                if (s) startSeconds += parseInt(s[1]);
-            }
-        }
-
-        return { videoId, startSeconds };
-    }
-
-    ownerLoadVideo() {
-        const val = this.ytUrlInput.value.trim();
-        const { videoId, startSeconds } = this.extractYoutubeInfo(val);
-
-        if (videoId) {
-            this.ytState.videoId = videoId;
-            this.ytState.state = 5; // Cued
-            this.ytState.currentTime = startSeconds;
-            this.ownerUpdateFirebase();
-            this.modalYT.classList.add('hidden');
-
-            // Local update to show the player immediately for the owner
-            this.ytPlayerContainer.classList.remove('hidden');
-            this.vidPlaceholder.classList.add('hidden');
-            if (this.player && this.player.cueVideoById) {
-                this.player.cueVideoById({
-                    videoId: videoId,
-                    startSeconds: startSeconds
-                });
-                this.vidMiniThumb.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+            this.updateCentralIconButton(event.data);
+        } else {
+            // Guest tried to change state
+            const targetState = this.ytState.state;
+            if (event.data !== targetState && targetState !== -1) {
+                if (event.data === 3) return; // Buffering is fine
+                this.showToast("التحكم مقتصر على المالك فقط");
+                if (targetState === 1) this.player.playVideo();
+                if (targetState === 2) this.player.pauseVideo();
             }
         }
     }
 
-    ownerChangeState(state) {
-        if (!this.player || !this.ytState.videoId) return;
+    guestEnforceSync() {
+        if (this.role === 'owner' || !this.player || !this.ytState.videoId || this.ytState.state === -1) return;
 
-        this.ytState.state = state;
-        this.ytState.currentTime = this.player.getCurrentTime();
+        const now = Date.now() + this.serverOffset;
+        let targetTime = this.ytState.currentTime;
+        if (this.ytState.state === 1 && this.ytState.updatedAt) {
+            targetTime += (now - this.ytState.updatedAt) / 1000;
+        }
 
-        if (state === 1) this.player.playVideo();
-        if (state === 2) this.player.pauseVideo();
+        const currentLocalTime = this.player.getCurrentTime();
+        const diff = Math.abs(currentLocalTime - targetTime);
 
-        this.ownerUpdateFirebase();
-    }
-
-    ownerUpdateFirebase() {
-        if (!this.roomId || !this.player) return;
-
-        const time = (typeof this.player.getCurrentTime === 'function') ? this.player.getCurrentTime() : 0;
-
-        update(ref(this.db, `rooms/${this.roomId}/youtube_state`), {
-            videoId: this.ytState.videoId,
-            state: this.ytState.state,
-            currentTime: time,
-            updatedAt: serverTimestamp()
-        });
+        if (diff > 5) {
+            this.showToast("التحكم مقتصر على المالك فقط");
+            this.player.seekTo(targetTime, true);
+        }
     }
 
     syncYouTube(state) {
-        if (this.role === 'owner') {
-            // Owner is the source of truth, don't sync from DB unless it's a completely new video
-            // Or if we just joined and need the initial state
-            if (this.ytState.videoId && this.ytState.videoId === state.videoId) {
-                return;
-            }
+        if (!this.player || !this.player.loadVideoById) {
+            this.ytState = state;
+            return;
         }
 
+        // Calculate absolute time
+        const now = Date.now() + this.serverOffset;
+        let targetTime = state.currentTime;
+        if (state.state === 1 && state.updatedAt) {
+            const elapsed = (now - state.updatedAt) / 1000;
+            targetTime += elapsed;
+        }
+
+        const isNewVideo = state.videoId !== this.ytState.videoId;
         this.ytState = state;
 
         if (!state.videoId) {
             this.ytPlayerContainer.classList.add('hidden');
             this.vidPlaceholder.classList.remove('hidden');
-            this.vidStoppedMessage.textContent = 'المالك او المشرف قاموا بإيقاف الفيديو';
-            if (this.player && this.player.stopVideo) this.player.stopVideo();
+            if (this.player.stopVideo) this.player.stopVideo();
             return;
         }
 
-        // We have a videoId
         this.ytPlayerContainer.classList.remove('hidden');
         this.vidPlaceholder.classList.add('hidden');
 
-        if (this.player && this.player.loadVideoById) {
-            const currentVideoId = this.player.getVideoData ? this.player.getVideoData().video_id : null;
-
-            if (state.videoId !== currentVideoId) {
-                this.player.loadVideoById({
-                    videoId: state.videoId,
-                    startSeconds: state.currentTime || 0
-                });
-                // Update mini-thumb
-                this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
+        if (isNewVideo) {
+            this.player.loadVideoById({
+                videoId: state.videoId,
+                startSeconds: targetTime
+            });
+            if (this.isMutedByPolicy) {
+                this.player.mute();
+                this.unmuteOverlay.classList.remove('hidden');
             }
+            this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
 
-            const diff = Math.abs(this.player.getCurrentTime() - state.currentTime);
-            if (diff > 3) {
-                this.player.seekTo(state.currentTime);
-            }
+            // Try to get title after load
+            const checkTitle = setInterval(() => {
+                if (this.player.getVideoData && this.player.getVideoData().title) {
+                    const data = this.player.getVideoData();
+                    this.vidTitle.textContent = data.title;
+                    this.vidOwner.textContent = "بواسطة: " + (data.author || "يوتيوب");
+                    clearInterval(checkTitle);
+                }
+            }, 1000);
+            setTimeout(() => clearInterval(checkTitle), 10000);
+        }
 
-            if (state.state === 1) { // Playing
-                this.player.playVideo();
-            } else if (state.state === 2) { // Paused
-                this.player.pauseVideo();
-            } else if (state.state === 5) { // Cued
-                this.player.cueVideoById({
-                    videoId: state.videoId,
-                    startSeconds: state.currentTime || 0
-                });
+        // Sync Time
+        const currentLocalTime = this.player.getCurrentTime();
+        const diff = Math.abs(currentLocalTime - targetTime);
+        if (diff > 3) {
+            this.player.seekTo(targetTime, true);
+        }
+
+        // Sync State
+        const currentLocalState = this.player.getPlayerState();
+        if (state.state === 1 && currentLocalState !== 1) this.player.playVideo();
+        if (state.state === 2 && currentLocalState !== 2) this.player.pauseVideo();
+
+        this.updateCentralIconButton(state.state);
+    }
+
+    handleUserUnmute() {
+        if (this.player) {
+            this.player.unMute();
+            this.player.setVolume(100);
+            this.isMutedByPolicy = false;
+            this.unmuteOverlay.classList.add('hidden');
+            this.showToast("تم تفعيل الصوت بنجاح");
+        }
+    }
+
+    // ================== OWNER ACTIONS ==================
+
+    ownerLoadVideo() {
+        const val = this.ytUrlInput.value.trim();
+        let videoId = '';
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = val.match(regExp);
+        videoId = (match && match[2].length === 11) ? match[2] : val;
+
+        if (videoId.length === 11) {
+            this.ytState = {
+                videoId: videoId,
+                state: 1,
+                currentTime: 0,
+                updatedAt: serverTimestamp()
+            };
+            this.ownerUpdateFirebase();
+            this.modalYT.classList.add('hidden');
+
+            // Immediate local feedback
+            this.player.loadVideoById({ videoId: videoId });
+            this.ytPlayerContainer.classList.remove('hidden');
+            this.vidPlaceholder.classList.add('hidden');
+        } else {
+            this.showToast("رابط غير صالح");
+        }
+    }
+
+    ownerUpdateFirebase() {
+        if (!this.roomId || !this.player || this.isSyncing) return;
+        this.isSyncing = true;
+
+        const time = this.player.getCurrentTime();
+        update(ref(this.db, `rooms/${this.roomId}/youtube_state`), {
+            videoId: this.ytState.videoId,
+            state: this.ytState.state,
+            currentTime: time,
+            updatedAt: serverTimestamp()
+        }).then(() => {
+            setTimeout(() => { this.isSyncing = false; }, 500);
+        });
+    }
+
+    ownerTogglePlayPause() {
+        const currentState = this.player.getPlayerState();
+        if (currentState === 1) this.ownerChangeState(2);
+        else this.ownerChangeState(1);
+    }
+
+    ownerChangeState(state) {
+        if (state === 1) this.player.playVideo();
+        else this.player.pauseVideo();
+        this.ytState.state = state;
+        this.ownerUpdateFirebase();
+    }
+
+    ownerHandleDoubleTap(dir) {
+        const now = Date.now();
+        if (now - this.lastTapTime < 350) {
+            const current = this.player.getCurrentTime();
+            const seek = (dir === 'forward') ? current + 10 : current - 10;
+            this.player.seekTo(seek, true);
+            this.showToast(dir === 'forward' ? "تقديم 10 ثوانٍ" : "تأخير 10 ثوانٍ");
+            setTimeout(() => this.ownerUpdateFirebase(), 100);
+        }
+        this.lastTapTime = now;
+    }
+
+    ownerToggleCentralUI() {
+        this.centralControl.classList.toggle('hidden');
+        if (!this.centralControl.classList.contains('hidden')) {
+            if (this.player.getPlayerState() === 1) {
+                setTimeout(() => {
+                    if (this.player.getPlayerState() === 1) {
+                        this.centralControl.classList.add('hidden');
+                    }
+                }, 3000);
             }
         }
     }
 
+    updateCentralIconButton(state) {
+        if (state === 1) {
+            this.iconCentralPlay.classList.add('hidden');
+            this.iconCentralPause.classList.remove('hidden');
+        } else {
+            this.iconCentralPlay.classList.remove('hidden');
+            this.iconCentralPause.classList.add('hidden');
+            this.centralControl.classList.remove('hidden');
+        }
+    }
+
     toggleFullscreen() {
+        const container = document.getElementById('main-video-container');
         if (!document.fullscreenElement) {
-            this.ytPlayerContainer.requestFullscreen().catch(err => {
-                console.error(`Error attempting to enable full-screen mode: ${err.message}`);
-            });
+            container.requestFullscreen().catch(err => console.log(err));
         } else {
             document.exitFullscreen();
         }
     }
 
-    // ================== CHAT LOGIC ==================
+    // ================== AGORA VOICE ==================
+
+    async initAgora() {
+        if (AGORA_APP_ID === "YOUR_AGORA_APP_ID") return;
+        this.agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+
+        this.agoraClient.on("user-published", async (user, mediaType) => {
+            await this.agoraClient.subscribe(user, mediaType);
+            if (mediaType === "audio") {
+                user.audioTrack.play();
+                this.remoteUsers[user.uid] = user;
+            }
+        });
+
+        this.agoraClient.on("user-unpublished", (user) => {
+            delete this.remoteUsers[user.uid];
+        });
+
+        AgoraRTC.setParameter("AUDIO_VOLUME_INDICATION_INTERVAL", 200);
+        this.agoraClient.on("volume-indicator", (volumes) => {
+            volumes.forEach((volume) => {
+                const isSpeaking = volume.level > 5;
+                this.updateSpeakingUI(volume.uid, isSpeaking);
+            });
+        });
+        this.agoraClient.enableAudioVolumeIndicator();
+    }
+
+    async toggleMic() {
+        if (AGORA_APP_ID === "YOUR_AGORA_APP_ID") {
+            this.showToast("يرجى إعداد Agora App ID أولاً");
+            return;
+        }
+
+        try {
+            if (!this.isMicOn) {
+                if (!this.localAudioTrack) {
+                    this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                }
+                if (this.agoraClient.connectionState === "DISCONNECTED") {
+                    await this.agoraClient.join(AGORA_APP_ID, this.roomId, null, this.myId);
+                }
+                await this.agoraClient.publish([this.localAudioTrack]);
+                this.isMicOn = true;
+                this.micOnIcon.classList.remove('hidden');
+                this.micOffIcon.classList.add('hidden');
+                this.btnToggleMic.classList.remove('muted');
+                this.showToast("الميكروفون قيد التشغيل");
+            } else {
+                if (this.localAudioTrack) {
+                    await this.agoraClient.unpublish([this.localAudioTrack]);
+                }
+                this.isMicOn = false;
+                this.micOnIcon.classList.add('hidden');
+                this.micOffIcon.classList.remove('hidden');
+                this.btnToggleMic.classList.add('muted');
+                this.showToast("تم كتم الميكروفون");
+            }
+        } catch (err) {
+            console.error(err);
+            this.showToast("خطأ في الوصول للميكروفون");
+        }
+    }
+
+    updateSpeakingUI(uid, isSpeaking) {
+        const frames = document.querySelectorAll('.avatar-circle-frame');
+        frames.forEach(frame => {
+            if (frame.dataset.uid === String(uid)) {
+                if (isSpeaking) frame.classList.add('speaking');
+                else frame.classList.remove('speaking');
+            }
+        });
+    }
+
+    // ================== SEATS ==================
+
+    updateSeatsUI(seats) {
+        this.seatsContainer.innerHTML = '';
+        for (let i = 1; i <= 6; i++) {
+            const seat = seats[i] || { status: 'empty' };
+            const seatBox = document.createElement('div');
+            seatBox.className = 'seat-box';
+
+            let content = '';
+            if (seat.status === 'locked') {
+                content = `<span class="lock-seat">🔒</span><span class="seat-label-num">${i}</span>`;
+            } else if (seat.status === 'occupied') {
+                const isMe = seat.userId === this.myId;
+                content = `
+                    <div class="avatar-circle-frame ${isMe ? 'green-border' : ''}" data-uid="${seat.userId}">
+                        <img src="${seat.avatar}" alt="${seat.name}">
+                    </div>
+                    <span class="seat-label-num" style="color:#fff;">${seat.name}</span>
+                `;
+            } else {
+                content = `
+                    <div class="avatar-circle-frame seat-empty" onclick="window.liveManager.joinSeat(${i})">
+                        <span style="font-size:20px;color:rgba(255,255,255,0.3);">+</span>
+                    </div>
+                    <button class="btn-join-small" onclick="window.liveManager.joinSeat(${i})">انضم</button>
+                    <span class="seat-label-num">${i}</span>
+                `;
+            }
+            seatBox.innerHTML = content;
+            this.seatsContainer.appendChild(seatBox);
+        }
+    }
+
+    async joinSeat(index) {
+        const seatRef = ref(this.db, `rooms/${this.roomId}/seats/${index}`);
+        const snap = await get(seatRef);
+        if (snap.exists() && snap.val().status !== 'empty') return;
+
+        const seatsSnap = await get(ref(this.db, `rooms/${this.roomId}/seats`));
+        const currentSeats = seatsSnap.val() || {};
+        for (const [idx, s] of Object.entries(currentSeats)) {
+            if (s.userId === this.myId) {
+                await set(ref(this.db, `rooms/${this.roomId}/seats/${idx}`), { status: 'empty' });
+            }
+        }
+
+        await update(seatRef, {
+            status: 'occupied',
+            userId: this.myId,
+            name: this.username,
+            avatar: this.userAvatar
+        });
+        onDisconnect(seatRef).set({ status: 'empty' });
+    }
+
+    // ================== CHAT ==================
 
     async sendChatMessage() {
         const text = this.chatInput.value.trim();
-        if (!text || !this.roomId) return;
-
+        if (!text) return;
         const chatRef = ref(this.db, `rooms/${this.roomId}/messages`);
         await push(chatRef, {
             userId: this.myId,
@@ -475,7 +584,6 @@ class LiveManager {
             text: text,
             timestamp: serverTimestamp()
         });
-
         this.chatInput.value = '';
     }
 
@@ -486,7 +594,7 @@ class LiveManager {
             const div = document.createElement('div');
             div.className = 'chat-msg';
             div.innerHTML = `
-                <img class="chat-avatar" src="${m.avatar}" alt="u">
+                <img class="chat-avatar" src="${m.avatar}">
                 <div class="chat-body">
                     <span class="chat-user-name">${m.userName}</span>
                     <div class="chat-bubble-new">${this.escapeHtml(m.text)}</div>
@@ -494,13 +602,13 @@ class LiveManager {
             `;
             this.chatLogEl.appendChild(div);
         });
-        this.chatLogEl.scrollTop = this.chatLogEl.scrollHeight;
+        this.chatLogEl.scrollTo({ top: this.chatLogEl.scrollHeight, behavior: 'smooth' });
     }
 
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    escapeHtml(t) {
+        const d = document.createElement('div');
+        d.textContent = t;
+        return d.innerHTML;
     }
 }
 
