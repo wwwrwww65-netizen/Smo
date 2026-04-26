@@ -65,6 +65,12 @@ class LiveManager {
 
         this.vidPlaceholder = document.getElementById('vid-placeholder');
         this.vidStoppedMessage = document.getElementById('vid-stopped-message');
+        this.ytPlayerContainer = document.getElementById('youtube-player-container');
+        this.playerOverlay = document.getElementById('player-overlay');
+        this.vidMiniThumb = document.getElementById('vid-mini-thumb');
+        this.vidTitle = document.getElementById('vid-title');
+        this.vidOwner = document.getElementById('vid-owner');
+        this.btnFullscreen = document.getElementById('btn-fullscreen');
 
         // Event Listeners
         if (this.role === 'owner') {
@@ -83,6 +89,8 @@ class LiveManager {
         this.btnPauseVid.addEventListener('click', () => this.ownerChangeState(2)); // Paused
 
         this.btnCloseSeatModal.addEventListener('click', () => this.modalSeat.classList.add('hidden'));
+
+        this.btnFullscreen.addEventListener('click', () => this.toggleFullscreen());
 
         // Update UI with Room ID & Username
         document.querySelector('.user-display-name').textContent = this.username;
@@ -276,18 +284,27 @@ class LiveManager {
             height: '100%',
             width: '100%',
             playerVars: {
-                'autoplay': 0,
-                'controls': (this.role === 'owner' ? 1 : 0),
+                'autoplay': 1,
+                'controls': 0,
                 'disablekb': 1,
                 'modestbranding': 1,
                 'rel': 0,
-                'iv_load_policy': 3
+                'iv_load_policy': 3,
+                'showinfo': 0,
+                'fs': 1,
+                'playsinline': 1
             },
             events: {
                 'onReady': (event) => this.onPlayerReady(event),
-                'onStateChange': (event) => this.onPlayerStateChange(event)
+                'onStateChange': (event) => this.onPlayerStateChange(event),
+                'onError': (event) => console.error("YT Player Error:", event.data)
             }
         });
+
+        // Apply guest overlay
+        if (this.role !== 'owner') {
+            this.playerOverlay.style.display = 'block';
+        }
     }
 
     onPlayerReady(event) {
@@ -339,29 +356,58 @@ class LiveManager {
     }
 
     syncYouTube(state) {
-        if (this.role === 'owner') return; // Owner doesn't sync from Firebase to avoid loops
-
-        if (state.videoId !== this.ytState.videoId) {
-            this.ytState.videoId = state.videoId;
-            this.player.loadVideoById(state.videoId);
+        if (this.role === 'owner' && this.ytState.videoId === state.videoId) {
+            // Owner already has the state, just update local ref if needed
+            this.ytState = state;
+            return;
         }
 
-        const diff = Math.abs(this.player.getCurrentTime() - state.currentTime);
-        if (diff > 3) {
-            this.player.seekTo(state.currentTime);
-        }
+        this.ytState = state;
 
-        if (state.state === 1) { // Playing
-            this.player.playVideo();
-            this.vidPlaceholder.classList.add('hidden');
-        } else if (state.state === 2) { // Paused
-            this.player.pauseVideo();
+        if (!state.videoId) {
+            this.ytPlayerContainer.classList.add('hidden');
             this.vidPlaceholder.classList.remove('hidden');
-            this.vidStoppedMessage.textContent = 'المالك أوقف الفيديو مؤقتاً';
+            this.vidStoppedMessage.textContent = 'المالك او المشرف قاموا بإيقاف الفيديو';
+            if (this.player && this.player.stopVideo) this.player.stopVideo();
+            return;
+        }
+
+        // We have a videoId
+        this.ytPlayerContainer.classList.remove('hidden');
+        this.vidPlaceholder.classList.add('hidden');
+
+        if (this.player && this.player.loadVideoById) {
+            const currentVideoId = this.player.getVideoData ? this.player.getVideoData().video_id : null;
+
+            if (state.videoId !== currentVideoId) {
+                this.player.loadVideoById({
+                    videoId: state.videoId,
+                    startSeconds: state.currentTime || 0
+                });
+                // Update mini-thumb
+                this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
+            }
+
+            const diff = Math.abs(this.player.getCurrentTime() - state.currentTime);
+            if (diff > 3) {
+                this.player.seekTo(state.currentTime);
+            }
+
+            if (state.state === 1) { // Playing
+                this.player.playVideo();
+            } else if (state.state === 2) { // Paused
+                this.player.pauseVideo();
+            }
+        }
+    }
+
+    toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            this.ytPlayerContainer.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+            });
         } else {
-            this.player.stopVideo();
-            this.vidPlaceholder.classList.remove('hidden');
-            this.vidStoppedMessage.textContent = 'لا يوجد فيديو حالياً';
+            document.exitFullscreen();
         }
     }
 
