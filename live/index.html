@@ -76,22 +76,9 @@
                 </div>
 
                 <!-- الجزء الأوسط: المشغل أو حالة الإيقاف -->
-                <div class="vid-content-middle" id="vid-touch-zone">
+                <div class="vid-content-middle">
                     <div id="youtube-player-container" class="hidden">
                         <div id="player"></div>
-                        <!-- مناطق النقر المزدوج -->
-                        <div class="double-tap-area left" id="tap-back"></div>
-                        <div class="double-tap-area right" id="tap-forward"></div>
-                        <!-- طبقة حماية للمشاهدين (تظهر برمجياً) -->
-                        <div id="player-overlay" class="player-overlay"></div>
-
-                        <!-- زر التشغيل المركزي -->
-                        <div id="central-play-pause" class="central-control hidden">
-                            <button id="btn-central-toggle">
-                                <svg id="icon-central-play" width="60" height="60" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-                                <svg id="icon-central-pause" class="hidden" width="60" height="60" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                            </button>
-                        </div>
 
                         <!-- تغطية كتم الصوت للمتأخرين -->
                         <div id="unmute-overlay" class="unmute-overlay hidden">
@@ -122,7 +109,7 @@
                         <button id="btn-fullscreen" class="share-arrow-btn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
                         </button>
-                        <button id="btn-open-control" class="share-arrow-btn hidden">
+                        <button id="btn-open-control" class="share-arrow-btn hidden" title="إدارة الفيديو">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                         </button>
                     </div>
