@@ -749,6 +749,19 @@ body {
 
 .hidden { display: none !important; }
 
+/* Browser Spinner */
+.browser-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top: 3px solid var(--accent-turquoise);
+    border-radius: 50%;
+    animation: browser-spin 1s linear infinite;
+}
+@keyframes browser-spin {
+    to { transform: rotate(360deg); }
+}
+
 /* Fullscreen Styling */
 #main-video-container:fullscreen {
     width: 100vw;

@@ -88,16 +88,25 @@
                     </div>
 
                     <!-- متصفح داخلي -->
-                    <div id="browser-container" class="hidden" style="width:100%; height:100%; display: flex; flex-direction: column;">
-                        <div id="browser-toolbar" class="hidden" style="background: #222; padding: 5px; display: flex; gap: 5px; align-items: center;">
-                            <input type="text" id="browser-url-input" placeholder="أدخل الرابط أو ابحث..." style="flex: 1; padding: 5px; border-radius: 4px; border: none; font-size: 12px;">
-                            <button id="btn-browser-go" title="انتقال" style="background: var(--accent-turquoise); border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">انتقال</button>
-                            <button id="btn-browser-sync" title="مزامنة مع الجميع" style="background: #2e7d32; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white;">بث للجميع</button>
-                            <button id="btn-browser-external" title="فتح خارجي" style="background: #444; border: none; padding: 5px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    <div id="browser-container" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; display: flex; flex-direction: column; z-index: 10;">
+                        <div id="browser-toolbar" class="hidden" style="background: #1a1a1a; padding: 8px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #333; z-index: 30;">
+                            <button id="btn-browser-back" title="رجوع" style="background: #333; border: none; padding: 5px; border-radius: 4px; color: #fff; cursor: pointer;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                             </button>
+                            <input type="text" id="browser-url-input" placeholder="أدخل الرابط أو ابحث في جوجل..." style="flex: 1; padding: 6px 12px; border-radius: 20px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 12px; outline: none;">
+                            <button id="btn-browser-go" title="انتقال" style="background: var(--accent-turquoise); border: none; padding: 6px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; color: #000; cursor: pointer;">انتقال</button>
+                            <button id="btn-browser-sync" title="بث للجميع" style="background: #2e7d32; border: none; padding: 6px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; cursor: pointer;">بث</button>
                         </div>
-                        <iframe id="browser-iframe" src="" style="flex: 1; width:100%; border:none; background:#fff;"></iframe>
+                        <div id="browser-loading-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 25;">
+                             <div class="browser-spinner"></div>
+                             <span style="margin-top: 15px; font-size: 14px; color: var(--accent-turquoise); font-weight: bold;">جاري تحميل الموقع...</span>
+                             <p style="margin-top: 10px; font-size: 11px; color: #888; text-align: center; padding: 0 20px;">بعض المواقع تمنع العرض داخل الغرف، إذا لم يظهر الموقع استخدم زر الفتح الخارجي.</p>
+                        </div>
+                        <iframe id="browser-iframe" src="" allow="autoplay; encrypted-media; fullscreen" style="flex: 1; width:100%; border:none; background:#fff;"></iframe>
+                        <button id="btn-browser-fallback" class="hidden" style="position: absolute; bottom: 20px; left: 20px; background: rgba(0,210,255,0.9); color: #000; border: none; padding: 8px 18px; border-radius: 25px; font-size: 12px; font-weight: bold; z-index: 40; box-shadow: 0 4px 15px rgba(0,0,0,0.5); cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                            <span>فتح في نافذة جديدة</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                        </button>
                     </div>
 
                     <!-- تغطية كتم الصوت للمتأخرين (تعمل مع الجميع) -->
