@@ -147,8 +147,9 @@ class LiveManager {
             // Browser events for owner
             this.btnBrowserGo.onclick = () => {
                 const url = this.browserUrlInput.value.trim();
-                if (url) this.browserIframe.src = url.startsWith('http') ? url : 'https://' + url;
+                if (url) this.browserIframe.src = this.ensureAbsoluteUrl(url);
             };
+            this.browserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnBrowserGo.click(); };
             this.btnBrowserSync.onclick = () => {
                 this.mediaState = {
                     type: 'web',
@@ -194,6 +195,16 @@ class LiveManager {
         onValue(offsetRef, (snap) => {
             this.serverOffset = snap.val() || 0;
         });
+    }
+
+    ensureAbsoluteUrl(url) {
+        if (!url) return '';
+        // If it starts with // it's protocol-relative
+        if (url.startsWith('//')) return 'https:' + url;
+        // If it already has a protocol, return as is
+        if (/^https?:\/\//i.test(url)) return url;
+        // Otherwise, prepend https://
+        return 'https://' + url;
     }
 
     async joinRoom() {
@@ -401,8 +412,9 @@ class LiveManager {
 
     syncGenericVideo(state) {
         if (!this.genericVideo) return;
-        if (this.genericVideo.src !== state.url) {
-            this.genericVideo.src = state.url;
+        const absoluteUrl = this.ensureAbsoluteUrl(state.url);
+        if (this.genericVideo.src !== absoluteUrl) {
+            this.genericVideo.src = absoluteUrl;
             this.vidTitle.textContent = "فيديو مباشر";
             this.vidOwner.textContent = "بواسطة: رابط خارجي";
             this.vidMiniThumb.src = ""; // Clear mini thumb
@@ -423,8 +435,9 @@ class LiveManager {
 
     syncBrowser(state) {
         if (!this.browserIframe) return;
-        if (this.browserIframe.src !== state.url) {
-            this.browserIframe.src = state.url;
+        const absoluteUrl = this.ensureAbsoluteUrl(state.url);
+        if (this.browserIframe.src !== absoluteUrl) {
+            this.browserIframe.src = absoluteUrl;
             this.vidTitle.textContent = "تصفح ويب";
             try {
                 const host = new URL(state.url).hostname;
@@ -456,7 +469,7 @@ class LiveManager {
     // ================== OWNER ACTIONS ==================
 
     ownerLoadVideo() {
-        const url = this.ytUrlInput.value.trim();
+        let url = this.ytUrlInput.value.trim();
         if (!url) return;
 
         let type = this.selectedType;
@@ -473,6 +486,11 @@ class LiveManager {
             } else {
                 type = 'web';
             }
+        }
+
+        // Ensure URL is absolute for video and web types
+        if (type === 'video' || type === 'web') {
+            url = this.ensureAbsoluteUrl(url);
         }
 
         this.mediaState = {
