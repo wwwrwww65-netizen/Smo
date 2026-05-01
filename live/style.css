@@ -712,6 +712,23 @@ body {
     color: #fff;
     text-align: center;
 }
+
+.btn-type {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #ccc;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-type.active {
+    background: #00d2ff;
+    color: #000;
+    font-weight: bold;
+}
 .modal-actions {
     display: flex;
     justify-content: center;
