@@ -87,6 +87,7 @@ class LiveManager {
         this.browserUrlInput = document.getElementById('browser-url-input');
         this.btnBrowserGo = document.getElementById('btn-browser-go');
         this.btnBrowserSync = document.getElementById('btn-browser-sync');
+        this.btnBrowserExternal = document.getElementById('btn-browser-external');
 
         this.vidPlaceholder = document.getElementById('vid-placeholder');
         this.unmuteOverlay = document.getElementById('unmute-overlay');
@@ -146,8 +147,12 @@ class LiveManager {
 
             // Browser events for owner
             this.btnBrowserGo.onclick = () => {
-                const url = this.browserUrlInput.value.trim();
-                if (url) this.browserIframe.src = this.ensureAbsoluteUrl(url);
+                const input = this.browserUrlInput.value.trim();
+                if (input) {
+                    const processedUrl = this.processUrl(input);
+                    this.browserUrlInput.value = processedUrl;
+                    this.browserIframe.src = processedUrl;
+                }
             };
             this.browserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnBrowserGo.click(); };
             this.btnBrowserSync.onclick = () => {
@@ -160,6 +165,13 @@ class LiveManager {
                 this.ownerUpdateFirebase();
                 this.showToast("تم مزامنة الموقع مع الجميع");
             };
+            if (this.btnBrowserExternal) {
+                this.btnBrowserExternal.onclick = () => {
+                    if (this.browserIframe.src) {
+                        window.open(this.browserIframe.src, '_blank');
+                    }
+                };
+            }
         }
 
         this.btnLoadVid.onclick = () => this.ownerLoadVideo();
@@ -197,14 +209,51 @@ class LiveManager {
         });
     }
 
-    ensureAbsoluteUrl(url) {
+    processUrl(input) {
+        let url = input.trim();
         if (!url) return '';
-        // If it starts with // it's protocol-relative
-        if (url.startsWith('//')) return 'https:' + url;
-        // If it already has a protocol, return as is
-        if (/^https?:\/\//i.test(url)) return url;
-        // Otherwise, prepend https://
-        return 'https://' + url;
+
+        // If it's already a processed Google search with igu=1, don't re-process
+        if (url.includes('google.com/search') && url.includes('igu=1')) return url;
+
+        // 1. Correct common typos in domains
+        url = url.replace(/\.(con|comn|comm)$/i, '.com');
+        url = url.replace(/\.(ne|netn)$/i, '.net');
+        url = url.replace(/\.(or|orgn)$/i, '.org');
+
+        // 2. Check if it's a URL or a search query
+        // Regex for a basic URL: starts with protocol OR looks like domain.tld
+        // We include common URL characters like ?, =, &, #. Supports modern TLDs, ports, and localhost.
+        const urlPattern = /^(https?:\/\/)?(([\da-z\.-]+)\.([a-z]{2,24})|localhost)(:\d+)?([\/\w \.?=&%#\+-]*)*\/?$/i;
+        const isLikelyUrl = urlPattern.test(url) && !url.includes(' ');
+
+        if (isLikelyUrl) {
+            // Ensure protocol
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            // Special handling for Google to allow iframe embedding (using 'igu=1')
+            if (url.includes('google.com')) {
+                if (url.includes('/search')) {
+                    if (!url.includes('igu=1')) {
+                        url += (url.includes('?') ? '&' : '?') + 'igu=1';
+                    }
+                } else if (url.endsWith('google.com') || url.endsWith('google.com/')) {
+                    // Convert plain google.com to search with igu=1 to work in iframe
+                    url = 'https://www.google.com/search?q=&igu=1';
+                }
+            }
+        } else {
+            // It's a search query, convert to Google Search
+            url = `https://www.google.com/search?q=${encodeURIComponent(url)}&igu=1`;
+        }
+
+        return url;
+    }
+
+    ensureAbsoluteUrl(url) {
+        return this.processUrl(url);
     }
 
     async joinRoom() {
@@ -469,11 +518,12 @@ class LiveManager {
     // ================== OWNER ACTIONS ==================
 
     ownerLoadVideo() {
-        let url = this.ytUrlInput.value.trim();
-        if (!url) return;
+        let input = this.ytUrlInput.value.trim();
+        if (!input) return;
 
         let type = this.selectedType;
         let videoId = '';
+        let url = input;
 
         if (type === 'auto') {
             const ytRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -483,14 +533,13 @@ class LiveManager {
                 videoId = match[2];
             } else if (url.match(/\.(mp4|webm|ogg|m3u8|mov)(\?.*)?$/i)) {
                 type = 'video';
+                url = this.processUrl(input);
             } else {
                 type = 'web';
+                url = this.processUrl(input);
             }
-        }
-
-        // Ensure URL is absolute for video and web types
-        if (type === 'video' || type === 'web') {
-            url = this.ensureAbsoluteUrl(url);
+        } else if (type === 'video' || type === 'web') {
+            url = this.processUrl(input);
         }
 
         this.mediaState = {
