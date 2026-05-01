@@ -89,10 +89,13 @@
 
                     <!-- متصفح داخلي -->
                     <div id="browser-container" class="hidden" style="width:100%; height:100%; display: flex; flex-direction: column;">
-                        <div id="browser-toolbar" class="hidden" style="background: #222; padding: 5px; display: flex; gap: 5px;">
-                            <input type="text" id="browser-url-input" placeholder="أدخل الرابط هنا..." style="flex: 1; padding: 5px; border-radius: 4px; border: none; font-size: 12px;">
-                            <button id="btn-browser-go" style="background: var(--accent-turquoise); border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">انتقال</button>
-                            <button id="btn-browser-sync" style="background: #2e7d32; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white;">بث للجميع</button>
+                        <div id="browser-toolbar" class="hidden" style="background: #222; padding: 5px; display: flex; gap: 5px; align-items: center;">
+                            <input type="text" id="browser-url-input" placeholder="أدخل الرابط أو ابحث..." style="flex: 1; padding: 5px; border-radius: 4px; border: none; font-size: 12px;">
+                            <button id="btn-browser-go" title="انتقال" style="background: var(--accent-turquoise); border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;">انتقال</button>
+                            <button id="btn-browser-sync" title="مزامنة مع الجميع" style="background: #2e7d32; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white;">بث للجميع</button>
+                            <button id="btn-browser-external" title="فتح خارجي" style="background: #444; border: none; padding: 5px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                            </button>
                         </div>
                         <iframe id="browser-iframe" src="" style="flex: 1; width:100%; border:none; background:#fff;"></iframe>
                     </div>
