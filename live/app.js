@@ -87,7 +87,9 @@ class LiveManager {
         this.browserUrlInput = document.getElementById('browser-url-input');
         this.btnBrowserGo = document.getElementById('btn-browser-go');
         this.btnBrowserSync = document.getElementById('btn-browser-sync');
-        this.btnBrowserExternal = document.getElementById('btn-browser-external');
+        this.btnBrowserBack = document.getElementById('btn-browser-back');
+        this.btnBrowserFallback = document.getElementById('btn-browser-fallback');
+        this.browserLoadingOverlay = document.getElementById('browser-loading-overlay');
 
         this.vidPlaceholder = document.getElementById('vid-placeholder');
         this.unmuteOverlay = document.getElementById('unmute-overlay');
@@ -146,35 +148,77 @@ class LiveManager {
             this.genericVideo.onseeked = () => this.ownerOnMediaEvent();
 
             // Browser events for owner
-            this.btnBrowserGo.onclick = () => {
-                const input = this.browserUrlInput.value.trim();
-                if (input) {
-                    const processedUrl = this.processUrl(input);
-                    this.browserUrlInput.value = processedUrl;
-                    this.browserIframe.src = processedUrl;
-                }
-            };
-            this.browserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnBrowserGo.click(); };
-            this.btnBrowserSync.onclick = () => {
-                this.mediaState = {
-                    type: 'web',
-                    url: this.browserIframe.src,
-                    state: 1,
-                    updatedAt: serverTimestamp()
+            if (this.btnBrowserGo) {
+                this.btnBrowserGo.onclick = () => {
+                    const input = this.browserUrlInput.value.trim();
+                    if (input) {
+                        const processedUrl = this.processUrl(input);
+                        this.browserUrlInput.value = processedUrl;
+
+                        // Show loading
+                        if (this.browserLoadingOverlay) this.browserLoadingOverlay.classList.remove('hidden');
+                        this.browserIframe.src = processedUrl;
+
+                        // Auto-sync for owner
+                        this.mediaState = {
+                            type: 'web',
+                            url: processedUrl,
+                            state: 1,
+                            updatedAt: serverTimestamp()
+                        };
+                        this.ownerUpdateFirebase();
+                    }
                 };
-                this.ownerUpdateFirebase();
-                this.showToast("تم مزامنة الموقع مع الجميع");
-            };
-            if (this.btnBrowserExternal) {
-                this.btnBrowserExternal.onclick = () => {
-                    if (this.browserIframe.src) {
-                        window.open(this.browserIframe.src, '_blank');
+            }
+            if (this.browserUrlInput) {
+                this.browserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnBrowserGo.click(); };
+            }
+            if (this.btnBrowserSync) {
+                this.btnBrowserSync.onclick = () => {
+                    const currentUrl = this.browserIframe.src;
+                    if (!currentUrl || currentUrl === window.location.href) return;
+
+                    this.mediaState = {
+                        type: 'web',
+                        url: currentUrl,
+                        state: 1,
+                        updatedAt: serverTimestamp()
+                    };
+                    this.ownerUpdateFirebase();
+                    this.showToast("تم مزامنة الموقع مع الجميع");
+                };
+            }
+            if (this.btnBrowserBack) {
+                this.btnBrowserBack.onclick = () => {
+                    try {
+                        this.browserIframe.contentWindow.history.back();
+                    } catch(e) {
+                        this.showToast("لا يمكن الرجوع للمواقع الخارجية أمنياً");
                     }
                 };
             }
         }
 
+        if (this.btnBrowserFallback) {
+            this.btnBrowserFallback.onclick = () => {
+                if (this.browserIframe.src) {
+                    window.open(this.browserIframe.src, '_blank');
+                }
+            };
+        }
+
+        if (this.browserIframe) {
+            this.browserIframe.onload = () => {
+                if (this.browserLoadingOverlay) {
+                    this.browserLoadingOverlay.classList.add('hidden');
+                }
+            };
+        }
+
         this.btnLoadVid.onclick = () => this.ownerLoadVideo();
+        if (this.ytUrlInput) {
+            this.ytUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.ownerLoadVideo(); };
+        }
         this.btnPlayVid.onclick = () => this.ownerChangeState(1);
         this.btnPauseVid.onclick = () => this.ownerChangeState(2);
         this.btnCloseModal.onclick = () => this.modalYT.classList.add('hidden');
@@ -222,14 +266,14 @@ class LiveManager {
         url = url.replace(/\.(or|orgn)$/i, '.org');
 
         // 2. Check if it's a URL or a search query
-        // Regex for a basic URL: starts with protocol OR looks like domain.tld
-        // We include common URL characters like ?, =, &, #. Supports modern TLDs, ports, and localhost.
         const urlPattern = /^(https?:\/\/)?(([\da-z\.-]+)\.([a-z]{2,24})|localhost)(:\d+)?([\/\w \.?=&%#\+-]*)*\/?$/i;
-        const isLikelyUrl = urlPattern.test(url) && !url.includes(' ');
+        const isLikelyUrl = url.startsWith('http') || (url.includes('.') && !url.includes(' '));
 
         if (isLikelyUrl) {
-            // Ensure protocol
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            // Force HTTPS for GitHub Pages compatibility
+            if (url.startsWith('http://')) {
+                url = url.replace('http://', 'https://');
+            } else if (!url.startsWith('https://')) {
                 url = 'https://' + url;
             }
 
@@ -239,9 +283,23 @@ class LiveManager {
                     if (!url.includes('igu=1')) {
                         url += (url.includes('?') ? '&' : '?') + 'igu=1';
                     }
-                } else if (url.endsWith('google.com') || url.endsWith('google.com/')) {
-                    // Convert plain google.com to search with igu=1 to work in iframe
-                    url = 'https://www.google.com/search?q=&igu=1';
+                } else {
+                    // Check if it's a direct google search query in the URL
+                    let query = "";
+                    try {
+                        const tempUrl = new URL(url);
+                        query = tempUrl.searchParams.get('q') || "";
+                    } catch(e) {}
+                    url = `https://www.google.com/search?q=${encodeURIComponent(query)}&igu=1`;
+                }
+            }
+
+            // Handle YouTube links in browser mode - convert to embed if possible
+            if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+                const ytRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                const match = url.match(ytRegExp);
+                if (match && match[2].length === 11) {
+                    url = `https://www.youtube.com/embed/${match[2]}?autoplay=1`;
                 }
             }
         } else {
@@ -485,12 +543,19 @@ class LiveManager {
     syncBrowser(state) {
         if (!this.browserIframe) return;
         const absoluteUrl = this.ensureAbsoluteUrl(state.url);
-        if (this.browserIframe.src !== absoluteUrl) {
+
+        // Use attribute check as .src might be expanded with trailing slashes by the browser
+        const currentSrc = this.browserIframe.getAttribute('src');
+        if (currentSrc !== absoluteUrl) {
+            if (this.browserLoadingOverlay) this.browserLoadingOverlay.classList.remove('hidden');
             this.browserIframe.src = absoluteUrl;
+            if (this.btnBrowserFallback) this.btnBrowserFallback.classList.remove('hidden');
+            if (this.browserUrlInput) this.browserUrlInput.value = absoluteUrl;
+
             this.vidTitle.textContent = "تصفح ويب";
             try {
-                const host = new URL(state.url).hostname;
-                this.vidOwner.textContent = "الموقع: " + host;
+                const urlObj = new URL(absoluteUrl);
+                this.vidOwner.textContent = "الموقع: " + urlObj.hostname;
             } catch(e) {
                 this.vidOwner.textContent = "تصفح مباشر";
             }
