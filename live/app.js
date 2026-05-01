@@ -32,9 +32,9 @@ class LiveManager {
         this.myId = null;
         this.userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.username}_${Math.random()}`;
 
-        // YouTube State
+        // Media State (YouTube, Generic Video, Web Browser)
         this.player = null;
-        this.ytState = { videoId: '', state: -1, currentTime: 0, updatedAt: 0 };
+        this.mediaState = { type: 'none', url: '', videoId: '', state: -1, currentTime: 0, updatedAt: 0 };
         this.isSyncing = false;
         this.serverOffset = 0;
         this.isMutedByPolicy = true;
@@ -77,8 +77,17 @@ class LiveManager {
         this.seatsContainer = document.getElementById('seats-container');
         this.toastContainer = document.getElementById('toast-container');
 
-        // YouTube
+        // Media Containers
         this.ytPlayerContainer = document.getElementById('youtube-player-container');
+        this.genericVideoContainer = document.getElementById('generic-video-container');
+        this.genericVideo = document.getElementById('generic-video');
+        this.browserContainer = document.getElementById('browser-container');
+        this.browserIframe = document.getElementById('browser-iframe');
+        this.browserToolbar = document.getElementById('browser-toolbar');
+        this.browserUrlInput = document.getElementById('browser-url-input');
+        this.btnBrowserGo = document.getElementById('btn-browser-go');
+        this.btnBrowserSync = document.getElementById('btn-browser-sync');
+
         this.vidPlaceholder = document.getElementById('vid-placeholder');
         this.unmuteOverlay = document.getElementById('unmute-overlay');
         this.btnUnmuteTap = document.getElementById('btn-unmute-tap');
@@ -87,8 +96,9 @@ class LiveManager {
         this.vidOwner = document.getElementById('vid-owner');
         this.vidHeaderTop = document.querySelector('.vid-header-top');
         this.vidFooterRow = document.querySelector('.vid-footer-row');
+        this.mediaBrand = document.getElementById('media-brand');
 
-        // Modals
+        // Modals & Controls
         this.btnOpenControl = document.getElementById('btn-open-control');
         this.modalYT = document.getElementById('modal-yt-control');
         this.ytUrlInput = document.getElementById('yt-url-input');
@@ -96,6 +106,25 @@ class LiveManager {
         this.btnPlayVid = document.getElementById('btn-play-vid');
         this.btnPauseVid = document.getElementById('btn-pause-vid');
         this.btnCloseModal = document.getElementById('btn-close-modal');
+
+        // Media Type Selectors
+        this.btnTypeAuto = document.getElementById('type-auto');
+        this.btnTypeYT = document.getElementById('type-yt');
+        this.btnTypeVideo = document.getElementById('type-video');
+        this.btnTypeWeb = document.getElementById('type-web');
+        this.selectedType = 'auto';
+
+        if (this.btnTypeAuto) {
+            const types = [this.btnTypeAuto, this.btnTypeYT, this.btnTypeVideo, this.btnTypeWeb];
+            types.forEach(btn => {
+                if(!btn) return;
+                btn.onclick = () => {
+                    types.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.selectedType = btn.id.replace('type-', '');
+                };
+            });
+        }
 
         // Mic
         this.btnToggleMic = document.getElementById('btn-toggle-mic');
@@ -109,6 +138,27 @@ class LiveManager {
         if (this.role === 'owner') {
             this.btnOpenControl.classList.remove('hidden');
             this.btnOpenControl.onclick = () => this.modalYT.classList.remove('hidden');
+
+            // Generic Video Events for Owner
+            this.genericVideo.onplay = () => this.ownerOnMediaEvent(1);
+            this.genericVideo.onpause = () => this.ownerOnMediaEvent(2);
+            this.genericVideo.onseeked = () => this.ownerOnMediaEvent();
+
+            // Browser events for owner
+            this.btnBrowserGo.onclick = () => {
+                const url = this.browserUrlInput.value.trim();
+                if (url) this.browserIframe.src = url.startsWith('http') ? url : 'https://' + url;
+            };
+            this.btnBrowserSync.onclick = () => {
+                this.mediaState = {
+                    type: 'web',
+                    url: this.browserIframe.src,
+                    state: 1,
+                    updatedAt: serverTimestamp()
+                };
+                this.ownerUpdateFirebase();
+                this.showToast("تم مزامنة الموقع مع الجميع");
+            };
         }
 
         this.btnLoadVid.onclick = () => this.ownerLoadVideo();
@@ -171,7 +221,7 @@ class LiveManager {
             if (data.users) this.onlineCountEl.textContent = Object.keys(data.users).length;
             if (data.messages) this.updateChatUI(data.messages);
             this.updateSeatsUI(data.seats || {});
-            if (data.youtube_state) this.syncYouTube(data.youtube_state);
+            if (data.youtube_state) this.syncMedia(data.youtube_state);
         });
     }
 
@@ -218,89 +268,116 @@ class LiveManager {
     }
 
     onPlayerReady() {
-        if (this.ytState.videoId) {
-            this.syncYouTube(this.ytState);
+        if (this.mediaState.type === 'youtube' && this.mediaState.videoId) {
+            this.syncYouTube(this.mediaState);
         }
     }
 
     onPlayerStateChange(event) {
-        if (this.isSyncing) return;
+        if (this.isSyncing || this.mediaState.type !== 'youtube') return;
 
         if (this.role === 'owner') {
-            this.ytState.state = event.data;
+            this.mediaState.state = event.data;
             this.ownerUpdateFirebase();
         } else {
-            const targetState = this.ytState.state;
+            const targetState = this.mediaState.state;
             if (event.data !== targetState && targetState !== -1) {
                 if (event.data === 3) return;
-
-                // Allow buffering/ready, but enforce play/pause sync
-                if (targetState === 1 && event.data !== 1) {
-                    this.player.playVideo();
-                } else if (targetState === 2 && event.data !== 2) {
-                    this.player.pauseVideo();
-                }
+                if (targetState === 1 && event.data !== 1) this.player.playVideo();
+                else if (targetState === 2 && event.data !== 2) this.player.pauseVideo();
             }
         }
     }
 
     guestEnforceSync() {
-        if (this.role === 'owner' || !this.player || !this.ytState.videoId || this.ytState.state === -1) return;
+        if (this.role === 'owner' || this.mediaState.state === -1) return;
 
         const now = Date.now() + this.serverOffset;
-        let targetTime = this.ytState.currentTime;
-        if (this.ytState.state === 1 && this.ytState.updatedAt) {
-            targetTime += (now - this.ytState.updatedAt) / 1000;
+        let targetTime = this.mediaState.currentTime;
+        if (this.mediaState.state === 1 && this.mediaState.updatedAt) {
+            targetTime += (now - this.mediaState.updatedAt) / 1000;
         }
 
-        const currentLocalTime = this.player.getCurrentTime();
-        const diff = Math.abs(currentLocalTime - targetTime);
+        let currentLocalTime = 0;
+        if (this.mediaState.type === 'youtube' && this.player && this.player.getCurrentTime) {
+            currentLocalTime = this.player.getCurrentTime();
+        } else if (this.mediaState.type === 'video' && this.genericVideo) {
+            currentLocalTime = this.genericVideo.currentTime;
+        } else {
+            return;
+        }
 
-        if (diff > 5) {
-            this.showToast("التحكم مقتصر على المالك فقط");
-            this.player.seekTo(targetTime, true);
+        const diff = Math.abs(currentLocalTime - targetTime);
+        if (diff > 8) {
+            this.showToast("مزامنة مع المالك...");
+            if (this.mediaState.type === 'youtube') this.player.seekTo(targetTime, true);
+            else this.genericVideo.currentTime = targetTime;
+        }
+    }
+
+    syncMedia(state) {
+        if (!state) return;
+        const type = state.type || 'youtube';
+        this.mediaState = state;
+
+        // Hide all first
+        this.ytPlayerContainer.classList.add('hidden');
+        this.genericVideoContainer.classList.add('hidden');
+        this.browserContainer.classList.add('hidden');
+        this.vidPlaceholder.classList.add('hidden');
+        this.mediaBrand.innerHTML = ''; // Clear brand area
+
+        if (!state.url && !state.videoId) {
+            this.vidPlaceholder.classList.remove('hidden');
+            if (this.player && this.player.stopVideo) this.player.stopVideo();
+            if (this.genericVideo) this.genericVideo.pause();
+            return;
+        }
+
+        if (type === 'youtube') {
+            this.ytPlayerContainer.classList.remove('hidden');
+            this.mediaBrand.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <svg width="28" height="20" viewBox="0 0 28 20" fill="red"><path d="M27.3 3.3c-0.3-1.2-1.3-2.2-2.5-2.5C22.6 0.4 14 0.4 14 0.4s-8.6 0-10.8 0.4C2 1.1 1 2.1 0.7 3.3 0.3 5.5 0.3 10 0.3 10s0 4.5 0.4 6.7c0.3 1.2 1.3 2.2 2.5 2.5 2.2 0.4 10.8 0.4 10.8 0.4s8.6 0 10.8-0.4c1.2-0.3 2.2-1.3 2.5-2.5 0.4-2.2 0.4-6.7 0.4-6.7s0-4.5-0.4-6.7z"/><polygon fill="white" points="11.2 14.3 18.2 10 11.2 5.7"/></svg>
+                    <span style="color: white; font-weight: bold; font-family: Arial; font-size: 16px;">YouTube</span>
+                </div>`;
+            this.syncYouTube(state);
+        } else if (type === 'video') {
+            this.genericVideoContainer.classList.remove('hidden');
+            this.mediaBrand.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><polygon points="10 8 14 10 10 12 10 8"></polygon></svg>
+                    <span style="color: white; font-weight: bold; font-size: 14px;">فيديو مباشر</span>
+                </div>`;
+            this.syncGenericVideo(state);
+        } else if (type === 'web') {
+            this.browserContainer.classList.remove('hidden');
+            if (this.role === 'owner') this.browserToolbar.classList.remove('hidden');
+
+            this.mediaBrand.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    <span style="color: white; font-weight: bold; font-size: 14px;">متصفح</span>
+                </div>`;
+            this.syncBrowser(state);
         }
     }
 
     syncYouTube(state) {
-        if (!this.player || !this.player.loadVideoById) {
-            this.ytState = state;
-            return;
-        }
+        if (!this.player || !this.player.loadVideoById) return;
 
         const now = Date.now() + this.serverOffset;
         let targetTime = state.currentTime;
         if (state.state === 1 && state.updatedAt) {
-            const elapsed = (now - state.updatedAt) / 1000;
-            targetTime += elapsed;
+            targetTime += (now - state.updatedAt) / 1000;
         }
 
-        const isNewVideo = state.videoId !== this.ytState.videoId;
-        this.ytState = state;
-
-        if (!state.videoId) {
-            this.ytPlayerContainer.classList.add('hidden');
-            this.vidPlaceholder.classList.remove('hidden');
-            if (this.player.stopVideo) this.player.stopVideo();
-            return;
-        }
-
-        this.ytPlayerContainer.classList.remove('hidden');
-        this.vidPlaceholder.classList.add('hidden');
+        const isNewVideo = state.videoId !== (this._lastYtId || '');
+        this._lastYtId = state.videoId;
 
         if (isNewVideo) {
-            this.player.loadVideoById({
-                videoId: state.videoId,
-                startSeconds: targetTime
-            });
-
-            // For guests, always start muted and show overlay
-            if (this.role !== 'owner' && this.isMutedByPolicy) {
-                this.player.mute();
-                if (this.unmuteOverlay) {
-                    this.unmuteOverlay.classList.remove('hidden');
-                }
-            }
+            this.player.loadVideoById({ videoId: state.videoId, startSeconds: targetTime });
+            if (this.role !== 'owner' && this.isMutedByPolicy) this.player.mute();
             this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
 
             const checkTitle = setInterval(() => {
@@ -314,75 +391,142 @@ class LiveManager {
             setTimeout(() => clearInterval(checkTitle), 10000);
         }
 
-        const currentLocalTime = this.player.getCurrentTime();
-        const diff = Math.abs(currentLocalTime - targetTime);
-        if (diff > 3) {
-            this.player.seekTo(targetTime, true);
+        const diff = Math.abs(this.player.getCurrentTime() - targetTime);
+        if (diff > 3) this.player.seekTo(targetTime, true);
+
+        const curState = this.player.getPlayerState();
+        if (state.state === 1 && curState !== 1) this.player.playVideo();
+        if (state.state === 2 && curState !== 2) this.player.pauseVideo();
+    }
+
+    syncGenericVideo(state) {
+        if (!this.genericVideo) return;
+        if (this.genericVideo.src !== state.url) {
+            this.genericVideo.src = state.url;
+            this.vidTitle.textContent = "فيديو مباشر";
+            this.vidOwner.textContent = "بواسطة: رابط خارجي";
+            this.vidMiniThumb.src = ""; // Clear mini thumb
         }
 
-        const currentLocalState = this.player.getPlayerState();
-        if (state.state === 1 && currentLocalState !== 1) this.player.playVideo();
-        if (state.state === 2 && currentLocalState !== 2) this.player.pauseVideo();
+        const now = Date.now() + this.serverOffset;
+        let targetTime = state.currentTime;
+        if (state.state === 1 && state.updatedAt) {
+            targetTime += (now - state.updatedAt) / 1000;
+        }
+
+        const diff = Math.abs(this.genericVideo.currentTime - targetTime);
+        if (diff > 3) this.genericVideo.currentTime = targetTime;
+
+        if (state.state === 1 && this.genericVideo.paused) this.genericVideo.play().catch(() => {});
+        if (state.state === 2 && !this.genericVideo.paused) this.genericVideo.pause();
+    }
+
+    syncBrowser(state) {
+        if (!this.browserIframe) return;
+        if (this.browserIframe.src !== state.url) {
+            this.browserIframe.src = state.url;
+            this.vidTitle.textContent = "تصفح ويب";
+            try {
+                const host = new URL(state.url).hostname;
+                this.vidOwner.textContent = "الموقع: " + host;
+            } catch(e) {
+                this.vidOwner.textContent = "تصفح مباشر";
+            }
+        }
     }
 
     handleUserUnmute() {
-        if (this.player) {
+        this.isMutedByPolicy = false;
+        if (this.unmuteOverlay) {
+            this.unmuteOverlay.remove();
+            this.unmuteOverlay = null;
+        }
+
+        if (this.player && this.player.unMute) {
             this.player.unMute();
             this.player.setVolume(100);
-            this.isMutedByPolicy = false;
-            if (this.unmuteOverlay) {
-                this.unmuteOverlay.remove();
-                this.unmuteOverlay = null;
-            }
-            this.showToast("تم تفعيل الصوت بنجاح");
         }
+        if (this.genericVideo) {
+            this.genericVideo.muted = false;
+            this.genericVideo.volume = 1.0;
+        }
+        this.showToast("تم تفعيل الصوت بنجاح");
     }
 
     // ================== OWNER ACTIONS ==================
 
     ownerLoadVideo() {
-        const val = this.ytUrlInput.value.trim();
-        let videoId = '';
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-        const match = val.match(regExp);
-        videoId = (match && match[2].length === 11) ? match[2] : val;
+        const url = this.ytUrlInput.value.trim();
+        if (!url) return;
 
-        if (videoId.length === 11) {
-            this.ytState = {
-                videoId: videoId,
-                state: 1,
-                currentTime: 0,
-                updatedAt: serverTimestamp()
-            };
-            this.ownerUpdateFirebase();
-            this.modalYT.classList.add('hidden');
-            this.player.loadVideoById({ videoId: videoId });
-            this.ytPlayerContainer.classList.remove('hidden');
-            this.vidPlaceholder.classList.add('hidden');
-        } else {
-            this.showToast("رابط غير صالح");
+        let type = this.selectedType;
+        let videoId = '';
+
+        if (type === 'auto') {
+            const ytRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(ytRegExp);
+            if (match && match[2].length === 11) {
+                type = 'youtube';
+                videoId = match[2];
+            } else if (url.match(/\.(mp4|webm|ogg|m3u8|mov)(\?.*)?$/i)) {
+                type = 'video';
+            } else {
+                type = 'web';
+            }
         }
+
+        this.mediaState = {
+            type: type,
+            url: url,
+            videoId: videoId,
+            state: 1, // playing
+            currentTime: 0,
+            updatedAt: serverTimestamp()
+        };
+
+        this.ownerUpdateFirebase();
+        this.modalYT.classList.add('hidden');
+        this.showToast("جاري التحميل...");
+    }
+
+    ownerOnMediaEvent(state = null) {
+        if (this.role !== 'owner' || this.isSyncing) return;
+        if (state !== null) this.mediaState.state = state;
+        this.ownerUpdateFirebase();
     }
 
     ownerUpdateFirebase() {
-        if (!this.roomId || !this.player || this.isSyncing) return;
+        if (!this.roomId || this.isSyncing) return;
         this.isSyncing = true;
 
-        const time = this.player.getCurrentTime();
+        let time = 0;
+        if (this.mediaState.type === 'youtube' && this.player && this.player.getCurrentTime) {
+            time = this.player.getCurrentTime();
+        } else if (this.mediaState.type === 'video' && this.genericVideo) {
+            time = this.genericVideo.currentTime;
+        }
+
         update(ref(this.db, `rooms/${this.roomId}/youtube_state`), {
-            videoId: this.ytState.videoId,
-            state: this.ytState.state,
+            type: this.mediaState.type,
+            url: this.mediaState.url || '',
+            videoId: this.mediaState.videoId || '',
+            state: this.mediaState.state,
             currentTime: time,
             updatedAt: serverTimestamp()
         }).then(() => {
-            setTimeout(() => { this.isSyncing = false; }, 500);
+            setTimeout(() => { this.isSyncing = false; }, 800);
         });
     }
 
     ownerChangeState(state) {
-        if (state === 1) this.player.playVideo();
-        else this.player.pauseVideo();
-        this.ytState.state = state;
+        if (this.mediaState.type === 'youtube' && this.player) {
+            if (state === 1) this.player.playVideo();
+            else this.player.pauseVideo();
+        } else if (this.mediaState.type === 'video' && this.genericVideo) {
+            if (state === 1) this.genericVideo.play().catch(() => {});
+            else this.genericVideo.pause();
+        }
+        this.mediaState.state = state;
         this.ownerUpdateFirebase();
     }
 
