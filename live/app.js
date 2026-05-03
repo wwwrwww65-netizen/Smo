@@ -32,6 +32,8 @@ class LiveManager {
         this.myId = null;
         this.userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.username}_${Math.random()}`;
 
+        this.playlistData = {};
+
         // Media State (YouTube, Generic Video, Web Browser)
         this.player = null;
         this.mediaState = { type: 'none', url: '', videoId: '', state: -1, currentTime: 0, updatedAt: 0 };
@@ -117,15 +119,17 @@ class LiveManager {
         this.playlistItemsContainer = document.getElementById('playlist-items-container');
         this.btnOpenYtSearch = document.getElementById('btn-open-yt-search');
 
-        this.modalYtSearch = document.getElementById('modal-yt-search');
-        this.btnCloseYtSearch = document.getElementById('btn-close-yt-search');
-        this.btnBackToPlaylist = document.getElementById('btn-back-to-playlist');
-        this.ytSearchInput = document.getElementById('yt-search-input');
-        this.btnDoYtSearch = document.getElementById('btn-do-yt-search');
-        this.ytSearchResults = document.getElementById('yt-search-results');
-        this.ytSearchPreview = document.getElementById('yt-search-preview');
-        this.searchPlayerContainer = document.getElementById('search-player-container');
-        this.btnConfirmAdd = document.getElementById('btn-confirm-add');
+        // YouTube Browser Elements
+        this.modalYtBrowser = document.getElementById('modal-yt-browser');
+        this.btnCloseYtBrowser = document.getElementById('btn-close-yt-browser');
+        this.btnBackToPlaylistFromBrowser = document.getElementById('btn-back-to-playlist-from-browser');
+        this.ytBrowserUrlInput = document.getElementById('yt-browser-url-input');
+        this.btnYtBrowserGo = document.getElementById('btn-yt-browser-go');
+        this.ytBrowserIframe = document.getElementById('yt-browser-iframe');
+        this.ytBrowserLoading = document.getElementById('yt-browser-loading');
+        this.btnAddDetectedVideo = document.getElementById('btn-add-detected-video');
+        this.manualYtId = document.getElementById('manual-yt-id');
+        this.btnManualAdd = document.getElementById('btn-manual-add');
 
         // Media Type Selectors
         this.btnTypeAuto = document.getElementById('type-auto');
@@ -249,20 +253,51 @@ class LiveManager {
         this.btnClosePlaylist.onclick = () => this.modalPlaylist.classList.add('hidden');
         this.btnOpenYtSearch.onclick = () => {
             this.modalPlaylist.classList.add('hidden');
-            this.modalYtSearch.classList.remove('hidden');
-            this.ytSearchResults.classList.remove('hidden');
-            this.ytSearchPreview.classList.add('hidden');
+            this.modalYtBrowser.classList.remove('hidden');
+
+            // Initial load if empty
+            if (!this.ytBrowserIframe.src || this.ytBrowserIframe.src === window.location.href) {
+                const initialUrl = "https://www.google.com/search?q=youtube&igu=1";
+                this.ytBrowserIframe.src = initialUrl;
+                this.ytBrowserUrlInput.value = initialUrl;
+            }
         };
 
-        // Search Events
-        this.btnCloseYtSearch.onclick = () => this.modalYtSearch.classList.add('hidden');
-        this.btnBackToPlaylist.onclick = () => {
-            this.modalYtSearch.classList.add('hidden');
-            this.modalPlaylist.classList.remove('hidden');
-        };
-        this.btnDoYtSearch.onclick = () => this.performYtSearch();
-        this.ytSearchInput.onkeypress = (e) => { if (e.key === 'Enter') this.performYtSearch(); };
-        this.btnConfirmAdd.onclick = () => this.addToPlaylist();
+        // YouTube Browser Events
+        if (this.btnCloseYtBrowser) {
+            this.btnCloseYtBrowser.onclick = () => this.modalYtBrowser.classList.add('hidden');
+            this.btnBackToPlaylistFromBrowser.onclick = () => {
+                this.modalYtBrowser.classList.add('hidden');
+                this.modalPlaylist.classList.remove('hidden');
+            };
+            this.btnYtBrowserGo.onclick = () => {
+                const val = this.ytBrowserUrlInput.value.trim();
+                if (val) {
+                    const processed = this.processUrl(val);
+                    this.ytBrowserUrlInput.value = processed;
+                    this.ytBrowserLoading.classList.remove('hidden');
+                    this.ytBrowserIframe.src = processed;
+                }
+            };
+            this.ytBrowserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnYtBrowserGo.click(); };
+            this.ytBrowserUrlInput.oninput = () => {
+                this.detectVideoFromUrl(this.ytBrowserUrlInput.value);
+            };
+
+            this.ytBrowserIframe.onload = () => {
+                this.ytBrowserLoading.classList.add('hidden');
+                // Try to auto-detect video ID from URL input
+                this.detectVideoFromUrl(this.ytBrowserUrlInput.value);
+            };
+
+            this.btnManualAdd.onclick = () => {
+                const val = this.manualYtId.value.trim();
+                if (val) {
+                    this.addSpecificVideoToPlaylist(val);
+                }
+            };
+            this.manualYtId.onkeypress = (e) => { if (e.key === 'Enter') this.btnManualAdd.click(); };
+        }
 
         this.btnUnmuteTap.onclick = () => this.handleUserUnmute();
         this.btnToggleMic.onclick = () => this.toggleMic();
@@ -632,77 +667,70 @@ class LiveManager {
 
     // ================== SEARCH & PLAYLIST ==================
 
-    async performYtSearch() {
-        const query = this.ytSearchInput.value.trim();
-        if (!query) return;
+    detectVideoFromUrl(url) {
+        const ytRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(ytRegExp);
+        if (match && match[2].length === 11) {
+            const videoId = match[2];
+            this.manualYtId.value = url;
+            if (this.btnAddDetectedVideo) {
+                this.btnAddDetectedVideo.style.display = 'block';
+                this.btnAddDetectedVideo.onclick = () => this.addSpecificVideoToPlaylist(url);
+                this.btnAddDetectedVideo.textContent = `إضافة الفيديو للقائمة ✅`;
+            }
+            return videoId;
+        } else {
+            if (this.btnAddDetectedVideo) this.btnAddDetectedVideo.style.display = 'none';
+        }
+        return null;
+    }
 
-        this.ytSearchResults.innerHTML = '<div class="empty-playlist">جاري البحث...</div>';
-        this.ytSearchResults.classList.remove('hidden');
-        this.ytSearchPreview.classList.add('hidden');
+    async addSpecificVideoToPlaylist(urlOrId) {
+        if (this.role !== 'owner') return;
+
+        let videoId = urlOrId;
+        const ytRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = urlOrId.match(ytRegExp);
+        if (match && match[2].length === 11) {
+            videoId = match[2];
+        }
+
+        if (videoId.length !== 11) {
+            this.showToast("رابط غير صحيح");
+            return;
+        }
+
+        this.showToast("جاري إضافة الفيديو...");
 
         try {
-            // Using a public search proxy or a public Invidious instance for searching without API key
-            // For stability, we'll try a common one, or fallback to a simulated result if blocked
-            const response = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=videos`);
-            const data = await response.json();
+            // We'll fetch basic info if possible, otherwise use placeholders
+            // Since we can't easily fetch info without API key or proxy,
+            // and pipedapi might be unstable, we'll try a simple oembed call which is usually CORS-friendly for some providers or we just use default labels.
 
-            if (data && data.items) {
-                this.renderSearchResults(data.items);
-            } else {
-                this.ytSearchResults.innerHTML = '<div class="empty-playlist">لم يتم العثور على نتائج</div>';
-            }
+            const title = "فيديو يوتيوب";
+            const thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+
+            const playlistRef = ref(this.db, `rooms/${this.roomId}/playlist`);
+            await push(playlistRef, {
+                videoId: videoId,
+                title: title,
+                thumbnail: thumbnail,
+                author: "YouTube",
+                addedBy: this.username,
+                timestamp: serverTimestamp()
+            });
+
+            this.showToast("تمت الإضافة للقائمة ✅");
+            this.manualYtId.value = '';
+
+            // Optionally close and go back to playlist
+            this.modalYtBrowser.classList.add('hidden');
+            this.modalPlaylist.classList.remove('hidden');
+
         } catch (e) {
-            console.error("Search error:", e);
-            this.ytSearchResults.innerHTML = '<div class="empty-playlist">حدث خطأ أثناء البحث، حاول مرة أخرى</div>';
+            console.error(e);
+            this.showToast("فشل إضافة الفيديو");
         }
-    }
-
-    renderSearchResults(items) {
-        this.ytSearchResults.innerHTML = '';
-        items.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'search-item';
-            div.innerHTML = `
-                <img class="item-thumb" src="${item.thumbnail}">
-                <div class="item-info">
-                    <span class="item-title">${item.title}</span>
-                    <span class="item-author">${item.uploaderName}</span>
-                </div>
-            `;
-            div.onclick = () => this.previewVideo(item);
-            this.ytSearchResults.appendChild(div);
-        });
-    }
-
-    previewVideo(item) {
-        this.currentPreviewItem = item;
-        this.ytSearchResults.classList.add('hidden');
-        this.ytSearchPreview.classList.remove('hidden');
-
-        const videoId = item.url.split('v=')[1] || item.url.split('/').pop();
-        this.currentPreviewItem.videoId = videoId;
-
-        this.searchPlayerContainer.innerHTML = `
-            <iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-        `;
-    }
-
-    async addToPlaylist() {
-        if (!this.currentPreviewItem || this.role !== 'owner') return;
-
-        const playlistRef = ref(this.db, `rooms/${this.roomId}/playlist`);
-        await push(playlistRef, {
-            videoId: this.currentPreviewItem.videoId,
-            title: this.currentPreviewItem.title,
-            thumbnail: this.currentPreviewItem.thumbnail,
-            author: this.currentPreviewItem.uploaderName,
-            addedBy: this.username,
-            timestamp: serverTimestamp()
-        });
-
-        this.showToast("تمت الإضافة للقائمة ✅");
-        this.modalYtSearch.classList.add('hidden');
-        this.modalPlaylist.classList.remove('hidden');
     }
 
     renderPlaylist() {

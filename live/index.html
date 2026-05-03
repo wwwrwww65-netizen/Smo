@@ -289,31 +289,38 @@
         </div>
     </div>
 
-    <!-- Modal البحث في يوتيوب -->
-    <div id="modal-yt-search" class="modal-bottom hidden">
-        <div class="modal-bottom-content">
+    <!-- Modal متصفح يوتيوب (بوضع الجوال) -->
+    <div id="modal-yt-browser" class="modal-bottom hidden">
+        <div class="modal-bottom-content" style="height: 85vh;">
             <div class="modal-bottom-header">
                 <div class="drag-handle"></div>
                 <div class="header-main">
-                    <button id="btn-back-to-playlist" class="btn-back-modal-bottom">
+                    <button id="btn-back-to-playlist-from-browser" class="btn-back-modal-bottom">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                     </button>
-                    <span>بحث يوتيوب</span>
-                    <button id="btn-close-yt-search" class="btn-close-modal-bottom">✕</button>
+                    <span>يوتيوب (Mobile)</span>
+                    <button id="btn-close-yt-browser" class="btn-close-modal-bottom">✕</button>
                 </div>
                 <div class="search-input-wrapper">
-                    <input type="text" id="yt-search-input" placeholder="ابحث عن فيديوهات...">
-                    <button id="btn-do-yt-search">🔍</button>
+                    <input type="text" id="yt-browser-url-input" placeholder="ابحث في قوقل أو أدخل رابط يوتيوب...">
+                    <button id="btn-yt-browser-go">انتقال</button>
                 </div>
             </div>
-            <div id="yt-search-results" class="playlist-body">
-                <!-- نتائج البحث ستظهر هنا -->
+
+            <div class="browser-body" style="flex: 1; position: relative; background: #000; overflow: hidden;">
+                <div id="yt-browser-loading" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;">
+                    <div class="browser-spinner"></div>
+                    <span style="color: #00d2ff; margin-top: 10px;">جاري التحميل...</span>
+                </div>
+                <iframe id="yt-browser-iframe" src="" style="width: 100%; height: 100%; border: none; background: #fff;"></iframe>
             </div>
-            <div id="yt-search-preview" class="hidden" style="padding: 10px;">
-                 <div id="search-player-container" style="width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
-                     <!-- سيتم تحميل معاينة الفيديو هنا -->
-                 </div>
-                 <button id="btn-confirm-add" class="btn-add-to-playlist" style="width: 100%;">إضافة إلى قائمة التشغيل ✅</button>
+
+            <div class="modal-bottom-footer" id="yt-browser-footer" style="padding: 10px; background: #1a1a1a;">
+                <button id="btn-add-detected-video" class="btn-add-to-playlist" style="width: 100%; display: none;">إضافة هذا الفيديو للقائمة ✅</button>
+                <div id="manual-add-area" style="display: flex; gap: 5px; margin-top: 5px;">
+                     <input type="text" id="manual-yt-id" placeholder="رابط الفيديو المفتوح..." style="flex: 1; padding: 8px; border-radius: 5px; border: 1px solid #444; background: #000; color: #fff; font-size: 12px;">
+                     <button id="btn-manual-add" class="btn-success" style="padding: 5px 15px; font-size: 12px; white-space: nowrap;">إضافة</button>
+                </div>
             </div>
         </div>
     </div>
