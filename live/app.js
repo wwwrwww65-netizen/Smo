@@ -126,17 +126,27 @@ class LiveManager {
         this.ytSearchInput = document.getElementById('yt-search-input');
         this.ytResultsGrid = document.getElementById('yt-results-grid');
         this.ytBrowserLoading = document.getElementById('yt-browser-loading');
-        this.manualYtId = document.getElementById('manual-yt-id');
-        this.btnManualAdd = document.getElementById('btn-manual-add');
         this.catChips = document.querySelectorAll('.cat-chip');
 
         this.pipedInstances = [
             "https://pipedapi.kavin.rocks",
-            "https://pipedapi.moomoo.me",
-            "https://pipedapi.synced.cloud",
-            "https://piped-api.garudalinux.org"
+            "https://pipedapi.leptons.xyz",
+            "https://pipedapi.nosebs.ru",
+            "https://pipedapi-libre.kavin.rocks",
+            "https://piped-api.privacy.com.de",
+            "https://pipedapi.adminforge.de",
+            "https://api.piped.yt",
+            "https://pipedapi.drgns.space",
+            "https://pipedapi.owo.si",
+            "https://pipedapi.ducks.party",
+            "https://piped-api.codespace.cz",
+            "https://pipedapi.reallyaweso.me",
+            "https://api.piped.private.coffee",
+            "https://pipedapi.darkness.services",
+            "https://pipedapi.orangenet.cc"
         ];
-        this.currentInstance = this.pipedInstances[0];
+        // Randomly pick an instance to start with to distribute load
+        this.currentInstance = this.pipedInstances[Math.floor(Math.random() * this.pipedInstances.length)];
 
         // Media Type Selectors
         this.btnTypeAuto = document.getElementById('type-auto');
@@ -292,14 +302,6 @@ class LiveManager {
                 searchIcon.style.cursor = 'pointer';
                 searchIcon.onclick = () => this.searchYouTube(this.ytSearchInput.value);
             }
-
-            this.btnManualAdd.onclick = () => {
-                const val = this.manualYtId.value.trim();
-                if (val) {
-                    this.addSpecificVideoToPlaylist(val);
-                }
-            };
-            this.manualYtId.onkeypress = (e) => { if (e.key === 'Enter') this.btnManualAdd.click(); };
         }
 
         this.btnUnmuteTap.onclick = () => this.handleUserUnmute();
@@ -673,11 +675,20 @@ class LiveManager {
     async fetchTrendingVideos() {
         this.ytResultsGrid.innerHTML = '';
         this.ytBrowserLoading.classList.remove('hidden');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
         try {
-            const res = await fetch(`${this.currentInstance}/trending?region=SA`);
+            const res = await fetch(`${this.currentInstance}/trending?region=SA`, {
+                signal: controller.signal,
+                headers: { 'Accept': 'application/json' }
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
+            if (!Array.isArray(data)) throw new Error("Invalid data format");
             this.renderYtResults(data);
         } catch (e) {
+            console.error("Trending fetch error:", e);
             this.handlePipedError(() => this.fetchTrendingVideos());
         } finally {
             this.ytBrowserLoading.classList.add('hidden');
@@ -688,11 +699,21 @@ class LiveManager {
         if (!query) return;
         this.ytResultsGrid.innerHTML = '';
         this.ytBrowserLoading.classList.remove('hidden');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
         try {
-            const res = await fetch(`${this.currentInstance}/search?q=${encodeURIComponent(query)}&filter=videos`);
+            const res = await fetch(`${this.currentInstance}/search?q=${encodeURIComponent(query)}&filter=videos`, {
+                signal: controller.signal,
+                headers: { 'Accept': 'application/json' }
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            this.renderYtResults(data.items);
+            const results = data.items || data;
+            if (!Array.isArray(results)) throw new Error("Invalid data format");
+            this.renderYtResults(results);
         } catch (e) {
+            console.error("Search fetch error:", e);
             this.handlePipedError(() => this.searchYouTube(query));
         } finally {
             this.ytBrowserLoading.classList.add('hidden');
@@ -702,16 +723,23 @@ class LiveManager {
     async fetchCategoryVideos(cat, label) {
         this.ytResultsGrid.innerHTML = '';
         this.ytBrowserLoading.classList.remove('hidden');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
         try {
-            // Some piped instances support category in trending
-            const res = await fetch(`${this.currentInstance}/trending?region=SA&category=${cat.toUpperCase()}`);
+            const res = await fetch(`${this.currentInstance}/trending?region=SA&category=${cat.toUpperCase()}`, {
+                signal: controller.signal,
+                headers: { 'Accept': 'application/json' }
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            if (data && data.length > 0) {
+            if (data && Array.isArray(data) && data.length > 0) {
                 this.renderYtResults(data);
             } else {
                 this.searchYouTube(label);
             }
         } catch (e) {
+            console.error("Category fetch error:", e);
             this.searchYouTube(label);
         } finally {
             this.ytBrowserLoading.classList.add('hidden');
@@ -719,26 +747,32 @@ class LiveManager {
     }
 
     handlePipedError(retryFn) {
-        const index = this.pipedInstances.indexOf(this.currentInstance);
-        if (index < this.pipedInstances.length - 1) {
-            this.currentInstance = this.pipedInstances[index + 1];
+        // Find another instance that is not the current one
+        const otherInstances = this.pipedInstances.filter(inst => inst !== this.currentInstance);
+        if (otherInstances.length > 0) {
+            this.currentInstance = otherInstances[Math.floor(Math.random() * otherInstances.length)];
+            console.log("Switching to Piped instance:", this.currentInstance);
             retryFn();
         } else {
-            this.showToast("عذراً، تعذر جلب الفيديوهات حالياً");
+            this.showToast("عذراً، تعذر جلب الفيديوهات حالياً. حاول مرة أخرى لاحقاً.");
         }
     }
 
     renderYtResults(videos) {
         this.ytResultsGrid.innerHTML = '';
-        if (!videos || videos.length === 0) {
-            this.ytResultsGrid.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">لا توجد نتائج</p>';
+        if (!videos || !Array.isArray(videos) || videos.length === 0) {
+            this.ytResultsGrid.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">لا توجد نتائج، جاري المحاولة مرة أخرى...</p>';
             return;
         }
 
         videos.forEach(v => {
             if (!v.url && !v.videoId) return;
-            const videoId = v.videoId || v.url.split('v=')[1];
-            if (!videoId) return;
+            let videoId = v.videoId;
+            if (!videoId && v.url) {
+                if (v.url.includes('v=')) videoId = v.url.split('v=')[1].split('&')[0];
+                else videoId = v.url.split('/').pop();
+            }
+            if (!videoId || videoId.length !== 11) return;
 
             const card = document.createElement('div');
             card.className = 'yt-card';
@@ -756,8 +790,10 @@ class LiveManager {
                 </div>
             `;
             card.onclick = () => {
-                this.addSpecificVideoToPlaylist(videoId, v.title, v.thumbnail);
-                this.playFromPlaylist({ videoId, title: v.title });
+                const title = v.title || "فيديو يوتيوب";
+                const thumbnail = v.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                this.addSpecificVideoToPlaylist(videoId, title, thumbnail);
+                this.playFromPlaylist({ videoId, title });
                 this.modalYtBrowser.classList.add('hidden');
             };
             this.ytResultsGrid.appendChild(card);
@@ -810,7 +846,6 @@ class LiveManager {
             });
 
             this.showToast("تمت الإضافة للقائمة ✅");
-            this.manualYtId.value = '';
 
             // Optionally close and go back to playlist
             this.modalYtBrowser.classList.add('hidden');
