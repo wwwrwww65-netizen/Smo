@@ -110,6 +110,23 @@ class LiveManager {
         this.btnPauseVid = document.getElementById('btn-pause-vid');
         this.btnCloseModal = document.getElementById('btn-close-modal');
 
+        // Playlist & Search
+        this.btnPlaylist = document.getElementById('btn-playlist');
+        this.modalPlaylist = document.getElementById('modal-playlist');
+        this.btnClosePlaylist = document.getElementById('btn-close-playlist');
+        this.playlistItemsContainer = document.getElementById('playlist-items-container');
+        this.btnOpenYtSearch = document.getElementById('btn-open-yt-search');
+
+        this.modalYtSearch = document.getElementById('modal-yt-search');
+        this.btnCloseYtSearch = document.getElementById('btn-close-yt-search');
+        this.btnBackToPlaylist = document.getElementById('btn-back-to-playlist');
+        this.ytSearchInput = document.getElementById('yt-search-input');
+        this.btnDoYtSearch = document.getElementById('btn-do-yt-search');
+        this.ytSearchResults = document.getElementById('yt-search-results');
+        this.ytSearchPreview = document.getElementById('yt-search-preview');
+        this.searchPlayerContainer = document.getElementById('search-player-container');
+        this.btnConfirmAdd = document.getElementById('btn-confirm-add');
+
         // Media Type Selectors
         this.btnTypeAuto = document.getElementById('type-auto');
         this.btnTypeYT = document.getElementById('type-yt');
@@ -141,6 +158,7 @@ class LiveManager {
         if (this.role === 'owner') {
             this.btnOpenControl.classList.remove('hidden');
             this.btnOpenControl.onclick = () => this.modalYT.classList.remove('hidden');
+            this.btnOpenYtSearch.classList.remove('hidden');
 
             // Generic Video Events for Owner
             this.genericVideo.onplay = () => this.ownerOnMediaEvent(1);
@@ -222,6 +240,30 @@ class LiveManager {
         this.btnPlayVid.onclick = () => this.ownerChangeState(1);
         this.btnPauseVid.onclick = () => this.ownerChangeState(2);
         this.btnCloseModal.onclick = () => this.modalYT.classList.add('hidden');
+
+        // Playlist Events
+        this.btnPlaylist.onclick = () => {
+            this.modalPlaylist.classList.remove('hidden');
+            this.renderPlaylist();
+        };
+        this.btnClosePlaylist.onclick = () => this.modalPlaylist.classList.add('hidden');
+        this.btnOpenYtSearch.onclick = () => {
+            this.modalPlaylist.classList.add('hidden');
+            this.modalYtSearch.classList.remove('hidden');
+            this.ytSearchResults.classList.remove('hidden');
+            this.ytSearchPreview.classList.add('hidden');
+        };
+
+        // Search Events
+        this.btnCloseYtSearch.onclick = () => this.modalYtSearch.classList.add('hidden');
+        this.btnBackToPlaylist.onclick = () => {
+            this.modalYtSearch.classList.add('hidden');
+            this.modalPlaylist.classList.remove('hidden');
+        };
+        this.btnDoYtSearch.onclick = () => this.performYtSearch();
+        this.ytSearchInput.onkeypress = (e) => { if (e.key === 'Enter') this.performYtSearch(); };
+        this.btnConfirmAdd.onclick = () => this.addToPlaylist();
+
         this.btnUnmuteTap.onclick = () => this.handleUserUnmute();
         this.btnToggleMic.onclick = () => this.toggleMic();
 
@@ -340,6 +382,9 @@ class LiveManager {
             if (data.messages) this.updateChatUI(data.messages);
             this.updateSeatsUI(data.seats || {});
             if (data.youtube_state) this.syncMedia(data.youtube_state);
+
+            this.playlistData = data.playlist || {};
+            this.renderPlaylist();
         });
     }
 
@@ -397,6 +442,11 @@ class LiveManager {
         if (this.role === 'owner') {
             this.mediaState.state = event.data;
             this.ownerUpdateFirebase();
+
+            // Auto-play next in playlist if video ended (state 0)
+            if (event.data === 0) {
+                this.playNextInPlaylist();
+            }
         } else {
             const targetState = this.mediaState.state;
             if (event.data !== targetState && targetState !== -1) {
@@ -578,6 +628,161 @@ class LiveManager {
             this.genericVideo.volume = 1.0;
         }
         this.showToast("تم تفعيل الصوت بنجاح");
+    }
+
+    // ================== SEARCH & PLAYLIST ==================
+
+    async performYtSearch() {
+        const query = this.ytSearchInput.value.trim();
+        if (!query) return;
+
+        this.ytSearchResults.innerHTML = '<div class="empty-playlist">جاري البحث...</div>';
+        this.ytSearchResults.classList.remove('hidden');
+        this.ytSearchPreview.classList.add('hidden');
+
+        try {
+            // Using a public search proxy or a public Invidious instance for searching without API key
+            // For stability, we'll try a common one, or fallback to a simulated result if blocked
+            const response = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=videos`);
+            const data = await response.json();
+
+            if (data && data.items) {
+                this.renderSearchResults(data.items);
+            } else {
+                this.ytSearchResults.innerHTML = '<div class="empty-playlist">لم يتم العثور على نتائج</div>';
+            }
+        } catch (e) {
+            console.error("Search error:", e);
+            this.ytSearchResults.innerHTML = '<div class="empty-playlist">حدث خطأ أثناء البحث، حاول مرة أخرى</div>';
+        }
+    }
+
+    renderSearchResults(items) {
+        this.ytSearchResults.innerHTML = '';
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'search-item';
+            div.innerHTML = `
+                <img class="item-thumb" src="${item.thumbnail}">
+                <div class="item-info">
+                    <span class="item-title">${item.title}</span>
+                    <span class="item-author">${item.uploaderName}</span>
+                </div>
+            `;
+            div.onclick = () => this.previewVideo(item);
+            this.ytSearchResults.appendChild(div);
+        });
+    }
+
+    previewVideo(item) {
+        this.currentPreviewItem = item;
+        this.ytSearchResults.classList.add('hidden');
+        this.ytSearchPreview.classList.remove('hidden');
+
+        const videoId = item.url.split('v=')[1] || item.url.split('/').pop();
+        this.currentPreviewItem.videoId = videoId;
+
+        this.searchPlayerContainer.innerHTML = `
+            <iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        `;
+    }
+
+    async addToPlaylist() {
+        if (!this.currentPreviewItem || this.role !== 'owner') return;
+
+        const playlistRef = ref(this.db, `rooms/${this.roomId}/playlist`);
+        await push(playlistRef, {
+            videoId: this.currentPreviewItem.videoId,
+            title: this.currentPreviewItem.title,
+            thumbnail: this.currentPreviewItem.thumbnail,
+            author: this.currentPreviewItem.uploaderName,
+            addedBy: this.username,
+            timestamp: serverTimestamp()
+        });
+
+        this.showToast("تمت الإضافة للقائمة ✅");
+        this.modalYtSearch.classList.add('hidden');
+        this.modalPlaylist.classList.remove('hidden');
+    }
+
+    renderPlaylist() {
+        if (!this.playlistItemsContainer) return;
+        this.playlistItemsContainer.innerHTML = '';
+
+        const items = Object.entries(this.playlistData || {})
+            .sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+        if (items.length === 0) {
+            this.playlistItemsContainer.innerHTML = '<div class="empty-playlist">القائمة فارغة، أضف بعض الفيديوهات!</div>';
+            return;
+        }
+
+        items.forEach(([key, item]) => {
+            const isPlaying = this.mediaState.videoId === item.videoId;
+            const div = document.createElement('div');
+            div.className = `playlist-item ${isPlaying ? 'playing' : ''}`;
+            div.innerHTML = `
+                <img class="item-thumb" src="${item.thumbnail}">
+                <div class="item-info">
+                    <span class="item-title">${item.title}</span>
+                    <span class="item-author">${item.author}</span>
+                </div>
+                ${this.role === 'owner' ? `<button class="btn-item-action" onclick="event.stopPropagation(); window.liveManager.removeFromPlaylist('${key}')">🗑️</button>` : ''}
+            `;
+            div.onclick = () => {
+                if (this.role === 'owner') {
+                    this.playFromPlaylist(item);
+                } else {
+                    this.showToast("المالك فقط يمكنه تشغيل فيديوهات من القائمة");
+                }
+            };
+            this.playlistItemsContainer.appendChild(div);
+        });
+    }
+
+    async removeFromPlaylist(key) {
+        if (this.role !== 'owner') return;
+        await remove(ref(this.db, `rooms/${this.roomId}/playlist/${key}`));
+        this.showToast("تم الحذف من القائمة");
+    }
+
+    playNextInPlaylist() {
+        if (!this.playlistData || this.role !== 'owner') return;
+
+        const items = Object.entries(this.playlistData)
+            .sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+        if (items.length === 0) return;
+
+        // Find current video index
+        const currentIndex = items.findIndex(([_, item]) => item.videoId === this.mediaState.videoId);
+        let nextItem = null;
+
+        if (currentIndex !== -1 && currentIndex < items.length - 1) {
+            nextItem = items[currentIndex + 1][1];
+        } else if (items.length > 0) {
+            // Loop back to first if it was the last or not found
+            nextItem = items[0][1];
+        }
+
+        if (nextItem) {
+            this.playFromPlaylist(nextItem);
+            this.showToast(`التالي: ${nextItem.title}`);
+        }
+    }
+
+    playFromPlaylist(item) {
+        this.mediaState = {
+            type: 'youtube',
+            url: `https://www.youtube.com/watch?v=${item.videoId}`,
+            videoId: item.videoId,
+            state: 1,
+            currentTime: 0,
+            updatedAt: serverTimestamp()
+        };
+        this.ownerUpdateFirebase();
+        this.modalPlaylist.classList.add('hidden');
+        this.showToast("جاري التشغيل من القائمة...");
     }
 
     // ================== OWNER ACTIONS ==================
