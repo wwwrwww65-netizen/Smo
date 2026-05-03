@@ -119,17 +119,24 @@ class LiveManager {
         this.playlistItemsContainer = document.getElementById('playlist-items-container');
         this.btnOpenYtSearch = document.getElementById('btn-open-yt-search');
 
-        // YouTube Browser Elements
+        // YouTube Browser Elements (TopTop Style)
         this.modalYtBrowser = document.getElementById('modal-yt-browser');
         this.btnCloseYtBrowser = document.getElementById('btn-close-yt-browser');
         this.btnBackToPlaylistFromBrowser = document.getElementById('btn-back-to-playlist-from-browser');
-        this.ytBrowserUrlInput = document.getElementById('yt-browser-url-input');
-        this.btnYtBrowserGo = document.getElementById('btn-yt-browser-go');
-        this.ytBrowserIframe = document.getElementById('yt-browser-iframe');
+        this.ytSearchInput = document.getElementById('yt-search-input');
+        this.ytResultsGrid = document.getElementById('yt-results-grid');
         this.ytBrowserLoading = document.getElementById('yt-browser-loading');
-        this.btnAddDetectedVideo = document.getElementById('btn-add-detected-video');
         this.manualYtId = document.getElementById('manual-yt-id');
         this.btnManualAdd = document.getElementById('btn-manual-add');
+        this.catChips = document.querySelectorAll('.cat-chip');
+
+        this.pipedInstances = [
+            "https://pipedapi.kavin.rocks",
+            "https://pipedapi.moomoo.me",
+            "https://pipedapi.synced.cloud",
+            "https://piped-api.garudalinux.org"
+        ];
+        this.currentInstance = this.pipedInstances[0];
 
         // Media Type Selectors
         this.btnTypeAuto = document.getElementById('type-auto');
@@ -254,13 +261,7 @@ class LiveManager {
         this.btnOpenYtSearch.onclick = () => {
             this.modalPlaylist.classList.add('hidden');
             this.modalYtBrowser.classList.remove('hidden');
-
-            // Initial load if empty
-            if (!this.ytBrowserIframe.src || this.ytBrowserIframe.src === window.location.href) {
-                const initialUrl = "https://www.google.com/search?q=youtube&igu=1";
-                this.ytBrowserIframe.src = initialUrl;
-                this.ytBrowserUrlInput.value = initialUrl;
-            }
+            this.fetchTrendingVideos();
         };
 
         // YouTube Browser Events
@@ -270,25 +271,27 @@ class LiveManager {
                 this.modalYtBrowser.classList.add('hidden');
                 this.modalPlaylist.classList.remove('hidden');
             };
-            this.btnYtBrowserGo.onclick = () => {
-                const val = this.ytBrowserUrlInput.value.trim();
-                if (val) {
-                    const processed = this.processUrl(val);
-                    this.ytBrowserUrlInput.value = processed;
-                    this.ytBrowserLoading.classList.remove('hidden');
-                    this.ytBrowserIframe.src = processed;
-                }
-            };
-            this.ytBrowserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnYtBrowserGo.click(); };
-            this.ytBrowserUrlInput.oninput = () => {
-                this.detectVideoFromUrl(this.ytBrowserUrlInput.value);
+
+            this.ytSearchInput.onkeypress = (e) => {
+                if (e.key === 'Enter') this.searchYouTube(this.ytSearchInput.value);
             };
 
-            this.ytBrowserIframe.onload = () => {
-                this.ytBrowserLoading.classList.add('hidden');
-                // Try to auto-detect video ID from URL input
-                this.detectVideoFromUrl(this.ytBrowserUrlInput.value);
-            };
+            this.catChips.forEach(chip => {
+                chip.onclick = () => {
+                    this.catChips.forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    const cat = chip.dataset.cat;
+                    if (cat === 'trending') this.fetchTrendingVideos();
+                    else if (cat === 'live') this.searchYouTube("بث مباشر");
+                    else this.fetchCategoryVideos(cat, chip.textContent);
+                };
+            });
+
+            const searchIcon = this.ytSearchInput.parentElement.querySelector('svg');
+            if (searchIcon) {
+                searchIcon.style.cursor = 'pointer';
+                searchIcon.onclick = () => this.searchYouTube(this.ytSearchInput.value);
+            }
 
             this.btnManualAdd.onclick = () => {
                 const val = this.manualYtId.value.trim();
@@ -667,25 +670,115 @@ class LiveManager {
 
     // ================== SEARCH & PLAYLIST ==================
 
-    detectVideoFromUrl(url) {
-        const ytRegExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-        const match = url.match(ytRegExp);
-        if (match && match[2].length === 11) {
-            const videoId = match[2];
-            this.manualYtId.value = url;
-            if (this.btnAddDetectedVideo) {
-                this.btnAddDetectedVideo.style.display = 'block';
-                this.btnAddDetectedVideo.onclick = () => this.addSpecificVideoToPlaylist(url);
-                this.btnAddDetectedVideo.textContent = `إضافة الفيديو للقائمة ✅`;
-            }
-            return videoId;
-        } else {
-            if (this.btnAddDetectedVideo) this.btnAddDetectedVideo.style.display = 'none';
+    async fetchTrendingVideos() {
+        this.ytResultsGrid.innerHTML = '';
+        this.ytBrowserLoading.classList.remove('hidden');
+        try {
+            const res = await fetch(`${this.currentInstance}/trending?region=SA`);
+            const data = await res.json();
+            this.renderYtResults(data);
+        } catch (e) {
+            this.handlePipedError(() => this.fetchTrendingVideos());
+        } finally {
+            this.ytBrowserLoading.classList.add('hidden');
         }
-        return null;
     }
 
-    async addSpecificVideoToPlaylist(urlOrId) {
+    async searchYouTube(query) {
+        if (!query) return;
+        this.ytResultsGrid.innerHTML = '';
+        this.ytBrowserLoading.classList.remove('hidden');
+        try {
+            const res = await fetch(`${this.currentInstance}/search?q=${encodeURIComponent(query)}&filter=videos`);
+            const data = await res.json();
+            this.renderYtResults(data.items);
+        } catch (e) {
+            this.handlePipedError(() => this.searchYouTube(query));
+        } finally {
+            this.ytBrowserLoading.classList.add('hidden');
+        }
+    }
+
+    async fetchCategoryVideos(cat, label) {
+        this.ytResultsGrid.innerHTML = '';
+        this.ytBrowserLoading.classList.remove('hidden');
+        try {
+            // Some piped instances support category in trending
+            const res = await fetch(`${this.currentInstance}/trending?region=SA&category=${cat.toUpperCase()}`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                this.renderYtResults(data);
+            } else {
+                this.searchYouTube(label);
+            }
+        } catch (e) {
+            this.searchYouTube(label);
+        } finally {
+            this.ytBrowserLoading.classList.add('hidden');
+        }
+    }
+
+    handlePipedError(retryFn) {
+        const index = this.pipedInstances.indexOf(this.currentInstance);
+        if (index < this.pipedInstances.length - 1) {
+            this.currentInstance = this.pipedInstances[index + 1];
+            retryFn();
+        } else {
+            this.showToast("عذراً، تعذر جلب الفيديوهات حالياً");
+        }
+    }
+
+    renderYtResults(videos) {
+        this.ytResultsGrid.innerHTML = '';
+        if (!videos || videos.length === 0) {
+            this.ytResultsGrid.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">لا توجد نتائج</p>';
+            return;
+        }
+
+        videos.forEach(v => {
+            if (!v.url && !v.videoId) return;
+            const videoId = v.videoId || v.url.split('v=')[1];
+            if (!videoId) return;
+
+            const card = document.createElement('div');
+            card.className = 'yt-card';
+            card.innerHTML = `
+                <div class="yt-thumb-wrapper">
+                    <img class="yt-card-thumb" src="${v.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}" loading="lazy">
+                    <span class="yt-duration">${v.duration ? this.formatDuration(v.duration) : ''}</span>
+                </div>
+                <div class="yt-card-info">
+                    <img class="yt-channel-avatar" src="${v.uploaderAvatar || ''}" onerror="this.src='https://www.youtube.com/s/desktop/28b67e7e/img/avatar_proxy.png'">
+                    <div class="yt-meta">
+                        <div class="yt-card-title">${this.escapeHtml(v.title)}</div>
+                        <div class="yt-card-sub">${v.uploaderName || 'YouTube'} • ${v.views ? this.formatViews(v.views) : ''}</div>
+                    </div>
+                </div>
+            `;
+            card.onclick = () => {
+                this.addSpecificVideoToPlaylist(videoId, v.title, v.thumbnail);
+                this.playFromPlaylist({ videoId, title: v.title });
+                this.modalYtBrowser.classList.add('hidden');
+            };
+            this.ytResultsGrid.appendChild(card);
+        });
+    }
+
+    formatDuration(sec) {
+        if (!sec) return "";
+        const hrs = Math.floor(sec / 3600);
+        const mins = Math.floor((sec % 3600) / 60);
+        const secs = Math.floor(sec % 60);
+        return (hrs > 0 ? hrs + ":" : "") + (mins < 10 && hrs > 0 ? "0" : "") + mins + ":" + (secs < 10 ? "0" : "") + secs;
+    }
+
+    formatViews(views) {
+        if (views >= 1000000) return (views / 1000000).toFixed(1) + 'M view';
+        if (views >= 1000) return (views / 1000).toFixed(1) + 'K view';
+        return views + ' view';
+    }
+
+    async addSpecificVideoToPlaylist(urlOrId, customTitle = null, customThumb = null) {
         if (this.role !== 'owner') return;
 
         let videoId = urlOrId;
@@ -703,12 +796,8 @@ class LiveManager {
         this.showToast("جاري إضافة الفيديو...");
 
         try {
-            // We'll fetch basic info if possible, otherwise use placeholders
-            // Since we can't easily fetch info without API key or proxy,
-            // and pipedapi might be unstable, we'll try a simple oembed call which is usually CORS-friendly for some providers or we just use default labels.
-
-            const title = "فيديو يوتيوب";
-            const thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+            const title = customTitle || "فيديو يوتيوب";
+            const thumbnail = customThumb || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
 
             const playlistRef = ref(this.db, `rooms/${this.roomId}/playlist`);
             await push(playlistRef, {
@@ -808,7 +897,7 @@ class LiveManager {
             currentTime: 0,
             updatedAt: serverTimestamp()
         };
-        this.ownerUpdateFirebase();
+        this.ownerUpdateFirebase(0);
         this.modalPlaylist.classList.add('hidden');
         this.showToast("جاري التشغيل من القائمة...");
     }
@@ -860,15 +949,19 @@ class LiveManager {
         this.ownerUpdateFirebase();
     }
 
-    ownerUpdateFirebase() {
+    ownerUpdateFirebase(forcedTime = null) {
         if (!this.roomId || this.isSyncing) return;
         this.isSyncing = true;
 
-        let time = 0;
-        if (this.mediaState.type === 'youtube' && this.player && this.player.getCurrentTime) {
-            time = this.player.getCurrentTime();
-        } else if (this.mediaState.type === 'video' && this.genericVideo) {
-            time = this.genericVideo.currentTime;
+        let time = forcedTime;
+        if (time === null) {
+            if (this.mediaState.type === 'youtube' && this.player && this.player.getCurrentTime) {
+                time = this.player.getCurrentTime();
+            } else if (this.mediaState.type === 'video' && this.genericVideo) {
+                time = this.genericVideo.currentTime;
+            } else {
+                time = 0;
+            }
         }
 
         update(ref(this.db, `rooms/${this.roomId}/youtube_state`), {
