@@ -134,8 +134,11 @@
                     <!-- الأيقونات على اليمين -->
                     <div class="footer-actions-right">
                         <img id="vid-mini-thumb" class="mini-preview" src="https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=60&h=40&fit=crop" alt="thumb">
-                        <button id="btn-fullscreen" class="share-arrow-btn">
+                        <button id="btn-fullscreen" class="share-arrow-btn" title="ملء الشاشة">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                        </button>
+                        <button id="btn-playlist" class="share-arrow-btn" title="قائمة التشغيل">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                         </button>
                         <button id="btn-open-control" class="share-arrow-btn hidden" title="إدارة الفيديو">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -263,6 +266,55 @@
                 <button id="btn-kick-player" class="btn-danger">طرد المستخدم 🚫</button>
             </div>
             <button id="btn-close-seat-modal" class="btn-secondary" style="margin-top: 10px;">إغلاق</button>
+        </div>
+    </div>
+
+    <!-- Modal قائمة التشغيل (Playlist) -->
+    <div id="modal-playlist" class="modal-bottom hidden">
+        <div class="modal-bottom-content">
+            <div class="modal-bottom-header">
+                <div class="drag-handle"></div>
+                <div class="header-main">
+                    <span>قائمة التشغيل</span>
+                    <button id="btn-close-playlist" class="btn-close-modal-bottom">✕</button>
+                </div>
+            </div>
+            <div id="playlist-items-container" class="playlist-body">
+                <!-- الفيديوهات المضافة ستظهر هنا -->
+                <div class="empty-playlist">القائمة فارغة، أضف بعض الفيديوهات!</div>
+            </div>
+            <div class="modal-bottom-footer">
+                <button id="btn-open-yt-search" class="btn-add-to-playlist hidden">إضافة فيديو جديد للقائمة ➕</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal البحث في يوتيوب -->
+    <div id="modal-yt-search" class="modal-bottom hidden">
+        <div class="modal-bottom-content">
+            <div class="modal-bottom-header">
+                <div class="drag-handle"></div>
+                <div class="header-main">
+                    <button id="btn-back-to-playlist" class="btn-back-modal-bottom">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <span>بحث يوتيوب</span>
+                    <button id="btn-close-yt-search" class="btn-close-modal-bottom">✕</button>
+                </div>
+                <div class="search-input-wrapper">
+                    <input type="text" id="yt-search-input" placeholder="ابحث عن فيديوهات...">
+                    <button id="btn-do-yt-search">🔍</button>
+                </div>
+            </div>
+            <div id="yt-search-results" class="playlist-body">
+                <!-- نتائج البحث ستظهر هنا -->
+            </div>
+            <div id="yt-search-preview" class="hidden" style="padding: 10px;">
+                 <div id="search-player-container" style="width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
+                     <!-- سيتم تحميل معاينة الفيديو هنا -->
+                 </div>
+                 <button id="btn-confirm-add" class="btn-add-to-playlist" style="width: 100%;">إضافة إلى قائمة التشغيل ✅</button>
+            </div>
         </div>
     </div>
 
