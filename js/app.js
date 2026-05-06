@@ -158,7 +158,6 @@ class GameManager {
             audio.autoplay = true;
             audio.playsInline = true;
             audio.style.display = 'none';
-            audio.setAttribute('data-in-use', 'false');
             document.body.appendChild(audio);
             this.audioPool.push(audio);
 
@@ -1185,30 +1184,32 @@ class GameManager {
         const onStreamReceived = (remoteStream) => {
             console.log('Receiving stream from:', call.peer);
 
-            let audio = document.querySelector(`audio[data-peer-id="${call.peer}"]`);
+            // 1. Check if this peer already has an assigned element
+            let audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
 
             if (!audio) {
-                // Find an available element in the pool
-                audio = this.audioPool.find(el => el.getAttribute('data-in-use') === 'false');
+                // 2. Find an available element in the pool (srcObject is null)
+                audio = this.audioPool.find(el => !el.srcObject);
 
                 if (!audio) {
                     console.warn("No available audio elements in the pool for peer:", call.peer);
                     return;
                 }
 
-                audio.setAttribute('data-in-use', 'true');
+                // 3. Mark it as used by this peer
                 audio.setAttribute('data-peer-id', call.peer);
             }
 
+            // 4. Assign the stream and play
             if (audio.srcObject !== remoteStream) {
                 audio.srcObject = remoteStream;
             }
 
             audio.muted = !this.speakerEnabled;
 
-            // Ensure playback starts - because it's already "primed" by user gesture, this should work
+            // Ensure playback starts
             audio.play().catch(e => {
-                console.warn("Autoplay blocked even with pool for remote stream:", call.peer, e);
+                console.warn("Autoplay blocked for remote stream:", call.peer, e);
                 // Try again after a small delay
                 setTimeout(() => audio.play().catch(() => {}), 1000);
             });
@@ -1232,11 +1233,11 @@ class GameManager {
 
         call.on('close', () => {
             delete this.activeCalls[call.peer];
-            const audio = document.querySelector(`audio[data-peer-id="${call.peer}"]`);
+            const audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
             if (audio) {
                 audio.srcObject = null;
-                audio.setAttribute('data-in-use', 'false');
                 audio.removeAttribute('data-peer-id');
+                console.log("Released audio element for peer:", call.peer);
             }
         });
     }
