@@ -54,12 +54,14 @@ class GameManager {
         this.timeLeft = 40;
         this.audioEnabled = false;
 
-        // Voice/WebRTC properties
-        this.pcs = {}; // remoteId -> RTCPeerConnection
+        // Voice/PeerJS properties
+        this.peer = null;
         this.localStream = null;
         this.micEnabled = false;
         this.speakerEnabled = true;
-        this.remoteAudios = {}; // remoteId -> Audio object
+        this.activeCalls = {}; // remoteId -> call
+        this.analysers = {};
+        this.audioContext = null;
 
         this.initElements();
         this.initMicStatus();
@@ -141,6 +143,14 @@ class GameManager {
             this.audioEnabled = true;
             this.overlayStart.classList.add('hidden');
             this.playSound('click');
+
+            if (this.audioContext && this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+            }
+            // Also try to play any remote audios
+            document.querySelectorAll('audio').forEach(a => {
+                if (a.id.startsWith('audio-')) a.play().catch(() => {});
+            });
         });
 
         // Chat Events
@@ -285,10 +295,6 @@ class GameManager {
                 this.modalNextRound.classList.add('hidden');
             }
 
-            // WebRTC Signaling
-            if (data.signaling) {
-                this.handleSignaling(data.signaling);
-            }
 
             // Update results & Host Evaluation
             if (data.results) {
@@ -356,6 +362,7 @@ class GameManager {
         });
 
         this.listenToRoom(roomId);
+        this.initPeer(); // Initialize PeerJS when joining a room
         this.showSection('lobby');
         this.displayRoomId.textContent = roomId;
         this.playSound('join');
@@ -1056,7 +1063,7 @@ class GameManager {
     }
 
     // ==========================================
-    // Voice Chat (WebRTC Multi-Peer Mesh) Methods
+    // Voice Chat (PeerJS Multi-Peer Mesh) Methods
     // ==========================================
 
     initMicStatus() {
@@ -1065,15 +1072,99 @@ class GameManager {
         this.micOffIcon.classList.remove('hidden');
     }
 
+    async initPeer() {
+        if (this.peer) return;
+
+        this.peer = new Peer(this.myId);
+
+        this.peer.on('open', (id) => {
+            console.log('Peer connected with ID:', id);
+            this.listenToVoicePeers();
+        });
+
+        this.peer.on('call', (call) => {
+            console.log('Incoming call from:', call.peer);
+            call.answer(this.localStream || this.createSilentAudioStream());
+            this.handleCallStream(call);
+        });
+
+        this.peer.on('error', (err) => {
+            console.error('PeerJS Error:', err);
+        });
+    }
+
+    createSilentAudioStream() {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const dst = oscillator.connect(ctx.createMediaStreamDestination());
+        oscillator.start();
+        const track = dst.stream.getAudioTracks()[0];
+        track.enabled = false;
+        return new MediaStream([track]);
+    }
+
+    listenToVoicePeers() {
+        // In the game room, we use the existing player list to decide who to call
+        // To avoid duplicate calls, player with lower ID calls player with higher ID
+        const callOthers = () => {
+            this.players.forEach(p => {
+                if (p.id !== this.myId && !this.activeCalls[p.id] && this.myId < p.id) {
+                    console.log('Calling player:', p.id);
+                    const stream = this.localStream || this.createSilentAudioStream();
+                    const call = this.peer.call(p.id, stream);
+                    if (call) {
+                        this.handleCallStream(call);
+                    }
+                }
+            });
+        };
+
+        // Call whenever player list updates
+        const playerRef = ref(this.db, `rooms/${this.roomId}/players`);
+        onValue(playerRef, () => {
+            if (this.peer && this.peer.open) callOthers();
+        });
+    }
+
+    handleCallStream(call) {
+        this.activeCalls[call.peer] = call;
+
+        call.on('stream', (remoteStream) => {
+            console.log('Receiving stream from:', call.peer);
+            let audio = document.getElementById(`audio-${call.peer}`);
+            if (!audio) {
+                audio = document.createElement('audio');
+                audio.id = `audio-${call.peer}`;
+                audio.autoplay = true;
+                audio.style.display = 'none';
+                document.body.appendChild(audio);
+            }
+            audio.srcObject = remoteStream;
+            audio.muted = !this.speakerEnabled;
+            audio.play().catch(e => console.error("Playback blocked:", e));
+
+            this.setupAudioLevelIndicator(remoteStream, false, call.peer);
+        });
+
+        call.on('close', () => {
+            delete this.activeCalls[call.peer];
+            const audio = document.getElementById(`audio-${call.peer}`);
+            if (audio) audio.remove();
+        });
+    }
+
     async toggleMic() {
-        if (!this.micEnabled) {
-            try {
+        try {
+            if (!this.micEnabled) {
                 if (!this.localStream) {
-                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     this.setupAudioLevelIndicator(this.localStream, true);
-                    // Connect to all existing players
-                    this.players.forEach(p => {
-                        if (p.id !== this.myId) this.initPeerConnection(p.id, true);
+
+                    // Replace tracks in all active calls
+                    const newTrack = this.localStream.getAudioTracks()[0];
+                    Object.values(this.activeCalls).forEach(call => {
+                        const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+                        if (sender) sender.replaceTrack(newTrack);
                     });
                 } else {
                     this.localStream.getAudioTracks().forEach(t => t.enabled = true);
@@ -1081,149 +1172,87 @@ class GameManager {
                 this.micEnabled = true;
                 this.micOnIcon.classList.remove('hidden');
                 this.micOffIcon.classList.add('hidden');
-            } catch (err) {
-                console.error("Mic Error:", err);
-                this.showToast("⚠️ يجب السماح بالوصول للميكروفون");
+                this.showToast("الميكروفون مفعل");
+            } else {
+                if (this.localStream) {
+                    this.localStream.getAudioTracks().forEach(t => t.enabled = false);
+                }
+                this.micEnabled = false;
+                this.micOnIcon.classList.add('hidden');
+                this.micOffIcon.classList.remove('hidden');
+                this.showToast("تم كتم الميكروفون");
+                this.updateSpeakingUI(this.myId, false);
             }
-        } else {
-            if (this.localStream) {
-                this.localStream.getAudioTracks().forEach(t => t.enabled = false);
-            }
-            this.micEnabled = false;
-            this.micOnIcon.classList.add('hidden');
-            this.micOffIcon.classList.remove('hidden');
+        } catch (err) {
+            console.error("Mic Error:", err);
+            this.showToast("⚠️ فشل تفعيل الميكروفون");
         }
     }
 
     toggleSpeaker() {
         this.speakerEnabled = !this.speakerEnabled;
-        Object.values(this.remoteAudios).forEach(audio => audio.muted = !this.speakerEnabled);
+        document.querySelectorAll('audio').forEach(audio => {
+            if (audio.id.startsWith('audio-')) {
+                audio.muted = !this.speakerEnabled;
+            }
+        });
         if (this.speakerEnabled) {
             this.speakerOnIcon.classList.remove('hidden');
             this.speakerOffIcon.classList.add('hidden');
+            this.showToast("الصوت مفعّل");
         } else {
             this.speakerOnIcon.classList.add('hidden');
             this.speakerOffIcon.classList.remove('hidden');
-        }
-    }
-
-    async initPeerConnection(remoteId, isOfferer) {
-        if (this.pcs[remoteId]) return this.pcs[remoteId];
-
-        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-        const pc = new RTCPeerConnection(configuration);
-        this.pcs[remoteId] = pc;
-
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream));
-        }
-
-        pc.ontrack = (event) => {
-            if (!this.remoteAudios[remoteId]) {
-                const audio = new Audio();
-                audio.autoplay = true;
-                audio.muted = !this.speakerEnabled;
-                this.remoteAudios[remoteId] = audio;
-            }
-            this.remoteAudios[remoteId].srcObject = event.streams[0];
-            this.setupAudioLevelIndicator(event.streams[0], false, remoteId);
-        };
-
-        pc.onicecandidate = (event) => {
-            if (event.candidate && this.roomId) {
-                const candidatePath = `rooms/${this.roomId}/signaling/${this.getPairId(remoteId)}/ice/${this.myId}`;
-                push(ref(this.db, candidatePath), event.candidate.toJSON());
-            }
-        };
-
-        if (isOfferer) {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            await set(ref(this.db, `rooms/${this.roomId}/signaling/${this.getPairId(remoteId)}/offer`), {
-                sdp: offer.sdp,
-                type: offer.type,
-                from: this.myId
-            });
-        }
-
-        return pc;
-    }
-
-    getPairId(remoteId) {
-        return [this.myId, remoteId].sort().join('_');
-    }
-
-    async handleSignaling(signaling) {
-        for (const [pairId, data] of Object.entries(signaling)) {
-            if (!pairId.includes(this.myId)) continue;
-            const remoteId = pairId.split('_').find(id => id !== this.myId);
-            if (!remoteId) continue;
-
-            const pc = this.pcs[remoteId] || await this.initPeerConnection(remoteId, false);
-
-            try {
-                // Receive Offer
-                if (data.offer && data.offer.from !== this.myId && !pc.remoteDescription) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    await set(ref(this.db, `rooms/${this.roomId}/signaling/${pairId}/answer`), {
-                        sdp: answer.sdp,
-                        type: answer.type,
-                        from: this.myId
-                    });
-                }
-
-                // Receive Answer
-                if (data.answer && data.answer.from !== this.myId && !pc.remoteDescription) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-                }
-
-                // Receive ICE
-                if (data.ice && data.ice[remoteId]) {
-                    if (!this._addedIce) this._addedIce = {};
-                    if (!this._addedIce[remoteId]) this._addedIce[remoteId] = new Set();
-
-                    Object.entries(data.ice[remoteId]).forEach(([iceId, candidate]) => {
-                        if (!this._addedIce[remoteId].has(iceId)) {
-                            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
-                            this._addedIce[remoteId].add(iceId);
-                        }
-                    });
-                }
-            } catch (e) {
-                console.error("Signaling Error:", e);
-            }
+            this.showToast("الصوت مكتوم");
         }
     }
 
     setupAudioLevelIndicator(stream, isLocal, remoteId = null) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const audioContext = new AudioContext();
-        const analyser = audioContext.createAnalyser();
-        const source = audioContext.createMediaStreamSource(stream);
+        const uid = isLocal ? this.myId : remoteId;
+
+        if (!this.audioContext) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioContext();
+        }
+
+        if (this.audioContext.state === 'suspended' && this.audioEnabled) {
+            this.audioContext.resume();
+        }
+
+        // Clean up old analyser if exists
+        if (this.analysers[uid]) {
+            try { this.analysers[uid].source.disconnect(); } catch(e) {}
+            delete this.analysers[uid];
+        }
+
+        const analyser = this.audioContext.createAnalyser();
+        const source = this.audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
         analyser.fftSize = 256;
+
+        this.analysers[uid] = { analyser, source };
+
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
 
         const checkVolume = () => {
-            // Stop if stream is inactive or mic disabled (for local)
+            if (!this.analysers[uid]) return;
+
             if (!stream.active || (isLocal && !this.micEnabled)) {
-                audioContext.close();
-                return;
+                this.updateSpeakingUI(uid, false);
+                if (!stream.active) {
+                    delete this.analysers[uid];
+                    return;
+                }
+            } else {
+                analyser.getByteFrequencyData(dataArray);
+                let values = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    values += dataArray[i];
+                }
+                const average = values / bufferLength;
+                this.updateSpeakingUI(uid, average > 15);
             }
-
-            analyser.getByteFrequencyData(dataArray);
-            let values = 0;
-            for (let i = 0; i < bufferLength; i++) {
-                values += dataArray[i];
-            }
-            const average = values / bufferLength;
-            const isSpeaking = average > 15; // Threshold for speaking
-
-            const targetId = isLocal ? this.myId : remoteId;
-            this.updateSpeakingUI(targetId, isSpeaking);
             requestAnimationFrame(checkVolume);
         };
         checkVolume();
