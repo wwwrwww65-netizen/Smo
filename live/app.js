@@ -408,7 +408,7 @@ class LiveManager {
         });
         this.listenToRoom();
 
-        // Initialize Peer immediately on room entry
+        // Initialize Peer immediately on room entry, but don't request media yet
         this.initPeer();
     }
 
@@ -1052,9 +1052,6 @@ class LiveManager {
         if (this.isPeerInitialized) return;
         this.isPeerInitialized = true;
 
-        // Create a silent track initially so we can connect before mic access
-        this.myStream = this.createSilentAudioStream();
-
         this.peer = new Peer(this.myId);
 
         this.peer.on('open', (id) => {
@@ -1071,14 +1068,12 @@ class LiveManager {
     }
 
     createSilentAudioStream() {
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        const oscillator = this.audioContext.createOscillator();
-        const dst = oscillator.connect(this.audioContext.createMediaStreamDestination());
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const dst = oscillator.connect(ctx.createMediaStreamDestination());
         oscillator.start();
         const track = dst.stream.getAudioTracks()[0];
-        track.enabled = false; // Truly silent
+        track.enabled = false;
         return new MediaStream([track]);
     }
 
@@ -1095,16 +1090,17 @@ class LiveManager {
     setupPeerListeners() {
         this.peer.on('call', (call) => {
             console.log('Incoming call from:', call.peer);
-            call.answer(this.myStream);
+            call.answer(this.myStream || this.createSilentAudioStream());
             this.handleCallStream(call);
         });
     }
 
     handleCallStream(call) {
+        this.activeCalls[call.peer] = call;
+
         call.on('stream', (remoteStream) => {
             console.log('Receiving stream from:', call.peer);
 
-            // Hidden audio element for playback
             let audio = document.getElementById(`audio-${call.peer}`);
             if (!audio) {
                 audio = document.createElement('audio');
@@ -1114,9 +1110,11 @@ class LiveManager {
                 document.body.appendChild(audio);
             }
             audio.srcObject = remoteStream;
-            audio.play().catch(e => console.error("Audio playback blocked:", e));
+            audio.play().catch(e => {
+                console.warn("Autoplay blocked, waiting for interaction:", e);
+                // The global unmute overlay or any interaction will eventually allow this
+            });
 
-            this.activeCalls[call.peer] = call;
             this.startVolumeDetection(remoteStream, call.peer);
         });
 
@@ -1125,52 +1123,43 @@ class LiveManager {
             const audio = document.getElementById(`audio-${call.peer}`);
             if (audio) audio.remove();
             delete this.activeCalls[call.peer];
-            if (this.analysers[call.peer]) delete this.analysers[call.peer];
-        });
-
-        call.on('error', (err) => {
-            console.error('Call error:', err);
-            call.close();
+            if (this.analysers[call.peer]) {
+                try { this.analysers[call.peer].source.disconnect(); } catch(e) {}
+                delete this.analysers[call.peer];
+            }
         });
     }
 
     async toggleMic() {
-        if (this.audioContext && this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
-        }
-
         try {
-            if (!this.realMicTrack) {
-                // First time: Request Permission and get real stream
+            if (!this.myStream) {
+                // First time: Get real stream
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                this.realMicTrack = stream.getAudioTracks()[0];
-
-                // Replace silent track with real mic track in all active calls
-                this.replaceTrackInActiveCalls(this.realMicTrack);
-
-                // Update local stream reference
-                const currentTrack = this.myStream.getAudioTracks()[0];
-                this.myStream.removeTrack(currentTrack);
-                this.myStream.addTrack(this.realMicTrack);
-
+                this.myStream = stream;
                 this.isMicOn = true;
+
+                // Replace track in all active calls
+                const newTrack = stream.getAudioTracks()[0];
+                Object.values(this.activeCalls).forEach(call => {
+                    const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+                    if (sender) sender.replaceTrack(newTrack);
+                });
+
                 this.micOnIcon.classList.remove('hidden');
                 this.micOffIcon.classList.add('hidden');
                 this.btnToggleMic.classList.remove('muted');
-                this.showToast("الميكروفون قيد التشغيل");
+                this.showToast("الميكروفون مفعل");
 
-                // Start detecting my volume
                 this.startVolumeDetection(this.myStream, this.myId);
             } else {
-                // Toggle mute (disable track)
                 this.isMicOn = !this.isMicOn;
-                this.realMicTrack.enabled = this.isMicOn;
+                this.myStream.getAudioTracks().forEach(t => t.enabled = this.isMicOn);
 
                 if (this.isMicOn) {
                     this.micOnIcon.classList.remove('hidden');
                     this.micOffIcon.classList.add('hidden');
                     this.btnToggleMic.classList.remove('muted');
-                    this.showToast("الميكروفون قيد التشغيل");
+                    this.showToast("الميكروفون مفعل");
                 } else {
                     this.micOnIcon.classList.add('hidden');
                     this.micOffIcon.classList.remove('hidden');
@@ -1181,31 +1170,17 @@ class LiveManager {
             }
         } catch (err) {
             console.error(err);
-            this.showToast("خطأ في الوصول للميكروفون");
+            this.showToast("⚠️ فشل الوصول للميكروفون");
         }
-    }
-
-    replaceTrackInActiveCalls(newTrack) {
-        Object.values(this.activeCalls).forEach(call => {
-            const peerConnection = call.peerConnection;
-            if (peerConnection) {
-                const senders = peerConnection.getSenders();
-                const sender = senders.find(s => s.track && s.track.kind === 'audio');
-                if (sender) {
-                    sender.replaceTrack(newTrack);
-                }
-            }
-        });
     }
 
     async callExistingPeers(peers) {
         Object.keys(peers).forEach(pid => {
-            // Rule: Only call peers with "smaller" ID string to avoid duplicate calls
             if (pid !== this.myId && !this.activeCalls[pid] && this.myId < pid) {
                 console.log('Calling peer:', pid);
-                const call = this.peer.call(pid, this.myStream);
+                const stream = this.myStream || this.createSilentAudioStream();
+                const call = this.peer.call(pid, stream);
                 if (call) {
-                    this.activeCalls[pid] = call;
                     this.handleCallStream(call);
                 }
             }
@@ -1215,7 +1190,7 @@ class LiveManager {
     listenToVoicePeers() {
         const voicePeersRef = ref(this.db, `rooms/${this.roomId}/voice_peers`);
         onValue(voicePeersRef, (snap) => {
-            if (!this.peer) return;
+            if (!this.peer || !this.peer.open) return;
             const peers = snap.val() || {};
             this.callExistingPeers(peers);
         });
@@ -1226,9 +1201,13 @@ class LiveManager {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        // Always resume audioContext if it's suspended (browser policy)
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume();
+        }
+
+        // Cleanup
+        if (this.analysers[uid]) {
+            try { this.analysers[uid].source.disconnect(); } catch(e) {}
         }
 
         try {
@@ -1236,7 +1215,7 @@ class LiveManager {
             const analyser = this.audioContext.createAnalyser();
             analyser.fftSize = 256;
             source.connect(analyser);
-            this.analysers[uid] = { analyser, source }; // Keep source to prevent GC
+            this.analysers[uid] = { analyser, source };
 
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
@@ -1244,10 +1223,10 @@ class LiveManager {
             const checkVolume = () => {
                 if (!this.analysers[uid]) return;
 
-                // Check if track is actually enabled and active
                 const track = stream.getAudioTracks()[0];
-                if (!track || !track.enabled || track.readyState === 'ended') {
+                if (!track || !track.enabled || track.readyState === 'ended' || !stream.active) {
                     this.updateSpeakingUI(uid, false);
+                    if (!stream.active) return;
                 } else {
                     analyser.getByteFrequencyData(dataArray);
                     let sum = 0;
@@ -1255,12 +1234,11 @@ class LiveManager {
                     const average = sum / bufferLength;
                     this.updateSpeakingUI(uid, average > 15);
                 }
-
                 requestAnimationFrame(checkVolume);
             };
             checkVolume();
         } catch (e) {
-            console.error("Volume detection error for", uid, e);
+            console.error("Volume detection error:", uid, e);
         }
     }
 
