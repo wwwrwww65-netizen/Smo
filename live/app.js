@@ -350,10 +350,14 @@ class LiveManager {
     async initAuth() {
         onAuthStateChanged(this.auth, (user) => {
             if (user) {
+                console.log("Firebase Auth: Logged in as", user.uid);
                 this.myId = user.uid;
                 this.joinRoom();
             } else {
-                signInAnonymously(this.auth);
+                console.log("Firebase Auth: Attempting anonymous login...");
+                signInAnonymously(this.auth).catch((err) => {
+                    console.error("Firebase Auth Error:", err);
+                });
             }
         });
     }
@@ -1099,9 +1103,12 @@ class LiveManager {
     // ================== PEERJS VOICE CHAT ==================
 
     async initPeer() {
-        if (this.isPeerInitialized) return;
-        this.isPeerInitialized = true;
+        if (this.peer || !this.myId) {
+            console.log("PeerJS: Initialization skipped (already exists or no ID). ID:", this.myId);
+            return;
+        }
 
+        console.log("PeerJS: Initializing with ID:", this.myId);
         this.peer = new Peer(this.myId, {
             config: {
                 'iceServers': [
@@ -1109,21 +1116,31 @@ class LiveManager {
                     { 'urls': 'stun:stun1.l.google.com:19302' },
                     { 'urls': 'stun:stun2.l.google.com:19302' }
                 ]
-            }
+            },
+            debug: 1
         });
 
+        // Global exposing as requested
+        window.peer = this.peer;
+
         this.peer.on('open', (id) => {
-            console.log('Peer connected with ID:', id);
+            console.log('PeerJS: Connection opened with ID:', id);
             this.registerVoicePeer();
             this.setupPeerListeners();
             this.listenToVoicePeers();
         });
 
         this.peer.on('error', (err) => {
-            console.error('PeerJS Error:', err);
-            this.isPeerInitialized = false;
-            if (err.type === 'network' || err.type === 'server-error') {
-                setTimeout(() => this.initPeer(), 5000);
+            console.error('PeerJS Error:', err.type, err);
+            if (err.type === 'peer-unavailable') {
+                // Ignore
+            } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'unavailable-id') {
+                console.log("PeerJS: Critical error, attempting reset...");
+                setTimeout(() => {
+                    if (this.peer && !this.peer.destroyed) this.peer.destroy();
+                    this.peer = null;
+                    this.initPeer();
+                }, 5000);
             }
         });
     }
@@ -1271,25 +1288,30 @@ class LiveManager {
         }
     }
 
-    async callExistingPeers(peers) {
-        Object.keys(peers).forEach(pid => {
-            if (pid !== this.myId && !this.activeCalls[pid] && this.myId < pid) {
-                console.log('Calling peer:', pid);
-                const stream = this.myStream || this.silentStream;
-                const call = this.peer.call(pid, stream);
-                if (call) {
-                    this.handleCallStream(call);
-                }
-            }
-        });
-    }
-
     listenToVoicePeers() {
+        if (!this.roomId) return;
+        console.log("PeerJS: Starting listener for voice peers in room:", this.roomId);
+
         const voicePeersRef = ref(this.db, `rooms/${this.roomId}/voice_peers`);
         onValue(voicePeersRef, (snap) => {
             if (!this.peer || !this.peer.open) return;
             const peers = snap.val() || {};
-            this.callExistingPeers(peers);
+
+            // Handshake logic: lower ID calls higher ID
+            Object.keys(peers).forEach(pid => {
+                if (pid !== this.myId && !this.activeCalls[pid] && this.myId < pid) {
+                    console.log('PeerJS: Initiating call to:', pid);
+                    const stream = this.myStream || this.silentStream;
+                    try {
+                        const call = this.peer.call(pid, stream);
+                        if (call) {
+                            this.handleCallStream(call);
+                        }
+                    } catch (e) {
+                        console.error("PeerJS: Call initiation failed:", e);
+                    }
+                }
+            });
         });
     }
 
