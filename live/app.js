@@ -54,6 +54,24 @@ class LiveManager {
         this.audioPool = [];
         this.maxPoolSize = 6;
 
+        this.iceConfig = {
+            'iceServers': [
+                { 'urls': 'stun:stun.l.google.com:19302' },
+                { 'urls': 'stun:stun1.l.google.com:19302' },
+                { 'urls': 'stun:stun2.l.google.com:19302' },
+                {
+                    'urls': 'turn:global.metered.ca:443',
+                    'username': 'cc045d3456c33ca2d5c8b09d',
+                    'credential': 'Ab6Gsl42QGT6sNcK'
+                },
+                {
+                    'urls': 'turn:global.metered.ca:443?transport=tcp',
+                    'username': 'cc045d3456c33ca2d5c8b09d',
+                    'credential': 'Ab6Gsl42QGT6sNcK'
+                }
+            ]
+        };
+
         this.initElements();
         this.initAuth();
         this.setupYouTube();
@@ -1110,14 +1128,8 @@ class LiveManager {
 
         console.log("PeerJS: Initializing with ID:", this.myId);
         this.peer = new Peer(this.myId, {
-            config: {
-                'iceServers': [
-                    { 'urls': 'stun:stun.l.google.com:19302' },
-                    { 'urls': 'stun:stun1.l.google.com:19302' },
-                    { 'urls': 'stun:stun2.l.google.com:19302' }
-                ]
-            },
-            debug: 1
+            config: this.iceConfig,
+            debug: 2
         });
 
         // Global exposing as requested
