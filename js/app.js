@@ -61,7 +61,8 @@ class GameManager {
         this.speakerEnabled = true;
         this.activeCalls = {}; // remoteId -> call
         this.analysers = {};
-        this.audioContext = null;
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.silentStream = this.createSilentAudioStream();
 
         this.initElements();
         this.initMicStatus();
@@ -87,6 +88,13 @@ class GameManager {
     }
 
     initElements() {
+        // Resume audio context on first interaction
+        document.addEventListener('click', () => {
+            if (this.audioContext && this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+            }
+        }, { once: true });
+
         // Chat elements
         this.chatContainer = document.getElementById('global-chat-container');
         this.chatMessagesEl = document.getElementById('chat-messages');
@@ -286,6 +294,13 @@ class GameManager {
             // Progress Tracking
             if (data.progress) {
                 this.updateOpponentProgressUI(data.progress);
+            }
+
+            // Sync Speaking Indicators
+            if (data.players) {
+                Object.entries(data.players).forEach(([id, p]) => {
+                    this.updateSpeakingUI(id, p.isSpeaking || false);
+                });
             }
 
             // Handshake for Next Round
@@ -1084,19 +1099,23 @@ class GameManager {
 
         this.peer.on('call', (call) => {
             console.log('Incoming call from:', call.peer);
-            call.answer(this.localStream || this.createSilentAudioStream());
+            call.answer(this.localStream || this.silentStream);
             this.handleCallStream(call);
         });
 
         this.peer.on('error', (err) => {
             console.error('PeerJS Error:', err);
+            if (err.type === 'peer-unavailable') {
+                // Ignore, peer might have disconnected
+            } else if (err.type === 'network' || err.type === 'server-error') {
+                setTimeout(() => this.initPeer(), 5000); // Retry after 5s
+            }
         });
     }
 
     createSilentAudioStream() {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = ctx.createOscillator();
-        const dst = oscillator.connect(ctx.createMediaStreamDestination());
+        const oscillator = this.audioContext.createOscillator();
+        const dst = oscillator.connect(this.audioContext.createMediaStreamDestination());
         oscillator.start();
         const track = dst.stream.getAudioTracks()[0];
         track.enabled = false;
@@ -1110,7 +1129,7 @@ class GameManager {
             this.players.forEach(p => {
                 if (p.id !== this.myId && !this.activeCalls[p.id] && this.myId < p.id) {
                     console.log('Calling player:', p.id);
-                    const stream = this.localStream || this.createSilentAudioStream();
+                    const stream = this.localStream || this.silentStream;
                     const call = this.peer.call(p.id, stream);
                     if (call) {
                         this.handleCallStream(call);
@@ -1163,8 +1182,15 @@ class GameManager {
                     // Replace tracks in all active calls
                     const newTrack = this.localStream.getAudioTracks()[0];
                     Object.values(this.activeCalls).forEach(call => {
-                        const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
-                        if (sender) sender.replaceTrack(newTrack);
+                        if (call.peerConnection) {
+                            const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+                            if (sender) {
+                                sender.replaceTrack(newTrack);
+                            } else {
+                                // If no sender, we might need to re-call or the connection is in a weird state
+                                console.warn("No audio sender found for call:", call.peer);
+                            }
+                        }
                     });
                 } else {
                     this.localStream.getAudioTracks().forEach(t => t.enabled = true);
@@ -1210,12 +1236,7 @@ class GameManager {
     setupAudioLevelIndicator(stream, isLocal, remoteId = null) {
         const uid = isLocal ? this.myId : remoteId;
 
-        if (!this.audioContext) {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            this.audioContext = new AudioContext();
-        }
-
-        if (this.audioContext.state === 'suspended' && this.audioEnabled) {
+        if (this.audioContext.state === 'suspended' && (this.audioEnabled || isLocal)) {
             this.audioContext.resume();
         }
 
@@ -1251,11 +1272,25 @@ class GameManager {
                     values += dataArray[i];
                 }
                 const average = values / bufferLength;
-                this.updateSpeakingUI(uid, average > 15);
+                const isSpeaking = average > 15;
+                if (isLocal) {
+                    this.updateSpeakingInFirebase(isSpeaking);
+                } else {
+                    this.updateSpeakingUI(uid, isSpeaking);
+                }
             }
             requestAnimationFrame(checkVolume);
         };
         checkVolume();
+    }
+
+    updateSpeakingInFirebase(isSpeaking) {
+        if (!this.roomId || !this.myId || this._lastSpeakingState === isSpeaking) return;
+        this._lastSpeakingState = isSpeaking;
+
+        update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), {
+            isSpeaking: isSpeaking
+        });
     }
 
     updateSpeakingUI(playerId, isSpeaking) {
