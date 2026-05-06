@@ -1090,7 +1090,15 @@ class GameManager {
     async initPeer() {
         if (this.peer) return;
 
-        this.peer = new Peer(this.myId);
+        this.peer = new Peer(this.myId, {
+            config: {
+                'iceServers': [
+                    { 'urls': 'stun:stun.l.google.com:19302' },
+                    { 'urls': 'stun:stun1.l.google.com:19302' },
+                    { 'urls': 'stun:stun2.l.google.com:19302' }
+                ]
+            }
+        });
 
         this.peer.on('open', (id) => {
             console.log('Peer connected with ID:', id);
@@ -1148,22 +1156,54 @@ class GameManager {
     handleCallStream(call) {
         this.activeCalls[call.peer] = call;
 
-        call.on('stream', (remoteStream) => {
+        const onStreamReceived = (remoteStream) => {
             console.log('Receiving stream from:', call.peer);
+
+            // Limit to 6 remote audio elements
+            const existingAudios = document.querySelectorAll('audio[id^="audio-"]');
+            if (existingAudios.length >= 6 && !document.getElementById(`audio-${call.peer}`)) {
+                console.warn("Max 6 audio streams reached. Ignoring new stream from:", call.peer);
+                return;
+            }
+
             let audio = document.getElementById(`audio-${call.peer}`);
             if (!audio) {
                 audio = document.createElement('audio');
                 audio.id = `audio-${call.peer}`;
                 audio.autoplay = true;
+                audio.playsInline = true;
                 audio.style.display = 'none';
                 document.body.appendChild(audio);
             }
-            audio.srcObject = remoteStream;
+
+            if (audio.srcObject !== remoteStream) {
+                audio.srcObject = remoteStream;
+            }
+
             audio.muted = !this.speakerEnabled;
-            audio.play().catch(e => console.error("Playback blocked:", e));
+
+            // Ensure playback starts
+            audio.play().catch(e => {
+                console.warn("Autoplay blocked for remote stream:", call.peer, e);
+                // Will be resumed by user interaction
+            });
 
             this.setupAudioLevelIndicator(remoteStream, false, call.peer);
+        };
+
+        // Standard PeerJS stream event
+        call.on('stream', (remoteStream) => {
+            onStreamReceived(remoteStream);
         });
+
+        // Backup: Use ontrack via peerConnection for more reliability
+        if (call.peerConnection) {
+            call.peerConnection.ontrack = (event) => {
+                if (event.streams && event.streams[0]) {
+                    onStreamReceived(event.streams[0]);
+                }
+            };
+        }
 
         call.on('close', () => {
             delete this.activeCalls[call.peer];

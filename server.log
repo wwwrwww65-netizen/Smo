@@ -1,6 +1,0 @@
-127.0.0.1 - - [06/May/2026 01:50:19] "GET /index.html HTTP/1.1" 200 -
-127.0.0.1 - - [06/May/2026 01:50:19] "GET /css/style.css HTTP/1.1" 200 -
-127.0.0.1 - - [06/May/2026 01:50:19] "GET /js/app.js HTTP/1.1" 200 -
-127.0.0.1 - - [06/May/2026 01:50:24] "GET /live/index.html?roomID=123456789&username=JulesLive&role=owner HTTP/1.1" 200 -
-127.0.0.1 - - [06/May/2026 01:50:25] "GET /live/app.js HTTP/1.1" 200 -
-127.0.0.1 - - [06/May/2026 01:50:25] "GET /live/style.css HTTP/1.1" 200 -
