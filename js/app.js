@@ -63,6 +63,8 @@ class GameManager {
         this.analysers = {};
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         this.silentStream = this.createSilentAudioStream();
+        this.audioPool = [];
+        this.maxPoolSize = 6;
 
         this.initElements();
         this.initMicStatus();
@@ -88,11 +90,12 @@ class GameManager {
     }
 
     initElements() {
-        // Resume audio context on first interaction
+        // Resume audio context and initialize audio pool on first interaction
         document.addEventListener('click', () => {
             if (this.audioContext && this.audioContext.state === 'suspended') {
                 this.audioContext.resume();
             }
+            this.initializeAudioPool();
         }, { once: true });
 
         // Chat elements
@@ -146,6 +149,26 @@ class GameManager {
         this.modalTimeoutFill = document.getElementById('modal-timeout-fill');
     }
 
+    initializeAudioPool() {
+        if (this.audioPool.length > 0) return;
+        console.log("Initializing Audio Pool...");
+        for (let i = 0; i < this.maxPoolSize; i++) {
+            const audio = document.createElement('audio');
+            audio.id = `audio-pool-${i}`;
+            audio.autoplay = true;
+            audio.playsInline = true;
+            audio.style.display = 'none';
+            audio.setAttribute('data-in-use', 'false');
+            document.body.appendChild(audio);
+            this.audioPool.push(audio);
+
+            // "Prime" the element with a user gesture
+            audio.play().catch(() => {
+                // Expected to fail if no src, but it registers the intent
+            });
+        }
+    }
+
     initEvents() {
         document.getElementById('btn-start-app').addEventListener('click', () => {
             this.audioEnabled = true;
@@ -155,6 +178,9 @@ class GameManager {
             if (this.audioContext && this.audioContext.state === 'suspended') {
                 this.audioContext.resume();
             }
+
+            this.initializeAudioPool();
+
             // Also try to play any remote audios
             document.querySelectorAll('audio').forEach(a => {
                 if (a.id.startsWith('audio-')) a.play().catch(() => {});
@@ -1159,21 +1185,19 @@ class GameManager {
         const onStreamReceived = (remoteStream) => {
             console.log('Receiving stream from:', call.peer);
 
-            // Limit to 6 remote audio elements
-            const existingAudios = document.querySelectorAll('audio[id^="audio-"]');
-            if (existingAudios.length >= 6 && !document.getElementById(`audio-${call.peer}`)) {
-                console.warn("Max 6 audio streams reached. Ignoring new stream from:", call.peer);
-                return;
-            }
+            let audio = document.querySelector(`audio[data-peer-id="${call.peer}"]`);
 
-            let audio = document.getElementById(`audio-${call.peer}`);
             if (!audio) {
-                audio = document.createElement('audio');
-                audio.id = `audio-${call.peer}`;
-                audio.autoplay = true;
-                audio.playsInline = true;
-                audio.style.display = 'none';
-                document.body.appendChild(audio);
+                // Find an available element in the pool
+                audio = this.audioPool.find(el => el.getAttribute('data-in-use') === 'false');
+
+                if (!audio) {
+                    console.warn("No available audio elements in the pool for peer:", call.peer);
+                    return;
+                }
+
+                audio.setAttribute('data-in-use', 'true');
+                audio.setAttribute('data-peer-id', call.peer);
             }
 
             if (audio.srcObject !== remoteStream) {
@@ -1182,10 +1206,11 @@ class GameManager {
 
             audio.muted = !this.speakerEnabled;
 
-            // Ensure playback starts
+            // Ensure playback starts - because it's already "primed" by user gesture, this should work
             audio.play().catch(e => {
-                console.warn("Autoplay blocked for remote stream:", call.peer, e);
-                // Will be resumed by user interaction
+                console.warn("Autoplay blocked even with pool for remote stream:", call.peer, e);
+                // Try again after a small delay
+                setTimeout(() => audio.play().catch(() => {}), 1000);
             });
 
             this.setupAudioLevelIndicator(remoteStream, false, call.peer);
@@ -1207,8 +1232,12 @@ class GameManager {
 
         call.on('close', () => {
             delete this.activeCalls[call.peer];
-            const audio = document.getElementById(`audio-${call.peer}`);
-            if (audio) audio.remove();
+            const audio = document.querySelector(`audio[data-peer-id="${call.peer}"]`);
+            if (audio) {
+                audio.srcObject = null;
+                audio.setAttribute('data-in-use', 'false');
+                audio.removeAttribute('data-peer-id');
+            }
         });
     }
 
