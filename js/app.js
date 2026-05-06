@@ -249,9 +249,18 @@ class GameManager {
     async initAuth() {
         onAuthStateChanged(this.auth, (user) => {
             if (user) {
+                console.log("Firebase Auth: Logged in as", user.uid);
                 this.myId = user.uid;
+                // If we are already in a room (e.g. refresh), re-init peer
+                if (this.roomId) {
+                    this.initPeer();
+                }
             } else {
-                signInAnonymously(this.auth).catch(() => this.showToast("فشل الاتصال بـ Firebase"));
+                console.log("Firebase Auth: Attempting anonymous login...");
+                signInAnonymously(this.auth).catch((err) => {
+                    console.error("Firebase Auth Error:", err);
+                    this.showToast("فشل الاتصال بـ Firebase");
+                });
             }
         });
     }
@@ -385,6 +394,7 @@ class GameManager {
     }
 
     async joinRoomLogic(roomId) {
+        this.roomId = roomId; // Ensure roomId is set early
         const playerRef = ref(this.db, `rooms/${roomId}/players/${this.myId}`);
         onDisconnect(playerRef).remove();
         // Also remove progress on disconnect
@@ -452,6 +462,10 @@ class GameManager {
     }
 
     async createRoom(type = 'game') {
+        if (!this.myId) {
+            this.showToast("⏳ جاري تهيئة الاتصال... حاول ثانية");
+            return;
+        }
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
 
@@ -494,6 +508,10 @@ class GameManager {
     }
 
     async joinRoom() {
+        if (!this.myId) {
+            this.showToast("⏳ جاري تهيئة الاتصال... حاول ثانية");
+            return;
+        }
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
         if (!this.playerName || this.roomId.length !== 9) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
@@ -1113,8 +1131,12 @@ class GameManager {
     }
 
     async initPeer() {
-        if (this.peer) return;
+        if (this.peer || !this.myId) {
+            console.log("PeerJS: Initialization skipped (already exists or no ID). ID:", this.myId);
+            return;
+        }
 
+        console.log("PeerJS: Initializing with ID:", this.myId);
         this.peer = new Peer(this.myId, {
             config: {
                 'iceServers': [
@@ -1122,26 +1144,35 @@ class GameManager {
                     { 'urls': 'stun:stun1.l.google.com:19302' },
                     { 'urls': 'stun:stun2.l.google.com:19302' }
                 ]
-            }
+            },
+            debug: 1
         });
 
+        // Global access for debugging as requested
+        window.peer = this.peer;
+
         this.peer.on('open', (id) => {
-            console.log('Peer connected with ID:', id);
+            console.log('PeerJS: Connection opened with ID:', id);
             this.listenToVoicePeers();
         });
 
         this.peer.on('call', (call) => {
-            console.log('Incoming call from:', call.peer);
+            console.log('PeerJS: Incoming call from:', call.peer);
             call.answer(this.localStream || this.silentStream);
             this.handleCallStream(call);
         });
 
         this.peer.on('error', (err) => {
-            console.error('PeerJS Error:', err);
+            console.error('PeerJS Error:', err.type, err);
             if (err.type === 'peer-unavailable') {
-                // Ignore, peer might have disconnected
-            } else if (err.type === 'network' || err.type === 'server-error') {
-                setTimeout(() => this.initPeer(), 5000); // Retry after 5s
+                // Ignore
+            } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'unavailable-id') {
+                console.log("PeerJS: Critical error, attempting reset...");
+                setTimeout(() => {
+                    if (this.peer && !this.peer.destroyed) this.peer.destroy();
+                    this.peer = null;
+                    this.initPeer();
+                }, 5000);
             }
         });
     }
@@ -1156,26 +1187,42 @@ class GameManager {
     }
 
     listenToVoicePeers() {
-        // In the game room, we use the existing player list to decide who to call
-        // To avoid duplicate calls, player with lower ID calls player with higher ID
+        if (!this.roomId) return;
+        console.log("PeerJS: Starting listener for room:", this.roomId);
+
         const callOthers = () => {
+            if (!this.peer || !this.peer.open) return;
+
             this.players.forEach(p => {
-                if (p.id !== this.myId && !this.activeCalls[p.id] && this.myId < p.id) {
-                    console.log('Calling player:', p.id);
+                // Handshake: lower ID calls higher ID to avoid double calls
+                if (p.id && p.id !== this.myId && !this.activeCalls[p.id] && this.myId < p.id) {
+                    console.log('PeerJS: Initiating call to:', p.id);
                     const stream = this.localStream || this.silentStream;
-                    const call = this.peer.call(p.id, stream);
-                    if (call) {
-                        this.handleCallStream(call);
+
+                    try {
+                        const call = this.peer.call(p.id, stream);
+                        if (call) {
+                            this.handleCallStream(call);
+                        }
+                    } catch (e) {
+                        console.error("PeerJS: Call initiation failed:", e);
                     }
                 }
             });
         };
 
-        // Call whenever player list updates
+        // Listen for player changes to trigger calls
         const playerRef = ref(this.db, `rooms/${this.roomId}/players`);
-        onValue(playerRef, () => {
-            if (this.peer && this.peer.open) callOthers();
+        onValue(playerRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                this.players = Object.entries(data).map(([id, p]) => ({ id, ...p }));
+                if (this.peer && this.peer.open) callOthers();
+            }
         });
+
+        // Immediate check if list already exists
+        if (this.peer && this.peer.open) callOthers();
     }
 
     handleCallStream(call) {
