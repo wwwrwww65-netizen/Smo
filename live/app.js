@@ -233,6 +233,15 @@ class LiveManager {
             this.genericVideo.onplay = () => this.ownerOnMediaEvent(1);
             this.genericVideo.onpause = () => this.ownerOnMediaEvent(2);
             this.genericVideo.onseeked = () => this.ownerOnMediaEvent();
+            this.genericVideo.onended = () => {
+                this.ownerOnMediaEvent(0);
+                this.playNextInPlaylist();
+            };
+            this.genericVideo.onerror = () => {
+                if (this.genericVideo.src && !this.genericVideo.src.includes(window.location.host)) {
+                    this.showToast("⚠️ تعذر تشغيل هذا الرابط، قد يكون محمي أو غير مدعوم");
+                }
+            };
 
             // Browser events for owner
             if (this.btnBrowserGo) {
@@ -645,7 +654,10 @@ class LiveManager {
         if (isNewVideo) {
             this.player.loadVideoById({ videoId: state.videoId, startSeconds: targetTime });
             if (this.role !== 'owner' && this.isMutedByPolicy) this.player.mute();
-            this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
+            if (this.vidMiniThumb) {
+                this.vidMiniThumb.src = `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`;
+                this.vidMiniThumb.style.display = 'block';
+            }
 
             const checkTitle = setInterval(() => {
                 if (this.player.getVideoData && this.player.getVideoData().title) {
@@ -669,11 +681,39 @@ class LiveManager {
     syncGenericVideo(state) {
         if (!this.genericVideo) return;
         const absoluteUrl = this.ensureAbsoluteUrl(state.url);
-        if (this.genericVideo.src !== absoluteUrl) {
-            this.genericVideo.src = absoluteUrl;
+
+        if (this._lastVideoUrl !== absoluteUrl) {
+            this._lastVideoUrl = absoluteUrl;
             this.vidTitle.textContent = "فيديو مباشر";
             this.vidOwner.textContent = "بواسطة: رابط خارجي";
-            this.vidMiniThumb.src = ""; // Clear mini thumb
+            if (this.vidMiniThumb) {
+                this.vidMiniThumb.src = "";
+                this.vidMiniThumb.style.display = 'none';
+            }
+
+            // Handle HLS (.m3u8)
+            if (absoluteUrl.includes('.m3u8')) {
+                if (Hls.isSupported()) {
+                    if (this.hls) {
+                        this.hls.destroy();
+                    }
+                    this.hls = new Hls();
+                    this.hls.loadSource(absoluteUrl);
+                    this.hls.attachMedia(this.genericVideo);
+                } else if (this.genericVideo.canPlayType('application/vnd.apple.mpegurl')) {
+                    // Native support (Safari)
+                    this.genericVideo.src = absoluteUrl;
+                } else {
+                    this.showToast("المتصفح لا يدعم هذا النوع من البث");
+                }
+            } else {
+                // Regular MP4/WebM
+                if (this.hls) {
+                    this.hls.destroy();
+                    this.hls = null;
+                }
+                this.genericVideo.src = absoluteUrl;
+            }
         }
 
         const now = Date.now() + this.serverOffset;
@@ -731,6 +771,9 @@ class LiveManager {
         if (this.genericVideo) {
             this.genericVideo.muted = false;
             this.genericVideo.volume = 1.0;
+            if (this.mediaState.state === 1) {
+                this.genericVideo.play().catch(() => {});
+            }
         }
 
         // Also try to play any remote audios (crucial for voice chat)
@@ -1025,7 +1068,7 @@ class LiveManager {
             if (match && match[2].length === 11) {
                 type = 'youtube';
                 videoId = match[2];
-            } else if (url.match(/\.(mp4|webm|ogg|m3u8|mov)(\?.*)?$/i)) {
+            } else if (url.toLowerCase().match(/\.(mp4|webm|ogg|m3u8|mov|m4v|avi|flv)/) || url.includes('.m3u8')) {
                 type = 'video';
                 url = this.processUrl(input);
             } else {
