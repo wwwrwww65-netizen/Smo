@@ -20,22 +20,53 @@
 }
 
 body {
-    background-color: var(--bg-dark);
+    background-color: transparent; /* Changed to let bg-animated show */
     color: var(--text-white);
     direction: rtl;
     height: 100vh;
+    height: 100dvh; /* Use dynamic viewport height */
     overflow: hidden;
     display: flex;
     justify-content: center;
 }
 
+.hidden {
+    display: none !important;
+}
+
 /* 1) الخلفية العامة */
+.bg-animated {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2;
+    background: radial-gradient(circle at center, #24243e 0%, #0f0c29 100%);
+    overflow: hidden;
+}
+
+.particle {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.2); /* Increased opacity */
+    border-radius: 50%;
+    pointer-events: none;
+    animation: floatParticle 20s infinite linear;
+}
+
+@keyframes floatParticle {
+    0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+    10% { opacity: 0.5; }
+    90% { opacity: 0.5; }
+    100% { transform: translateY(-100px) translateX(50px); opacity: 0; }
+}
+
 .theatrical-bg {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
     z-index: -1;
-    background: radial-gradient(circle at 50% 30%, #1a1a3a 0%, #0f0c29 100%);
+    background: transparent; /* Changed to let bg-animated show */
 }
 
 .curtain {
@@ -71,49 +102,71 @@ body {
 
 .app-container {
     width: 100%;
-    max-width: 450px;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     position: relative;
-    padding-bottom: 80px; /* Adjusted for fixed footer */
+    padding-bottom: 75px; /* Matches footer height */
 }
 
 /* 2) الشريط العلوي */
 .top-bar {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    padding: 15px 10px;
+    align-items: center;
+    padding: 20px 15px;
     height: auto;
+    background: linear-gradient(to bottom, rgba(15, 12, 41, 0.5), transparent);
+    z-index: 100;
+}
+
+.top-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.top-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .top-left {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.back-rank-stack {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 4px;
 }
 
-.back-and-brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
 .brand-text {
+    font-size: 24px;
+    font-weight: 800;
+    background: linear-gradient(to right, #fff 20%, rgba(255,255,255,0.7) 50%, #fff 80%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: textShine 3s linear infinite;
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+    letter-spacing: 1px;
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-size: 18px;
-    font-weight: 800;
+    position: relative;
 }
 
-.brand-hash {
-    color: #fff;
-}
-
-.brand-fyo {
-    color: var(--accent-turquoise);
+@keyframes textShine {
+    0% { background-position: 200% center; }
+    100% { background-position: -200% center; }
 }
 
 .btn-back {
@@ -128,9 +181,9 @@ body {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 10px;
-    color: var(--text-white);
-    margin-top: 2px;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
 }
 
 .rank-badge-icon {
@@ -140,26 +193,12 @@ body {
     border-radius: 2px;
 }
 
-.top-center {
-    margin-top: 5px;
-}
-
-.btn-plus-glow {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    background: var(--accent-turquoise);
-    border: none;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    box-shadow: 0 0 15px var(--accent-turquoise);
-}
 
 .top-right {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
 }
 
 .user-main-info {
@@ -195,15 +234,11 @@ body {
     margin-right: 4px;
 }
 
-.lv-green-badge {
-    background: #00e676;
-    color: #fff;
-    font-size: 9px;
-    font-weight: 900;
-    padding: 1px 8px;
-    border-radius: 10px;
-    margin-top: 5px;
-    margin-left: 10px;
+.user-display-id {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: bold;
+    display: block;
 }
 
 /* 3) المنطقة الرئيسية */
@@ -214,15 +249,15 @@ body {
     align-items: center;
     overflow-y: auto;
     scrollbar-width: none;
-    padding: 0 5%;
+    padding: 0 8px; /* Very slight side margin as requested */
 }
 .main-area::-webkit-scrollbar { display: none; }
 
 .video-container {
-    width: 95%;
+    width: 100%;
     background: #0d0d0d;
-    border-radius: 28px;
-    padding: 15px;
+    border-radius: 15px;
+    padding: 10px 5px;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -557,6 +592,7 @@ body {
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.2) transparent;
+    padding-bottom: 40px; /* مساحة أمان لضمان ظهور الرسالة الأخيرة */
 }
 .chat-log::-webkit-scrollbar { width: 4px; }
 .chat-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
@@ -606,19 +642,18 @@ body {
 .footer-nav {
     position: fixed;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
     width: 100%;
-    max-width: 450px;
     height: 75px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0 15px;
-    background: rgba(15, 12, 41, 0.85);
-    backdrop-filter: blur(15px);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    z-index: 2000;
+    background: rgba(15, 12, 41, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    z-index: 9999; /* Ensure it is above everything */
 }
 
 .nav-group {
@@ -898,6 +933,19 @@ body {
     color: #fff;
     padding: 5px;
     border-radius: 50%;
+}
+
+.btn-add-to-playlist-top {
+    background: var(--accent-turquoise);
+    color: #000;
+    border: none;
+    padding: 6px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    margin-right: 10px;
+    box-shadow: 0 4px 10px rgba(0, 210, 255, 0.3);
 }
 
 .modal-bottom-footer {
