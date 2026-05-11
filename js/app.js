@@ -485,8 +485,16 @@ class GameManager {
 
     async createRoom(type = 'game') {
         if (!this.myId) {
-            this.showToast("⏳ جاري تهيئة الاتصال... حاول ثانية");
-            return;
+            this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
+            let attempts = 0;
+            while (!this.myId && attempts < 15) {
+                await new Promise(r => setTimeout(r, 400));
+                attempts++;
+            }
+            if (!this.myId) {
+                this.showToast("❌ فشل الاتصال، يرجى التحقق من الإنترنت");
+                return;
+            }
         }
         this.playerName = this.playerNameInput.value.trim();
         if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
@@ -531,8 +539,16 @@ class GameManager {
 
     async joinRoom() {
         if (!this.myId) {
-            this.showToast("⏳ جاري تهيئة الاتصال... حاول ثانية");
-            return;
+            this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
+            let attempts = 0;
+            while (!this.myId && attempts < 15) {
+                await new Promise(r => setTimeout(r, 400));
+                attempts++;
+            }
+            if (!this.myId) {
+                this.showToast("❌ فشل الاتصال، يرجى التحقق من الإنترنت");
+                return;
+            }
         }
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
