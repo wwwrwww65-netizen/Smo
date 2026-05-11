@@ -62,9 +62,6 @@ class LiveManager {
 
         this.iceConfig = {
             'iceServers': [
-                { 'urls': 'stun:stun.l.google.com:19302' },
-                { 'urls': 'stun:stun1.l.google.com:19302' },
-                { 'urls': 'stun:stun.metered.ca:19302' },
                 {
                     'urls': 'turn:global.metered.ca:443',
                     'username': 'cc045d3456c33ca2d5c8b09d',
@@ -74,9 +71,14 @@ class LiveManager {
                     'urls': 'turn:global.metered.ca:443?transport=tcp',
                     'username': 'cc045d3456c33ca2d5c8b09d',
                     'credential': 'Ab6Gsl42QGT6sNcK'
-                }
+                },
+                { 'urls': 'stun:stun.l.google.com:19302' },
+                { 'urls': 'stun:stun1.l.google.com:19302' },
+                { 'urls': 'stun:stun2.l.google.com:19302' },
+                { 'urls': 'stun:stun3.l.google.com:19302' }
             ],
-            'iceCandidatePoolSize': 10
+            'iceCandidatePoolSize': 10,
+            'sdpSemantics': 'unified-plan'
         };
 
         this.init();
@@ -1296,23 +1298,37 @@ class LiveManager {
                 }
             }
             
-            // 2. Setup AudioContext Boost (Parallel path for guaranteed volume)
+            // 2. Setup AudioContext Boost (The PRO path)
             try {
-                if (!this.audioContext) {
-                    console.warn("[AUDIO-ENGINE] محرك الصوت لم يتم إنشاؤه بعد (انتظار ضغطة المستخدم).");
-                } else {
-                    const source = this.audioContext.createMediaStreamSource(remoteStream);
-                    const gainNode = this.audioContext.createGain();
-                    const compressor = this.audioContext.createDynamicsCompressor();
-                    
-                    gainNode.gain.value = 4.0; // 400% Boost
-                    
-                    source.connect(gainNode);
-                    gainNode.connect(compressor);
-                    compressor.connect(this.audioContext.destination);
-                    console.log('%c[WEB-AUDIO] تم الربط بنجاح بمحرك الصوت بنسبة 400%', 'color: #00ff00;');
+                if (!this.audioContext || this.audioContext.state === 'closed') {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 }
-            } catch(e) { console.warn("WebAudio path failed:", e); }
+                
+                // Warm up the context
+                if (this.audioContext.state === 'suspended') this.audioContext.resume();
+
+                const source = this.audioContext.createMediaStreamSource(remoteStream);
+                const gainNode = this.audioContext.createGain();
+                const compressor = this.audioContext.createDynamicsCompressor();
+                
+                // Set high boost but with safety
+                gainNode.gain.value = 5.0; // 500% Boost
+                
+                // Compressor settings for crystal clear voice
+                compressor.threshold.setValueAtTime(-50, this.audioContext.currentTime);
+                compressor.knee.setValueAtTime(40, this.audioContext.currentTime);
+                compressor.ratio.setValueAtTime(12, this.audioContext.currentTime);
+                compressor.attack.setValueAtTime(0, this.audioContext.currentTime);
+                compressor.release.setValueAtTime(0.25, this.audioContext.currentTime);
+
+                source.connect(compressor);
+                compressor.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+
+                console.log('%c[FINAL-FIX] تم إجبار المسار الصوتي وتفعيل مضخم الـ 500%', 'color: #00ff00; font-weight: bold;');
+            } catch(e) { 
+                console.warn("[FINAL-FIX] فشل المسار المطور، الاعتماد على HTML5 فقط:", e); 
+            }
 
             this.logVoiceActivity(`استلام صوت من ${call.peer.split('_')[0]} 🔊`, 'success');
             this.startVolumeDetection(remoteStream, call.peer);
@@ -1434,7 +1450,12 @@ class LiveManager {
                             return;
                         }
                         try {
-                            const call = this.peer.call(pid, stream);
+                            const call = this.peer.call(pid, stream, {
+                                sdpTransform: (sdp) => {
+                                    // FORCE OPUS AND HIGH BITRATE FOR CRYSTAL CLEAR VOICE
+                                    return sdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=1; maxaveragebitrate=128000');
+                                }
+                            });
                             if (call) this.handleCallStream(call);
                         } catch(e) { console.error("Call error:", e); }
                     }
@@ -1487,7 +1508,11 @@ class LiveManager {
 
                     if (uid === this.myId) {
                         if (this._lastSpeakingState !== isSpeaking) {
-                            if (isSpeaking) this.logVoiceActivity("أنت تتحدث الآن... 🎤", "success");
+                            // Only log once when start speaking, not continuously
+                            if (isSpeaking && (Date.now() - (this._lastTalkLogTime || 0) > 10000)) {
+                                this.logVoiceActivity("أنت تتحدث الآن... 🎤", "success");
+                                this._lastTalkLogTime = Date.now();
+                            }
                             this.updateSpeakingInFirebase(isSpeaking);
                         }
                     } else {
