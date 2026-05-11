@@ -165,6 +165,7 @@ class GameManager {
         this.modalNextRound = document.getElementById('modal-next-round');
         this.btnModalAccept = document.getElementById('btn-modal-accept');
         this.modalTimeoutFill = document.getElementById('modal-timeout-fill');
+        this.lobbyHeader = document.querySelector('.lobby-header');
     }
 
     initializeAudioPool() {
@@ -227,7 +228,9 @@ class GameManager {
         this.btnSpeaker.addEventListener('click', () => this.toggleSpeaker());
 
         this.btnCreateRoom.addEventListener('click', () => this.createRoom('game'));
-        this.btnCreateViewingRoom.addEventListener('click', () => this.createRoom('viewing'));
+        if (this.btnCreateViewingRoom) {
+            this.btnCreateViewingRoom.addEventListener('click', () => this.createRoom('viewing'));
+        }
         this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
         document.getElementById('btn-ready').addEventListener('click', () => this.setReady());
         document.getElementById('btn-stop').addEventListener('click', () => this.stopGame());
@@ -418,8 +421,9 @@ class GameManager {
         // Also remove progress on disconnect
         onDisconnect(ref(this.db, `rooms/${roomId}/progress/${this.myId}`)).remove();
 
-        // Chat container should be visible once in a room
+        // Chat and Lobby elements should be visible once in a room
         this.chatContainer.style.display = 'flex';
+        if (this.lobbyHeader) this.lobbyHeader.style.display = 'flex';
 
         await update(playerRef, {
             name: this.playerName,

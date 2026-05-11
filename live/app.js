@@ -53,6 +53,7 @@ class LiveManager {
         this.isPeerInitialized = false;
         this.audioPool = [];
         this.maxPoolSize = 6;
+        this.sessionId = Math.random().toString(36).substring(2, 8); // Unique session ID
 
         this.iceConfig = {
             'iceServers': [
@@ -76,6 +77,23 @@ class LiveManager {
         this.initAuth();
         this.setupYouTube();
         this.calculateServerOffset();
+        this.createParticles();
+    }
+
+    createParticles() {
+        const bg = document.getElementById('bg-animated');
+        if (!bg) return;
+        for (let i = 0; i < 30; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = Math.random() * 25 + 8;
+            p.style.width = `${size}px`;
+            p.style.height = `${size}px`;
+            p.style.left = `${Math.random() * 100}%`;
+            p.style.animationDuration = `${Math.random() * 12 + 12}s`;
+            p.style.animationDelay = `${Math.random() * 10}s`;
+            bg.appendChild(p);
+        }
     }
 
     initializeAudioPool() {
@@ -367,9 +385,14 @@ class LiveManager {
         document.getElementById('btn-fullscreen').onclick = () => this.toggleFullscreen();
 
         // Profile UI
-        document.querySelector('.user-display-name').textContent = this.username;
-        document.querySelector('.user-display-id').textContent = `ID: ${this.roomId}`;
-        document.querySelector('.profile-square').src = this.userAvatar;
+        const nameEl = document.querySelector('.user-display-name');
+        if (nameEl) nameEl.textContent = this.username;
+
+        const idEl = document.querySelector('.user-display-id');
+        if (idEl) idEl.textContent = `ID: ${this.roomId}`;
+
+        const avatarEl = document.querySelector('.profile-square');
+        if (avatarEl) avatarEl.src = this.userAvatar;
     }
 
     // ================== CORE / AUTH ==================
@@ -1169,10 +1192,10 @@ class LiveManager {
             return;
         }
 
-        console.log("PeerJS: Initializing with ID:", this.myId);
-        this.peer = new Peer(this.myId, {
+        console.log("PeerJS: Initializing with ID:", this.myId + "_" + this.sessionId);
+        this.peer = new Peer(this.myId + "_" + this.sessionId, {
             config: this.iceConfig,
-            debug: 2
+            debug: 1
         });
 
         // Global exposing as requested
@@ -1210,12 +1233,15 @@ class LiveManager {
     }
 
     async registerVoicePeer() {
-        const voiceRef = ref(this.db, `rooms/${this.roomId}/voice_peers/${this.myId}`);
+        if (!this.peer || !this.peer.id) return;
+        const voiceRef = ref(this.db, `rooms/${this.roomId}/voice_peers/${this.peer.id}`);
         onDisconnect(voiceRef).remove();
         await set(voiceRef, {
-            peerId: this.myId,
+            uid: this.myId,
+            peerId: this.peer.id,
             name: this.username,
-            active: true
+            active: true,
+            updatedAt: serverTimestamp()
         });
     }
 
@@ -1266,6 +1292,7 @@ class LiveManager {
 
         call.on('stream', (remoteStream) => {
             onStreamReceived(remoteStream);
+            this.showToast(`تم ربط الصوت مع ${call.peer.split('_')[0]} ✅`);
         });
 
         // Backup: Use ontrack via peerConnection for more reliability
@@ -1277,8 +1304,14 @@ class LiveManager {
             };
         }
 
+        call.on('error', (err) => {
+            console.error("Call error with:", call.peer, err);
+            this.showToast(`⚠️ خطأ في الاتصال بـ ${call.peer.split('_')[0]}`);
+        });
+
         call.on('close', () => {
             console.log('Call closed with:', call.peer);
+            this.showToast(`انقطع اتصال ${call.peer.split('_')[0]}`);
             const audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
             if (audio) {
                 audio.srcObject = null;
@@ -1294,10 +1327,30 @@ class LiveManager {
     }
 
     async toggleMic() {
+        console.log("Mic Toggle Clicked. Current Stream:", !!this.myStream);
+        
+        // Resume audio context on any toggle attempt
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            await this.audioContext.resume().catch(e => console.error("AudioContext resume failed:", e));
+        }
+
         try {
             if (!this.myStream) {
+                this.showToast("جاري تفعيل الميكروفون...");
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("المتصفح لا يدعم الوصول للميكروفون أو الاتصال غير آمن (HTTPS مطلوب)");
+                }
+
                 // First time: Get real stream
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                
                 this.myStream = stream;
                 this.isMicOn = true;
 
@@ -1305,11 +1358,10 @@ class LiveManager {
                 const newTrack = stream.getAudioTracks()[0];
                 Object.values(this.activeCalls).forEach(call => {
                     if (call.peerConnection) {
-                        const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+                        const senders = call.peerConnection.getSenders();
+                        const sender = senders.find(s => s.track && s.track.kind === 'audio');
                         if (sender) {
-                            sender.replaceTrack(newTrack);
-                        } else {
-                            console.warn("No audio sender found for call:", call.peer);
+                            sender.replaceTrack(newTrack).catch(e => console.error("ReplaceTrack failed:", e));
                         }
                     }
                 });
@@ -1317,7 +1369,7 @@ class LiveManager {
                 this.micOnIcon.classList.remove('hidden');
                 this.micOffIcon.classList.add('hidden');
                 this.btnToggleMic.classList.remove('muted');
-                this.showToast("الميكروفون مفعل");
+                this.showToast("الميكروفون مفعل ✅");
 
                 this.startVolumeDetection(this.myStream, this.myId);
             } else {
@@ -1328,18 +1380,19 @@ class LiveManager {
                     this.micOnIcon.classList.remove('hidden');
                     this.micOffIcon.classList.add('hidden');
                     this.btnToggleMic.classList.remove('muted');
-                    this.showToast("الميكروفون مفعل");
+                    this.showToast("الميكروفون مفعل ✅");
                 } else {
                     this.micOnIcon.classList.add('hidden');
                     this.micOffIcon.classList.remove('hidden');
                     this.btnToggleMic.classList.add('muted');
-                    this.showToast("تم كتم الميكروفون");
+                    this.showToast("تم كتم الميكروفون 🔇");
                     this.updateSpeakingUI(this.myId, false);
+                    this.updateSpeakingInFirebase(false);
                 }
             }
         } catch (err) {
-            console.error(err);
-            this.showToast("⚠️ فشل الوصول للميكروفون");
+            console.error("Mic Error:", err);
+            this.showToast(`⚠️ ${err.message || "فشل الوصول للميكروفون"}`);
         }
     }
 
@@ -1352,18 +1405,21 @@ class LiveManager {
             if (!this.peer || !this.peer.open) return;
             const peers = snap.val() || {};
 
-            // Handshake logic: lower ID calls higher ID
-            Object.keys(peers).forEach(pid => {
-                if (pid !== this.myId && !this.activeCalls[pid] && this.myId < pid) {
-                    console.log('PeerJS: Initiating call to:', pid);
-                    const stream = this.myStream || this.silentStream;
-                    try {
-                        const call = this.peer.call(pid, stream);
-                        if (call) {
-                            this.handleCallStream(call);
+            Object.entries(peers).forEach(([pid, data]) => {
+                // pid is the unique PeerID (uid_session)
+                if (pid !== this.peer.id && !this.activeCalls[pid]) {
+                    // Handshake logic: Lexicographical comparison of PeerIDs to decide caller
+                    if (this.peer.id < pid) {
+                        console.log('PeerJS: Initiating call to:', pid);
+                        const stream = this.myStream || this.silentStream;
+                        try {
+                            const call = this.peer.call(pid, stream);
+                            if (call) {
+                                this.handleCallStream(call);
+                            }
+                        } catch (e) {
+                            console.error("PeerJS: Call initiation failed:", e);
                         }
-                    } catch (e) {
-                        console.error("PeerJS: Call initiation failed:", e);
                     }
                 }
             });
@@ -1400,6 +1456,7 @@ class LiveManager {
                 const track = stream.getAudioTracks()[0];
                 if (!track || !track.enabled || track.readyState === 'ended' || !stream.active) {
                     this.updateSpeakingUI(uid, false);
+                    if (uid === this.myId) this.updateSpeakingInFirebase(false);
                     if (!stream.active) return;
                 } else {
                     analyser.getByteFrequencyData(dataArray);
@@ -1430,7 +1487,9 @@ class LiveManager {
         });
     }
 
-    updateSpeakingUI(uid, isSpeaking) {
+    updateSpeakingUI(id, isSpeaking) {
+        // Handle both raw UID and PeerID (uid_session)
+        const uid = id.includes('_') ? id.split('_')[0] : id;
         const frames = document.querySelectorAll('.avatar-circle-frame');
         frames.forEach(frame => {
             if (frame.dataset.uid === String(uid)) {
@@ -1443,9 +1502,16 @@ class LiveManager {
     // ================== SEATS ==================
 
     updateSeatsUI(seats) {
+        if (!this.seatsContainer) {
+            this.seatsContainer = document.getElementById('seats-container');
+        }
+        if (!this.seatsContainer) return;
+
         this.seatsContainer.innerHTML = '';
+        const seatsData = seats || {};
+
         for (let i = 1; i <= 6; i++) {
-            const seat = seats[i] || { status: 'empty' };
+            const seat = seatsData[i] || { status: 'empty' };
             const seatBox = document.createElement('div');
             seatBox.className = 'seat-box';
 
@@ -1529,7 +1595,9 @@ class LiveManager {
         });
 
         // Auto-scroll logic as requested by user
-        this.chatLogEl.scrollTop = this.chatLogEl.scrollHeight;
+        setTimeout(() => {
+            this.chatLogEl.scrollTop = this.chatLogEl.scrollHeight;
+        }, 50);
     }
 
     escapeHtml(t) {
