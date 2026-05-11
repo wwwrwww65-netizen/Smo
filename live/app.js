@@ -88,38 +88,56 @@ class LiveManager {
 
     async init() {
         this.initElements();
-        
+        // Overlay is hidden by default in CSS, will show in initAuth
+    }
+
+    showJoinOverlay() {
         const btnJoin = document.getElementById('btn-join-audio');
         const overlay = document.getElementById('join-overlay');
+        if (!overlay) return;
+
+        overlay.style.display = 'flex';
         
-        if (btnJoin) {
-            btnJoin.onclick = async () => {
-                if (this.isPeerOpening) return;
-                this.isPeerOpening = true;
+        btnJoin.onclick = async () => {
+            if (this.isPeerOpening) return;
+            this.isPeerOpening = true;
+            
+            console.log("%c[SYSTEM] User clicked JOIN. Requesting Mic immediately...", "color: #00ff00; font-weight: bold;");
+            
+            try {
+                // 1. MUST call getUserMedia directly inside the click handler for maximum browser compatibility
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                }).catch(() => null);
+
+                // 2. Initialize Audio Engine
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                await this.audioContext.resume();
                 
-                console.log("%c[SYSTEM] User clicked JOIN. Unlocking audio...", "color: #00ff00; font-weight: bold;");
-                
-                try {
-                    // 1. Initialize Audio Engine with User Gesture
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    await this.audioContext.resume();
+                if (stream) {
+                    this.myStream = stream;
+                    this.isMicOn = true;
+                    this.micOnIcon.classList.remove('hidden');
+                    this.micOffIcon.classList.add('hidden');
+                    this.btnToggleMic.classList.remove('muted');
+                    this.startVolumeDetection(this.myStream, this.myId);
+                } else {
                     this.silentStream = this.createSilentAudioStream();
-                    this.initializeAudioPool();
-                    
-                    // 2. Initialize PeerJS (Requires the silentStream we just created)
-                    this.initializePeer();
-                    
-                    // 3. Hide UI Overlay
-                    if (overlay) {
-                        overlay.style.opacity = '0';
-                        setTimeout(() => overlay.style.display = 'none', 500);
-                    }
-                } catch (e) {
-                    console.error("Initialization failed:", e);
-                    this.isPeerOpening = false;
                 }
-            };
-        }
+
+                this.initializeAudioPool();
+                
+                // 3. Initialize PeerJS (Now we have a valid myId and a valid stream)
+                this.initializePeer();
+                
+                // 4. Hide UI Overlay
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.style.display = 'none', 500);
+            } catch (e) {
+                console.error("Join failed:", e);
+                this.isPeerOpening = false;
+            }
+        };
     }
 
     createParticles() {
@@ -435,14 +453,18 @@ class LiveManager {
     async initAuth() {
         onAuthStateChanged(this.auth, (user) => {
             if (user) {
-                console.log("Firebase Auth: Logged in as", user.uid);
                 this.myId = user.uid;
-                this.joinRoom();
-            } else {
-                console.log("Firebase Auth: Attempting anonymous login...");
-                signInAnonymously(this.auth).catch((err) => {
-                    console.error("Firebase Auth Error:", err);
+                console.log("Firebase Auth: Logged in as", this.myId);
+                
+                // Now that we have a valid myId, show the JOIN overlay
+                this.showJoinOverlay();
+                
+                update(ref(this.db, `rooms/${this.roomId}/users/${this.myId}`), {
+                    name: this.username,
+                    avatar: this.userAvatar,
+                    lastSeen: serverTimestamp()
                 });
+                this.listenToRoom();
             }
         });
     }

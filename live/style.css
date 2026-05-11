@@ -95,7 +95,7 @@ body {
     background: rgba(0,0,0,0.85);
     backdrop-filter: blur(10px);
     z-index: 10000;
-    display: flex;
+    display: none; /* Changed from flex to none - shown after auth */
     align-items: center;
     justify-content: center;
 }
