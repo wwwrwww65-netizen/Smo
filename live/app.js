@@ -93,54 +93,8 @@ class LiveManager {
         // Overlay is hidden by default in CSS, will show in initAuth
     }
 
-    showJoinOverlay() {
-        const btnJoin = document.getElementById('btn-join-audio');
-        const overlay = document.getElementById('join-overlay');
-        if (!overlay) return;
+    // showJoinOverlay() removed as requested. We now initialize everything automatically or on mic toggle.
 
-        overlay.style.display = 'flex';
-        
-        btnJoin.onclick = async () => {
-            if (this.isPeerOpening) return;
-            this.isPeerOpening = true;
-            
-            console.log("%c[SYSTEM] User clicked JOIN. Requesting Mic immediately...", "color: #00ff00; font-weight: bold;");
-            
-            try {
-                // 1. MUST call getUserMedia directly inside the click handler for maximum browser compatibility
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-                }).catch(() => null);
-
-                // 2. Initialize Audio Engine
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                await this.audioContext.resume();
-                
-                if (stream) {
-                    this.myStream = stream;
-                    this.isMicOn = true;
-                    this.micOnIcon.classList.remove('hidden');
-                    this.micOffIcon.classList.add('hidden');
-                    this.btnToggleMic.classList.remove('muted');
-                    this.startVolumeDetection(this.myStream, this.myId);
-                } else {
-                    this.silentStream = this.createSilentAudioStream();
-                }
-
-                this.initializeAudioPool();
-                
-                // 3. Initialize PeerJS (Now we have a valid myId and a valid stream)
-                this.initializePeer();
-                
-                // 4. Hide UI Overlay
-                overlay.style.opacity = '0';
-                setTimeout(() => overlay.style.display = 'none', 500);
-            } catch (e) {
-                console.error("Join failed:", e);
-                this.isPeerOpening = false;
-            }
-        };
-    }
 
     createParticles() {
         const bg = document.getElementById('bg-animated');
@@ -458,9 +412,22 @@ class LiveManager {
                 this.myId = user.uid;
                 console.log("Firebase Auth: Logged in as", this.myId);
                 
-                // Now that we have a valid myId, show the JOIN overlay
-                this.showJoinOverlay();
+                // Initialize Audio Engine silently (without mic prompt)
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.silentStream = this.createSilentAudioStream();
+                this.initializeAudioPool();
+                this.initializePeer();
                 
+                // Resume AudioContext on any interaction with the document
+                const resumeContext = () => {
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                        console.log("AudioContext resumed by user interaction.");
+                    }
+                    window.removeEventListener('click', resumeContext);
+                };
+                window.addEventListener('click', resumeContext);
+
                 update(ref(this.db, `rooms/${this.roomId}/users/${this.myId}`), {
                     name: this.username,
                     avatar: this.userAvatar,
@@ -1293,7 +1260,8 @@ class LiveManager {
                 if (playPromise !== undefined) {
                     playPromise.catch(e => {
                         console.warn("[HTML5-AUDIO] Autoplay blocked, waiting for user click.", e);
-                        this.showToast("⚠️ اضغط على الشاشة لتفعيل الصوت");
+                        // this.showToast("⚠️ اضغط على الشاشة لتفعيل الصوت");
+
                     });
                 }
             }
@@ -1330,7 +1298,8 @@ class LiveManager {
                 console.warn("[FINAL-FIX] فشل المسار المطور، الاعتماد على HTML5 فقط:", e); 
             }
 
-            this.logVoiceActivity(`استلام صوت من ${call.peer.split('_')[0]} 🔊`, 'success');
+            // this.logVoiceActivity(`استلام صوت من ${call.peer.split('_')[0]} 🔊`, 'success');
+
             this.startVolumeDetection(remoteStream, call.peer);
         };
 
@@ -1432,7 +1401,8 @@ class LiveManager {
 
     listenToVoicePeers() {
         if (!this.roomId) return;
-        this.logVoiceActivity("بدأ البحث عن متصلين...");
+        // this.logVoiceActivity("بدأ البحث عن متصلين...");
+
 
         const checkPeers = () => {
             if (!this.peer || !this.peer.open) return;
@@ -1443,7 +1413,8 @@ class LiveManager {
                 Object.entries(peers).forEach(([pid, d]) => {
                     if (pid !== this.peer.id && !this.activeCalls[pid]) {
                         console.log('%c[WebRTC] محاولة ربط صوتي بـ:', 'color: #0088ff;', pid);
-                        this.logVoiceActivity(`محاولة ربط بـ ${d.name || pid.split('_')[0]}...`, 'warn');
+                        // this.logVoiceActivity(`محاولة ربط بـ ${d.name || pid.split('_')[0]}...`, 'warn');
+
                         const stream = this.myStream || this.silentStream;
                         if (!stream) {
                             console.warn("[WebRTC] لا يمكن الاتصال بـ", pid, "لأن التدفق الصوتي غير جاهز.");
@@ -1508,18 +1479,13 @@ class LiveManager {
 
                     if (uid === this.myId) {
                         if (this._lastSpeakingState !== isSpeaking) {
-                            // Only log once when start speaking, not continuously
-                            if (isSpeaking && (Date.now() - (this._lastTalkLogTime || 0) > 10000)) {
-                                this.logVoiceActivity("أنت تتحدث الآن... 🎤", "success");
-                                this._lastTalkLogTime = Date.now();
-                            }
                             this.updateSpeakingInFirebase(isSpeaking);
                         }
                     } else {
                         // Remote peer activity logging
                         if (isSpeaking && !this._isSpeakingLogActive[uid]) {
                             this._isSpeakingLogActive[uid] = true;
-                            this.logVoiceActivity(`رصد صوت حي من: ${uid.split('_')[0]} 🔊`, "success");
+                            // logVoiceActivity removed as requested
                             setTimeout(() => { this._isSpeakingLogActive[uid] = false; }, 3000);
                         }
                     }
