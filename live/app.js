@@ -1299,6 +1299,18 @@ class LiveManager {
                 this.logVoiceActivity(`تم استلام صوت ${call.peer.split('_')[0]} ✅`, 'success');
             }
             
+            // 5. Setup Gain/Volume Boost
+            try {
+                if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.audioContext.state === 'suspended') this.audioContext.resume();
+                
+                const source = this.audioContext.createMediaStreamSource(remoteStream);
+                const gainNode = this.audioContext.createGain();
+                gainNode.gain.value = 2.5; // Boost volume by 250%
+                source.connect(gainNode).connect(this.audioContext.destination);
+                console.log('%c[AUDIO-BOOST] تم تفعيل مضخم الصوت!', 'color: #00ff00;');
+            } catch(e) { console.warn("GainNode setup failed:", e); }
+
             // Log track details
             remoteStream.getAudioTracks().forEach(track => {
                 console.log(`%c[TRACK-INFO] المسار: ${track.label}, مفعل: ${track.enabled}, الحالة: ${track.readyState}`, 'color: #f1c40f;');
@@ -1320,6 +1332,9 @@ class LiveManager {
         };
 
         call.on('stream', (remoteStream) => {
+            if (call._streamHandled) return; // Prevent duplicate handling
+            call._streamHandled = true;
+            
             console.log('%c[WebRTC-EVENT] stream fired! من طرف:', 'background: #ffaa00; color: #000; font-weight: bold;', call.peer);
             onStreamReceived(remoteStream);
             this.showToast(`تم ربط الصوت مع ${call.peer.split('_')[0]} ✅`);
@@ -1537,15 +1552,22 @@ class LiveManager {
     }
 
     updateSpeakingUI(id, isSpeaking) {
-        // Handle both raw UID and PeerID (uid_session)
+        if (!id) return;
         const uid = id.includes('_') ? id.split('_')[0] : id;
         const frames = document.querySelectorAll('.avatar-circle-frame');
+        let found = false;
         frames.forEach(frame => {
             if (frame.dataset.uid === String(uid)) {
                 if (isSpeaking) frame.classList.add('speaking');
                 else frame.classList.remove('speaking');
+                found = true;
             }
         });
+        // If not found in frames, it might be the user avatar at the top
+        if (!found) {
+            const profileFrame = document.querySelector('.profile-square'); // Or similar
+            // Add pulse to profile if needed
+        }
     }
 
     // ================== SEATS ==================
