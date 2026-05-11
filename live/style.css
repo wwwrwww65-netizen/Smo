@@ -110,6 +110,39 @@ body {
     padding-bottom: 75px; /* Matches footer height */
 }
 
+/* Voice Log Overlay - NEW ADDITION */
+.voice-log-overlay {
+    position: absolute;
+    top: 55px;
+    left: 15px;
+    width: 190px;
+    max-height: 130px;
+    z-index: 500;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    overflow: hidden;
+}
+
+.voice-log-entry {
+    background: rgba(15, 12, 41, 0.8);
+    backdrop-filter: blur(10px);
+    color: #2ecc71;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border-right: 4px solid #2ecc71;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    animation: voiceLogSlide 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes voiceLogSlide {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
 /* 2) الشريط العلوي */
 .top-bar {
     display: flex;
@@ -337,6 +370,7 @@ body {
     height: 100%;
 }
 
+
 /* Unmute Overlay */
 .unmute-overlay {
     position: absolute;
@@ -391,6 +425,15 @@ body {
 
 .yt-brand {
     opacity: 0.9;
+    flex-shrink: 0;
+}
+
+.mini-preview {
+    width: 45px;
+    height: 30px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1.5px solid rgba(255,255,255,0.15);
     flex-shrink: 0;
 }
 
@@ -453,6 +496,33 @@ body {
     object-fit: cover;
 }
 
+/* Unified Speaking Indicator Logic */
+.avatar-circle-frame.speaking {
+    position: relative;
+    border-color: #2ecc71 !important;
+    box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
+    transform: scale(1.05);
+    transition: all 0.3s ease;
+}
+
+.avatar-circle-frame.speaking::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border: 2px solid #2ecc71;
+    border-radius: 50%;
+    animation: voice-pulse 1.5s infinite;
+    pointer-events: none;
+}
+
+@keyframes voice-pulse {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.6); opacity: 0; }
+}
+
 .avatar-circle-frame.green-border {
     border-color: #00e676;
 }
@@ -467,6 +537,14 @@ body {
     border-radius: 12px;
     margin-top: -10px;
     z-index: 2;
+}
+
+.seat-badges {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: flex;
+    gap: 2px;
 }
 
 /* 5) شريط التحكم */
@@ -1105,37 +1183,4 @@ body {
     .brand-text { font-size: 16px; letter-spacing: 0; }
     .user-display-name { max-width: 60px; }
     .avatar-circle-frame { width: 42px; height: 42px; }
-}
-
-/* Speaking Indicator Animation */
-.avatar-circle-frame.speaking {
-    position: relative;
-    border-color: #2ecc71 !important;
-    box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
-    transform: scale(1.05);
-    transition: all 0.3s ease;
-}
-
-.avatar-circle-frame.speaking::after {
-    content: '';
-    position: absolute;
-    top: -4px;
-    left: -4px;
-    right: -4px;
-    bottom: -4px;
-    border: 2px solid #2ecc71;
-    border-radius: 50%;
-    animation: voice-pulse 1.5s infinite;
-    pointer-events: none;
-}
-
-@keyframes voice-pulse {
-    0% {
-        transform: scale(1);
-        opacity: 1;
-    }
-    100% {
-        transform: scale(1.6);
-        opacity: 0;
-    }
 }
