@@ -341,6 +341,20 @@
     <!-- SDKs -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
+    <!-- Join Audio Overlay (The Professional Standard Solution) -->
+    <div id="join-overlay" class="join-overlay">
+        <div class="join-card">
+            <div class="join-avatar">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" alt="Avatar" id="join-avatar-img">
+            </div>
+            <h2>مرحباً بك في الغرفة الحية</h2>
+            <p>اضغط على الزر أدناه لتفعيل الصوت والانضمام للمحادثة</p>
+            <button id="btn-join-audio" class="btn-join">
+                <i class="fas fa-headset"></i> انضمام للصوت
+            </button>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="voice-diagnostic.js"></script>
     <script type="module" src="app.js"></script>

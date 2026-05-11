@@ -47,15 +47,18 @@ class LiveManager {
         this.myStream = null;
         this.isMicOn = false;
         this.activeCalls = {}; // peerId -> call object
-        this.audioContext = null; // Will initialize on first click
-        this.silentStream = null; // Will initialize after context
-        this.analysers = {}; // uid -> analyser node
-        this.isPeerInitialized = false;
         this.audioPool = [];
         this.maxPoolSize = 6;
         this.sessionId = Math.random().toString(36).substring(2, 8); // Unique session ID
         this._isSpeakingLogActive = {}; // To prevent log flooding
         this._lastSpeakingState = false;
+        
+        // Finalized Audio State
+        this.audioContext = null;
+        this.silentStream = null;
+        this.isPeerInitialized = false;
+        this.isPeerOpening = false;
+        this.analysers = {};
 
         this.iceConfig = {
             'iceServers': [
@@ -76,11 +79,47 @@ class LiveManager {
             'iceCandidatePoolSize': 10
         };
 
-        this.initElements();
+        this.init();
         this.initAuth();
         this.setupYouTube();
         this.calculateServerOffset();
         this.createParticles();
+    }
+
+    async init() {
+        this.initElements();
+        
+        const btnJoin = document.getElementById('btn-join-audio');
+        const overlay = document.getElementById('join-overlay');
+        
+        if (btnJoin) {
+            btnJoin.onclick = async () => {
+                if (this.isPeerOpening) return;
+                this.isPeerOpening = true;
+                
+                console.log("%c[SYSTEM] User clicked JOIN. Unlocking audio...", "color: #00ff00; font-weight: bold;");
+                
+                try {
+                    // 1. Initialize Audio Engine with User Gesture
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    await this.audioContext.resume();
+                    this.silentStream = this.createSilentAudioStream();
+                    this.initializeAudioPool();
+                    
+                    // 2. Initialize PeerJS (Requires the silentStream we just created)
+                    this.initializePeer();
+                    
+                    // 3. Hide UI Overlay
+                    if (overlay) {
+                        overlay.style.opacity = '0';
+                        setTimeout(() => overlay.style.display = 'none', 500);
+                    }
+                } catch (e) {
+                    console.error("Initialization failed:", e);
+                    this.isPeerOpening = false;
+                }
+            };
+        }
     }
 
     createParticles() {
@@ -119,36 +158,6 @@ class LiveManager {
     }
 
     initElements() {
-        // Robust Audio Activation
-        const resumeAudio = async () => {
-            if (!this.audioContext) {
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                this.silentStream = this.createSilentAudioStream();
-                console.log("%c[AUDIO-ENGINE] تم إنشاء محرك الصوت بنجاح.", "color: #00ff00;");
-            }
-            if (this.audioContext.state === 'suspended') {
-                await this.audioContext.resume();
-                console.log("%c[AUDIO-ENGINE] تم تنشيط محرك الصوت (Resumed).", "color: #00ff00;");
-            }
-            this.initializeAudioPool();
-        };
-
-        document.addEventListener('click', resumeAudio, { once: false });
-        document.addEventListener('touchstart', resumeAudio, { once: false });
-
-        // Unmute logic - connect to button/overlay
-        const unmuteOverlay = document.getElementById('unmute-overlay');
-        const btnUnmuteTap = document.getElementById('btn-unmute-tap');
-        if (unmuteOverlay) {
-            unmuteOverlay.onclick = () => this.handleUserUnmute();
-        }
-        if (btnUnmuteTap) {
-            btnUnmuteTap.onclick = (e) => {
-                e.stopPropagation();
-                this.handleUserUnmute();
-            };
-        }
-
         // UI Refs
         this.onlineCountEl = document.getElementById('online-count');
         this.chatLogEl = document.getElementById('chat-log');
@@ -226,7 +235,6 @@ class LiveManager {
             "https://pipedapi.darkness.services",
             "https://pipedapi.orangenet.cc"
         ];
-        // Randomly pick an instance to start with to distribute load
         this.currentInstance = this.pipedInstances[Math.floor(Math.random() * this.pipedInstances.length)];
 
         // Media Type Selectors
@@ -394,7 +402,6 @@ class LiveManager {
             }
         }
 
-        this.btnUnmuteTap.onclick = () => this.handleUserUnmute();
         this.btnToggleMic.onclick = () => this.toggleMic();
 
         document.getElementById('btn-fullscreen').onclick = () => this.toggleFullscreen();
@@ -519,9 +526,6 @@ class LiveManager {
             lastSeen: serverTimestamp()
         });
         this.listenToRoom();
-
-        // Initialize Peer immediately on room entry, but don't request media yet
-        this.initPeer();
     }
 
     listenToRoom() {
@@ -802,40 +806,6 @@ class LiveManager {
         }
     }
 
-    handleUserUnmute() {
-        this.isMutedByPolicy = false;
-        if (this.unmuteOverlay) {
-            this.unmuteOverlay.remove();
-            this.unmuteOverlay = null;
-        }
-
-        if (this.audioContext && this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
-        }
-
-        this.initializeAudioPool();
-
-        if (this.player && this.player.unMute) {
-            this.player.unMute();
-            this.player.setVolume(100);
-        }
-        if (this.genericVideo) {
-            this.genericVideo.muted = false;
-            this.genericVideo.volume = 1.0;
-            if (this.mediaState.state === 1) {
-                this.genericVideo.play().catch(() => {});
-            }
-        }
-
-        // Also try to play any remote audios (crucial for voice chat)
-        document.querySelectorAll('audio').forEach(a => {
-            if (a.id.startsWith('audio-')) a.play().catch(() => {});
-            if (a.id.startsWith('audio-pool-')) a.play().catch(() => {});
-        });
-
-        this.showToast("تم تفعيل الصوت بنجاح");
-    }
-
     // ================== SEARCH & PLAYLIST ==================
 
     async fetchTrendingVideos() {
@@ -857,7 +827,7 @@ class LiveManager {
             console.error("Trending fetch error:", e);
             this.handlePipedError(() => this.fetchTrendingVideos());
         } finally {
-            this.ytBrowserLoading.classList.add('hidden');
+            this.ytBrowserLoading.classList.remove('hidden');
         }
     }
 
@@ -882,7 +852,7 @@ class LiveManager {
             console.error("Search fetch error:", e);
             this.handlePipedError(() => this.searchYouTube(query));
         } finally {
-            this.ytBrowserLoading.classList.add('hidden');
+            this.ytBrowserLoading.classList.remove('hidden');
         }
     }
 
@@ -908,7 +878,7 @@ class LiveManager {
             console.error("Category fetch error:", e);
             this.searchYouTube(label);
         } finally {
-            this.ytBrowserLoading.classList.add('hidden');
+            this.ytBrowserLoading.classList.remove('hidden');
         }
     }
 
@@ -1214,23 +1184,21 @@ class LiveManager {
 
     // ================== PEERJS VOICE CHAT ==================
 
-    async initPeer() {
-        if (this.peer || !this.myId) {
-            console.log("PeerJS: Initialization skipped (already exists or no ID). ID:", this.myId);
-            return;
-        }
-
-        console.log("PeerJS: Initializing with ID:", this.myId + "_" + this.sessionId);
-        this.peer = new Peer(this.myId + "_" + this.sessionId, {
+    initializePeer() {
+        if (this.peer) return;
+        const peerId = this.myId + "_" + this.sessionId;
+        console.log("PeerJS: Initializing with ID:", peerId);
+        
+        this.peer = new Peer(peerId, {
             config: this.iceConfig,
             debug: 1
         });
 
-        // Global exposing as requested
-        window.peer = this.peer;
+        this.setupPeerListeners();
 
         this.peer.on('open', (id) => {
             console.log('%c[PeerJS] تم فتح الاتصال بنجاح. المعرف الخاص بك:', 'color: #00ff00; font-weight: bold;', id);
+            this.isPeerInitialized = true;
             this.registerVoicePeer();
             this.setupPeerListeners();
             this.listenToVoicePeers();
@@ -1439,6 +1407,10 @@ class LiveManager {
                         console.log('%c[WebRTC] محاولة ربط صوتي بـ:', 'color: #0088ff;', pid);
                         this.logVoiceActivity(`محاولة ربط بـ ${d.name || pid.split('_')[0]}...`, 'warn');
                         const stream = this.myStream || this.silentStream;
+                        if (!stream) {
+                            console.warn("[WebRTC] لا يمكن الاتصال بـ", pid, "لأن التدفق الصوتي غير جاهز.");
+                            return;
+                        }
                         try {
                             const call = this.peer.call(pid, stream);
                             if (call) this.handleCallStream(call);
