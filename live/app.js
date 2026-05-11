@@ -54,6 +54,8 @@ class LiveManager {
         this.audioPool = [];
         this.maxPoolSize = 6;
         this.sessionId = Math.random().toString(36).substring(2, 8); // Unique session ID
+        this._isSpeakingLogActive = {}; // To prevent log flooding
+        this._lastSpeakingState = false;
 
         this.iceConfig = {
             'iceServers': [
@@ -1274,119 +1276,48 @@ class LiveManager {
         this.activeCalls[call.peer] = call;
 
         const onStreamReceived = (remoteStream) => {
-            console.log('Receiving stream from:', call.peer);
-
-            // 1. Check if this peer already has an assigned element
-            let audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
-
-            if (!audio) {
-                // 2. Find an available element in the pool (srcObject is null)
-                audio = this.audioPool.find(el => !el.srcObject);
-
-                if (!audio) {
-                    console.warn("No available audio elements in the pool for peer:", call.peer);
-                    return;
-                }
-
-                // 3. Mark it as used by this peer
+            // 1. Assign to Audio Pool for HTML element playback
+            let audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer) || this.audioPool.find(el => !el.srcObject);
+            if (audio) {
                 audio.setAttribute('data-peer-id', call.peer);
-            }
-
-            // 4. Assign the stream and play
-            if (audio.srcObject !== remoteStream) {
                 audio.srcObject = remoteStream;
-                console.log('%c[STREAM-SUCCESS] تم ربط التدفق الصوتي بالعنصر بنجاح!', 'background: #2ecc71; color: #fff; font-weight: bold; padding: 5px;');
-                this.logVoiceActivity(`تم استلام صوت ${call.peer.split('_')[0]} ✅`, 'success');
+                audio.play().catch(e => console.warn("Autoplay block:", e));
             }
             
-            // 5. Setup Gain/Volume Boost
+            // 2. Setup AudioContext Boost (Parallel path for guaranteed volume)
             try {
                 if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 if (this.audioContext.state === 'suspended') this.audioContext.resume();
                 
                 const source = this.audioContext.createMediaStreamSource(remoteStream);
                 const gainNode = this.audioContext.createGain();
-                gainNode.gain.value = 2.5; // Boost volume by 250%
+                gainNode.gain.value = 3.5; // Massive boost 350%
                 source.connect(gainNode).connect(this.audioContext.destination);
-                console.log('%c[AUDIO-BOOST] تم تفعيل مضخم الصوت!', 'color: #00ff00;');
+                console.log('%c[AUDIO-BOOST] تم تفعيل مضخم الصوت المباشر (350%)', 'color: #00ff00; font-weight: bold;');
             } catch(e) { console.warn("GainNode setup failed:", e); }
 
-            // Log track details
-            remoteStream.getAudioTracks().forEach(track => {
-                console.log(`%c[TRACK-INFO] المسار: ${track.label}, مفعل: ${track.enabled}, الحالة: ${track.readyState}`, 'color: #f1c40f;');
-            });
-
-            // Force Play with repeated attempts
-            const tryPlay = () => {
-                audio.play().then(() => {
-                    this.logVoiceActivity(`خروج صوت ${call.peer.split('_')[0]} 🔊`);
-                }).catch(e => {
-                    console.warn("Autoplay blocked for remote stream:", call.peer, e);
-                });
-            };
-
-            tryPlay();
-            setTimeout(tryPlay, 1000);
-
+            this.logVoiceActivity(`تم استلام صوت ${call.peer.split('_')[0]} ✅`, 'success');
             this.startVolumeDetection(remoteStream, call.peer);
         };
 
-        call.on('stream', (remoteStream) => {
-            if (call._streamHandled) return; // Prevent duplicate handling
-            call._streamHandled = true;
-            
-            console.log('%c[WebRTC-EVENT] stream fired! من طرف:', 'background: #ffaa00; color: #000; font-weight: bold;', call.peer);
-            onStreamReceived(remoteStream);
-            this.showToast(`تم ربط الصوت مع ${call.peer.split('_')[0]} ✅`);
-            
-            // Critical for iOS: Try to play every second if it fails
-            const audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
-            if (audio) {
-                console.log('[Audio] محاولة تشغيل الصوت للطرف:', call.peer);
-                const retryPlay = setInterval(() => {
-                    if (audio.paused && audio.srcObject) {
-                        audio.play().then(() => {
-                            console.log('%c[Audio] تم تشغيل صوت الطرف بنجاح:', 'color: #00ff00;', call.peer);
-                            clearInterval(retryPlay);
-                        }).catch((err) => {
-                            console.warn('[Audio] فشل التشغيل التلقائي (بانتظار تفاعل المستخدم):', call.peer);
-                        });
-                    } else if (!audio.srcObject) {
-                        clearInterval(retryPlay);
-                    }
-                }, 1000);
-                setTimeout(() => clearInterval(retryPlay), 10000);
-            }
-        });
-
-        // Backup: Use ontrack via peerConnection for more reliability
+        call.on('stream', (remoteStream) => onStreamReceived(remoteStream));
         if (call.peerConnection) {
             call.peerConnection.ontrack = (event) => {
-                if (event.streams && event.streams[0]) {
-                    onStreamReceived(event.streams[0]);
-                }
+                if (event.streams && event.streams[0]) onStreamReceived(event.streams[0]);
             };
         }
 
         call.on('error', (err) => {
-            console.error("Call error with:", call.peer, err);
-            this.showToast(`⚠️ خطأ في الاتصال بـ ${call.peer.split('_')[0]}`);
+            console.error("Call error:", call.peer, err);
+            this.logVoiceActivity(`خطأ في اتصال ${call.peer.split('_')[0]}`, 'error');
         });
 
         call.on('close', () => {
-            console.log('Call closed with:', call.peer);
-            this.showToast(`انقطع اتصال ${call.peer.split('_')[0]}`);
-            const audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
-            if (audio) {
-                audio.srcObject = null;
-                audio.removeAttribute('data-peer-id');
-                console.log("Released audio element for peer:", call.peer);
-            }
+            console.log('Call closed:', call.peer);
+            this.activeCalls[call.peer] = null;
             delete this.activeCalls[call.peer];
-            if (this.analysers[call.peer]) {
-                try { this.analysers[call.peer].source.disconnect(); } catch(e) {}
-                delete this.analysers[call.peer];
-            }
+            const audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
+            if (audio) { audio.srcObject = null; audio.removeAttribute('data-peer-id'); }
         });
     }
 
@@ -1527,11 +1458,20 @@ class LiveManager {
                     let sum = 0;
                     for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
                     const average = sum / bufferLength;
-                    const isSpeaking = average > 15;
+                    const isSpeaking = average > 12;
+
                     if (uid === this.myId) {
-                        this.updateSpeakingInFirebase(isSpeaking);
+                        if (this._lastSpeakingState !== isSpeaking) {
+                            if (isSpeaking) this.logVoiceActivity("أنت تتحدث الآن... 🎤", "success");
+                            this.updateSpeakingInFirebase(isSpeaking);
+                        }
                     } else {
-                        this.updateSpeakingUI(uid, isSpeaking);
+                        // Remote peer activity logging
+                        if (isSpeaking && !this._isSpeakingLogActive[uid]) {
+                            this._isSpeakingLogActive[uid] = true;
+                            this.logVoiceActivity(`رصد صوت حي من: ${uid.split('_')[0]} 🔊`, "success");
+                            setTimeout(() => { this._isSpeakingLogActive[uid] = false; }, 3000);
+                        }
                     }
                 }
                 requestAnimationFrame(checkVolume);
