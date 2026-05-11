@@ -1528,8 +1528,13 @@ class LiveManager {
             this.chatLogEl.appendChild(div);
         });
 
-        // Auto-scroll logic as requested by user
-        this.chatLogEl.scrollTop = this.chatLogEl.scrollHeight;
+        // Auto-scroll Fix for Android & iOS
+        setTimeout(() => {
+            this.chatLogEl.scrollTo({
+                top: this.chatLogEl.scrollHeight,
+                behavior: 'smooth'
+            });
+        }, 100);
     }
 
     escapeHtml(t) {
