@@ -1377,25 +1377,15 @@ class LiveManager {
                 this.myStream = stream;
                 this.isMicOn = true;
                 console.log('%c[Mic] تم الحصول على صلاحية الميكروفون بنجاح', 'color: #00ff00; font-weight: bold;');
+                this.logVoiceActivity("الميكروفون يعمل الآن ✅", "success");
 
-                // Replace track in all active calls
-                const newTrack = stream.getAudioTracks()[0];
-                console.log('[WebRTC] جاري تحديث مسار الصوت في المكالمات النشطة...', Object.keys(this.activeCalls).length);
-                Object.values(this.activeCalls).forEach(call => {
-                    if (call.peerConnection) {
-                        const senders = call.peerConnection.getSenders();
-                        const sender = senders.find(s => s.track && s.track.kind === 'audio');
-                        if (sender) {
-                            sender.replaceTrack(newTrack).catch(e => console.error("ReplaceTrack failed:", e));
-                        }
-                    }
-                });
+                // Hard Reconnect Strategy: Faster and more reliable on Mobile than replaceTrack
+                this.reconnectAllPeers();
 
                 this.micOnIcon.classList.remove('hidden');
                 this.micOffIcon.classList.add('hidden');
                 this.btnToggleMic.classList.remove('muted');
-                this.showToast("الميكروفون مفعل ✅");
-
+                
                 this.startVolumeDetection(this.myStream, this.myId);
             } else {
                 this.isMicOn = !this.isMicOn;
@@ -1417,8 +1407,21 @@ class LiveManager {
             }
         } catch (err) {
             console.error("Mic Error:", err);
+            this.logVoiceActivity(`خطأ في المايك: ${err.message}`, "error");
             this.showToast(`⚠️ ${err.message || "فشل الوصول للميكروفون"}`);
         }
+    }
+
+    reconnectAllPeers() {
+        console.log("[WebRTC] جاري إعادة الربط القسري لجميع الأطراف لضمان تفعيل الصوت...");
+        Object.keys(this.activeCalls).forEach(pid => {
+            if (this.activeCalls[pid]) {
+                this.activeCalls[pid].close();
+                delete this.activeCalls[pid];
+            }
+        });
+        // listenToVoicePeers will handle re-calling in its next interval
+        this.listenToVoicePeers();
     }
 
     listenToVoicePeers() {
