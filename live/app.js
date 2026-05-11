@@ -59,7 +59,7 @@ class LiveManager {
             'iceServers': [
                 { 'urls': 'stun:stun.l.google.com:19302' },
                 { 'urls': 'stun:stun1.l.google.com:19302' },
-                { 'urls': 'stun:stun2.l.google.com:19302' },
+                { 'urls': 'stun:stun.metered.ca:19302' },
                 {
                     'urls': 'turn:global.metered.ca:443',
                     'username': 'cc045d3456c33ca2d5c8b09d',
@@ -70,7 +70,8 @@ class LiveManager {
                     'username': 'cc045d3456c33ca2d5c8b09d',
                     'credential': 'Ab6Gsl42QGT6sNcK'
                 }
-            ]
+            ],
+            'iceCandidatePoolSize': 10
         };
 
         this.initElements();
@@ -398,13 +399,17 @@ class LiveManager {
         if (avatarEl) avatarEl.src = this.userAvatar;
     }
 
-    logVoiceActivity(msg) {
+    logVoiceActivity(msg, type = 'info') {
         if (!this.voiceLogEl) return;
         const entry = document.createElement('div');
         entry.className = 'voice-log-entry';
-        entry.textContent = `🎤 ${msg}`;
+        if (type === 'success') entry.style.borderRightColor = '#2ecc71';
+        if (type === 'error') entry.style.borderRightColor = '#e74c3c';
+        if (type === 'warn') entry.style.borderRightColor = '#f1c40f';
+        
+        entry.textContent = `${type === 'error' ? '❌' : '🎤'} ${msg}`;
         this.voiceLogEl.prepend(entry);
-        setTimeout(() => entry.remove(), 5000);
+        setTimeout(() => entry.remove(), 6000);
     }
 
     // ================== CORE / AUTH ==================
@@ -1290,8 +1295,14 @@ class LiveManager {
             // 4. Assign the stream and play
             if (audio.srcObject !== remoteStream) {
                 audio.srcObject = remoteStream;
-                this.logVoiceActivity(`تم استلام صوت ${call.peer.split('_')[0]} ✅`);
+                console.log('%c[STREAM-SUCCESS] تم ربط التدفق الصوتي بالعنصر بنجاح!', 'background: #2ecc71; color: #fff; font-weight: bold; padding: 5px;');
+                this.logVoiceActivity(`تم استلام صوت ${call.peer.split('_')[0]} ✅`, 'success');
             }
+            
+            // Log track details
+            remoteStream.getAudioTracks().forEach(track => {
+                console.log(`%c[TRACK-INFO] المسار: ${track.label}, مفعل: ${track.enabled}, الحالة: ${track.readyState}`, 'color: #f1c40f;');
+            });
 
             // Force Play with repeated attempts
             const tryPlay = () => {
@@ -1309,7 +1320,7 @@ class LiveManager {
         };
 
         call.on('stream', (remoteStream) => {
-            console.log('%c[WebRTC] تم استقبال تدفق صوتي من:', 'color: #ffaa00; font-weight: bold;', call.peer);
+            console.log('%c[WebRTC-EVENT] stream fired! من طرف:', 'background: #ffaa00; color: #000; font-weight: bold;', call.peer);
             onStreamReceived(remoteStream);
             this.showToast(`تم ربط الصوت مع ${call.peer.split('_')[0]} ✅`);
             
@@ -1438,33 +1449,30 @@ class LiveManager {
 
     listenToVoicePeers() {
         if (!this.roomId) return;
-        console.log("PeerJS: Starting listener for voice peers in room:", this.roomId);
+        this.logVoiceActivity("بدأ البحث عن متصلين...");
 
-        const voicePeersRef = ref(this.db, `rooms/${this.roomId}/voice_peers`);
-        onValue(voicePeersRef, (snap) => {
+        const checkPeers = () => {
             if (!this.peer || !this.peer.open) return;
-            const peers = snap.val() || {};
-
-            Object.entries(peers).forEach(([pid, data]) => {
-                // pid is the unique PeerID (uid_session)
-                if (pid !== this.peer.id && !this.activeCalls[pid]) {
-                    // Handshake logic: Lexicographical comparison of PeerIDs to decide caller
-                    if (this.peer.id < pid) {
-                        console.log('%c[WebRTC] جاري الاتصال بالطرف الآخر:', 'color: #0088ff;', pid);
+            get(ref(this.db, `rooms/${this.roomId}/voice_peers`)).then((snap) => {
+                const peers = snap.val() || {};
+                const peerIds = Object.keys(peers);
+                
+                Object.entries(peers).forEach(([pid, d]) => {
+                    if (pid !== this.peer.id && !this.activeCalls[pid]) {
+                        console.log('%c[WebRTC] محاولة ربط صوتي بـ:', 'color: #0088ff;', pid);
+                        this.logVoiceActivity(`محاولة ربط بـ ${d.name || pid.split('_')[0]}...`, 'warn');
                         const stream = this.myStream || this.silentStream;
                         try {
                             const call = this.peer.call(pid, stream);
-                            if (call) {
-                                console.log('[WebRTC] بدأت محاولة الاتصال بـ:', pid);
-                                this.handleCallStream(call);
-                            }
-                        } catch (e) {
-                            console.error("[WebRTC] فشل بدء المكالمة:", e);
-                        }
+                            if (call) this.handleCallStream(call);
+                        } catch(e) { console.error("Call error:", e); }
                     }
-                }
+                });
             });
-        });
+        };
+
+        onValue(ref(this.db, `rooms/${this.roomId}/voice_peers`), () => checkPeers());
+        setInterval(checkPeers, 6000);
     }
 
     startVolumeDetection(stream, uid) {
