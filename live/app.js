@@ -1202,7 +1202,7 @@ class LiveManager {
         window.peer = this.peer;
 
         this.peer.on('open', (id) => {
-            console.log('PeerJS: Connection opened with ID:', id);
+            console.log('%c[PeerJS] تم فتح الاتصال بنجاح. المعرف الخاص بك:', 'color: #00ff00; font-weight: bold;', id);
             this.registerVoicePeer();
             this.setupPeerListeners();
             this.listenToVoicePeers();
@@ -1247,7 +1247,7 @@ class LiveManager {
 
     setupPeerListeners() {
         this.peer.on('call', (call) => {
-            console.log('Incoming call from:', call.peer);
+            console.log('%c[WebRTC] مكالمة واردة من:', 'color: #0088ff; font-weight: bold;', call.peer);
             call.answer(this.myStream || this.silentStream);
             this.handleCallStream(call);
         });
@@ -1291,8 +1291,28 @@ class LiveManager {
         };
 
         call.on('stream', (remoteStream) => {
+            console.log('%c[WebRTC] تم استقبال تدفق صوتي من:', 'color: #ffaa00; font-weight: bold;', call.peer);
             onStreamReceived(remoteStream);
             this.showToast(`تم ربط الصوت مع ${call.peer.split('_')[0]} ✅`);
+            
+            // Critical for iOS: Try to play every second if it fails
+            const audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
+            if (audio) {
+                console.log('[Audio] محاولة تشغيل الصوت للطرف:', call.peer);
+                const retryPlay = setInterval(() => {
+                    if (audio.paused && audio.srcObject) {
+                        audio.play().then(() => {
+                            console.log('%c[Audio] تم تشغيل صوت الطرف بنجاح:', 'color: #00ff00;', call.peer);
+                            clearInterval(retryPlay);
+                        }).catch((err) => {
+                            console.warn('[Audio] فشل التشغيل التلقائي (بانتظار تفاعل المستخدم):', call.peer);
+                        });
+                    } else if (!audio.srcObject) {
+                        clearInterval(retryPlay);
+                    }
+                }, 1000);
+                setTimeout(() => clearInterval(retryPlay), 10000);
+            }
         });
 
         // Backup: Use ontrack via peerConnection for more reliability
@@ -1353,9 +1373,11 @@ class LiveManager {
                 
                 this.myStream = stream;
                 this.isMicOn = true;
+                console.log('%c[Mic] تم الحصول على صلاحية الميكروفون بنجاح', 'color: #00ff00; font-weight: bold;');
 
                 // Replace track in all active calls
                 const newTrack = stream.getAudioTracks()[0];
+                console.log('[WebRTC] جاري تحديث مسار الصوت في المكالمات النشطة...', Object.keys(this.activeCalls).length);
                 Object.values(this.activeCalls).forEach(call => {
                     if (call.peerConnection) {
                         const senders = call.peerConnection.getSenders();
@@ -1410,15 +1432,16 @@ class LiveManager {
                 if (pid !== this.peer.id && !this.activeCalls[pid]) {
                     // Handshake logic: Lexicographical comparison of PeerIDs to decide caller
                     if (this.peer.id < pid) {
-                        console.log('PeerJS: Initiating call to:', pid);
+                        console.log('%c[WebRTC] جاري الاتصال بالطرف الآخر:', 'color: #0088ff;', pid);
                         const stream = this.myStream || this.silentStream;
                         try {
                             const call = this.peer.call(pid, stream);
                             if (call) {
+                                console.log('[WebRTC] بدأت محاولة الاتصال بـ:', pid);
                                 this.handleCallStream(call);
                             }
                         } catch (e) {
-                            console.error("PeerJS: Call initiation failed:", e);
+                            console.error("[WebRTC] فشل بدء المكالمة:", e);
                         }
                     }
                 }
@@ -1479,10 +1502,10 @@ class LiveManager {
     }
 
     updateSpeakingInFirebase(isSpeaking) {
-        if (!this.roomId || !this.myId || this._lastSpeakingState === isSpeaking) return;
+        if (!this.roomId || !this.peer || !this.peer.id || this._lastSpeakingState === isSpeaking) return;
         this._lastSpeakingState = isSpeaking;
 
-        update(ref(this.db, `rooms/${this.roomId}/voice_peers/${this.myId}`), {
+        update(ref(this.db, `rooms/${this.roomId}/voice_peers/${this.peer.id}`), {
             isSpeaking: isSpeaking
         });
     }
@@ -1507,36 +1530,51 @@ class LiveManager {
         }
         if (!this.seatsContainer) return;
 
-        this.seatsContainer.innerHTML = '';
         const seatsData = seats || {};
-
+        
+        // Optimization: Instead of clearing everything, we update existing seats or rebuild only if needed
+        // To keep it simple and fix the flicker, we'll check if the content actually changed
         for (let i = 1; i <= 6; i++) {
             const seat = seatsData[i] || { status: 'empty' };
-            const seatBox = document.createElement('div');
-            seatBox.className = 'seat-box';
-
-            let content = '';
-            if (seat.status === 'locked') {
-                content = `<span class="lock-seat">🔒</span><span class="seat-label-num">${i}</span>`;
-            } else if (seat.status === 'occupied') {
-                const isMe = seat.userId === this.myId;
-                content = `
-                    <div class="avatar-circle-frame ${isMe ? 'green-border' : ''}" data-uid="${seat.userId}">
-                        <img src="${seat.avatar}" alt="${seat.name}">
-                    </div>
-                    <span class="seat-label-num" style="color:#fff;">${seat.name}</span>
-                `;
-            } else {
-                content = `
-                    <div class="avatar-circle-frame seat-empty" onclick="window.liveManager.joinSeat(${i})">
-                        <span style="font-size:20px;color:rgba(255,255,255,0.3);">+</span>
-                    </div>
-                    <button class="btn-join-small" onclick="window.liveManager.joinSeat(${i})">انضم</button>
-                    <span class="seat-label-num">${i}</span>
-                `;
+            let seatBox = this.seatsContainer.querySelector(`.seat-box[data-index="${i}"]`);
+            
+            if (!seatBox) {
+                seatBox = document.createElement('div');
+                seatBox.className = 'seat-box';
+                seatBox.dataset.index = i;
+                this.seatsContainer.appendChild(seatBox);
             }
-            seatBox.innerHTML = content;
-            this.seatsContainer.appendChild(seatBox);
+
+            const currentStatus = seatBox.dataset.status;
+            const currentUserId = seatBox.dataset.userId;
+
+            // Only update if status or user changed
+            if (currentStatus !== seat.status || currentUserId !== (seat.userId || '')) {
+                seatBox.dataset.status = seat.status;
+                seatBox.dataset.userId = seat.userId || '';
+
+                let content = '';
+                if (seat.status === 'locked') {
+                    content = `<span class="lock-seat">🔒</span><span class="seat-label-num">${i}</span>`;
+                } else if (seat.status === 'occupied') {
+                    const isMe = seat.userId === this.myId;
+                    content = `
+                        <div class="avatar-circle-frame ${isMe ? 'green-border' : ''}" data-uid="${seat.userId}">
+                            <img src="${seat.avatar}" alt="${seat.name}" loading="lazy">
+                        </div>
+                        <span class="seat-label-num" style="color:#fff;">${seat.name}</span>
+                    `;
+                } else {
+                    content = `
+                        <div class="avatar-circle-frame seat-empty" onclick="window.liveManager.joinSeat(${i})">
+                            <span style="font-size:20px;color:rgba(255,255,255,0.3);">+</span>
+                        </div>
+                        <button class="btn-join-small" onclick="window.liveManager.joinSeat(${i})">انضم</button>
+                        <span class="seat-label-num">${i}</span>
+                    `;
+                }
+                seatBox.innerHTML = content;
+            }
         }
     }
 

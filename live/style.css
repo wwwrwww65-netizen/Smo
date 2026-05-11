@@ -122,17 +122,19 @@ body {
 }
 
 .top-right {
-    flex: 1;
+    flex: 1.2; /* Give slightly more space for name/id */
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    min-width: 0; /* Allow shrinking */
 }
 
 .top-center {
-    flex: 1;
+    flex: 1.5; /* More space for the brand name */
     display: flex;
     justify-content: center;
     align-items: center;
+    min-width: 0;
 }
 
 .top-left {
@@ -140,6 +142,7 @@ body {
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    min-width: 0;
 }
 
 .back-rank-stack {
@@ -150,7 +153,7 @@ body {
 }
 
 .brand-text {
-    font-size: 24px;
+    font-size: clamp(18px, 5vw, 24px); /* Responsive font size */
     font-weight: 800;
     background: linear-gradient(to right, #fff 20%, rgba(255,255,255,0.7) 50%, #fff 80%);
     background-size: 200% auto;
@@ -158,10 +161,12 @@ body {
     -webkit-text-fill-color: transparent;
     animation: textShine 3s linear infinite;
     filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     display: flex;
     align-items: center;
     position: relative;
+    white-space: nowrap; /* Prevent wrapping to two lines */
+    text-align: center;
 }
 
 @keyframes textShine {
@@ -214,8 +219,12 @@ body {
 }
 
 .user-display-name {
-    font-size: 15px;
+    font-size: clamp(12px, 3.5vw, 15px);
     font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px; /* Prevent long names from pushing everything */
 }
 
 .user-display-id {
@@ -1124,9 +1133,49 @@ body {
 }
 
 /* Responsive adjustments */
-@media (max-width: 360px) {
-    .video-container { width: 98%; }
-    .avatar-circle-frame { width: 45px; height: 45px; }
-    .action-circle { width: 40px; height: 40px; }
-    .brand-text { font-size: 16px; }
+@media (max-width: 400px) {
+    .top-bar { padding: 15px 10px; }
+    .video-container { width: 100%; border-radius: 10px; }
+    .avatar-circle-frame { width: 48px; height: 48px; }
+    .action-circle { width: 38px; height: 38px; }
+}
+
+@media (max-width: 350px) {
+    .top-bar { padding: 10px 5px; }
+    .brand-text { font-size: 16px; letter-spacing: 0; }
+    .user-display-name { max-width: 60px; }
+    .avatar-circle-frame { width: 42px; height: 42px; }
+}
+
+/* Speaking Indicator Animation */
+.avatar-circle-frame.speaking {
+    position: relative;
+    border-color: #2ecc71 !important;
+    box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
+    transform: scale(1.05);
+    transition: all 0.3s ease;
+}
+
+.avatar-circle-frame.speaking::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border: 2px solid #2ecc71;
+    border-radius: 50%;
+    animation: voice-pulse 1.5s infinite;
+    pointer-events: none;
+}
+
+@keyframes voice-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.6);
+        opacity: 0;
+    }
 }
