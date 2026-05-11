@@ -47,8 +47,8 @@ class LiveManager {
         this.myStream = null;
         this.isMicOn = false;
         this.activeCalls = {}; // peerId -> call object
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        this.silentStream = this.createSilentAudioStream();
+        this.audioContext = null; // Will initialize on first click
+        this.silentStream = null; // Will initialize after context
         this.analysers = {}; // uid -> analyser node
         this.isPeerInitialized = false;
         this.audioPool = [];
@@ -119,13 +119,22 @@ class LiveManager {
     }
 
     initElements() {
-        // Resume audio context and initialize audio pool on first interaction
-        document.addEventListener('click', () => {
-            if (this.audioContext && this.audioContext.state === 'suspended') {
-                this.audioContext.resume();
+        // Robust Audio Activation
+        const resumeAudio = async () => {
+            if (!this.audioContext) {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.silentStream = this.createSilentAudioStream();
+                console.log("%c[AUDIO-ENGINE] تم إنشاء محرك الصوت بنجاح.", "color: #00ff00;");
+            }
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+                console.log("%c[AUDIO-ENGINE] تم تنشيط محرك الصوت (Resumed).", "color: #00ff00;");
             }
             this.initializeAudioPool();
-        }, { once: true });
+        };
+
+        document.addEventListener('click', resumeAudio, { once: false });
+        document.addEventListener('touchstart', resumeAudio, { once: false });
 
         // Unmute logic - connect to button/overlay
         const unmuteOverlay = document.getElementById('unmute-overlay');
@@ -1297,29 +1306,22 @@ class LiveManager {
                 }
             }
             
-            // 2. Path B: Web Audio API (Pro Boost)
+            // 2. Setup AudioContext Boost (Parallel path for guaranteed volume)
             try {
-                if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                if (this.audioContext.state === 'suspended') this.audioContext.resume();
-                
-                const source = this.audioContext.createMediaStreamSource(remoteStream);
-                const gainNode = this.audioContext.createGain();
-                const compressor = this.audioContext.createDynamicsCompressor();
-                
-                gainNode.gain.value = 3.0; // 300% Boost
-                
-                // Compressor settings for clarity
-                compressor.threshold.setValueAtTime(-50, this.audioContext.currentTime);
-                compressor.knee.setValueAtTime(40, this.audioContext.currentTime);
-                compressor.ratio.setValueAtTime(12, this.audioContext.currentTime);
-                compressor.attack.setValueAtTime(0, this.audioContext.currentTime);
-                compressor.release.setValueAtTime(0.25, this.audioContext.currentTime);
-
-                source.connect(gainNode);
-                gainNode.connect(compressor);
-                compressor.connect(this.audioContext.destination);
-                
-                console.log('%c[WEB-AUDIO] تم تفعيل المسار المطور (Boost + Compressor)', 'color: #00ff00; font-weight: bold;');
+                if (!this.audioContext) {
+                    console.warn("[AUDIO-ENGINE] محرك الصوت لم يتم إنشاؤه بعد (انتظار ضغطة المستخدم).");
+                } else {
+                    const source = this.audioContext.createMediaStreamSource(remoteStream);
+                    const gainNode = this.audioContext.createGain();
+                    const compressor = this.audioContext.createDynamicsCompressor();
+                    
+                    gainNode.gain.value = 4.0; // 400% Boost
+                    
+                    source.connect(gainNode);
+                    gainNode.connect(compressor);
+                    compressor.connect(this.audioContext.destination);
+                    console.log('%c[WEB-AUDIO] تم الربط بنجاح بمحرك الصوت بنسبة 400%', 'color: #00ff00;');
+                }
             } catch(e) { console.warn("WebAudio path failed:", e); }
 
             this.logVoiceActivity(`استلام صوت من ${call.peer.split('_')[0]} 🔊`, 'success');
