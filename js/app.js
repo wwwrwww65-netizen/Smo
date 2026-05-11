@@ -31,7 +31,16 @@ const SOUNDS = {
     loss: 'https://www.soundjay.com/misc/sounds/fail-trombone-01.mp3'
 };
 
-const AVATARS = ["🦊", "🦁", "🐯", "🐼", "🐨", "🐸", "🐵", "🦄", "🐙", "🦋", "🦖", "🐧"];
+const AVATARS = [
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Luna",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Oliver",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Maya",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Leo",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Milo",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Zoe"
+];
 
 class GameManager {
     constructor() {
@@ -405,7 +414,13 @@ class GameManager {
 
         const opp = progressData[this.topOppId];
         this.oppProgress.classList.remove('hidden');
-        this.oppAvatar.textContent = opp.avatar || '👤';
+
+        if (opp.avatar && opp.avatar.startsWith('http')) {
+            this.oppAvatar.innerHTML = `<img src="${opp.avatar}" style="width:40px; height:40px; border-radius:50%;">`;
+        } else {
+            this.oppAvatar.textContent = opp.avatar || '👤';
+        }
+
         this.oppName.textContent = opp.name;
         this.oppStatus.textContent = `يكتب في: ${opp.currentField}`;
         this.oppCounter.textContent = `${opp.count}/5`;
@@ -491,7 +506,7 @@ class GameManager {
         this.setLoading(btnId, true);
         try {
             this.isHost = true;
-            this.roomId = Math.floor(100000000 + Math.random() * 900000000).toString();
+            this.roomId = Math.floor(100000 + Math.random() * 900000).toString();
 
             if (type === 'viewing') {
                 const roomRef = ref(this.db, `rooms/${this.roomId}`);
@@ -532,7 +547,7 @@ class GameManager {
         }
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
-        if (!this.playerName || this.roomId.length !== 9) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
+        if (!this.playerName || this.roomId.length !== 6) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
 
         this.setLoading('btn-join-room', true);
         try {
@@ -584,7 +599,11 @@ class GameManager {
             const label = seat.querySelector('.player-name-label');
 
             wrapper.classList.remove('empty');
-            img.textContent = p.avatar || '👤';
+            if (p.avatar && p.avatar.startsWith('http')) {
+                img.innerHTML = `<img src="${p.avatar}" style="width:100%; height:100%; border-radius:50%;">`;
+            } else {
+                img.textContent = p.avatar || '👤';
+            }
             if (p.ready) readyIcon.classList.remove('hidden');
             else readyIcon.classList.add('hidden');
             label.textContent = p.name + (p.id === this.myId ? ' (أنت)' : '');
@@ -774,22 +793,31 @@ class GameManager {
         });
 
         // 2. Cross-check for duplicate answers and validity
-        fields.forEach(f => {
+        for (const f of fields) {
             const answerGroups = {};
-            this.results.forEach(res => {
-                const ans = (res.answers[f] || '').trim();
-                const valid = ans.length > 0 && ans.toLowerCase().startsWith(this.currentLetter.toLowerCase());
 
-                if (valid) {
-                    const normalized = ans.toLowerCase();
-                    if (!answerGroups[normalized]) answerGroups[normalized] = [];
-                    answerGroups[normalized].push(res.playerId);
-                    // Default to 10 for valid answers
-                    resultUpdates[res.playerId].scores[f] = 10;
+            // Collect answers and initial validity check (starts with letter)
+            for (const res of this.results) {
+                const ans = (res.answers[f] || '').trim();
+                const isAlif = (char) => ['أ', 'ا', 'إ', 'آ'].includes(char);
+                const startsWithCorrectLetter = ans.length > 0 &&
+                    (ans.startsWith(this.currentLetter) ||
+                     (isAlif(this.currentLetter) && isAlif(ans[0])));
+
+                if (startsWithCorrectLetter) {
+                    // Check if word is actually a word (minimum length 2)
+                    if (ans.length >= 2) {
+                        const normalized = ans.toLowerCase();
+                        if (!answerGroups[normalized]) answerGroups[normalized] = [];
+                        answerGroups[normalized].push(res.playerId);
+                        resultUpdates[res.playerId].scores[f] = 10;
+                    } else {
+                        resultUpdates[res.playerId].scores[f] = 0;
+                    }
                 } else {
                     resultUpdates[res.playerId].scores[f] = 0;
                 }
-            });
+            }
 
             // If more than one person has the same answer, they get 5 points
             Object.values(answerGroups).forEach(pIds => {
@@ -799,7 +827,7 @@ class GameManager {
                     });
                 }
             });
-        });
+        }
 
         // 3. Finalize roundTotal and update cumulative totalScore
         for (const res of this.results) {
@@ -914,9 +942,13 @@ class GameManager {
                 this._winCelebrated = true;
             }
 
+            const avatarHtml = (res.avatar && res.avatar.startsWith('http'))
+                ? `<img src="${res.avatar}" style="width:100%; height:100%; border-radius:50%;">`
+                : (res.avatar || '👤');
+
             section.innerHTML = `
                 <div class="player-header">
-                    <div class="avatar">${res.avatar || '👤'}</div>
+                    <div class="avatar" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--glass-border); display:flex; align-items:center; justify-content:center;">${avatarHtml}</div>
                     <div class="name">${res.playerName} ${res.playerId === this.myId ? '(أنت)' : ''}</div>
                 </div>
                 <div class="result-grid">
@@ -1122,14 +1154,19 @@ class GameManager {
             const div = document.createElement('div');
             div.className = `message ${m.senderId === this.myId ? 'mine' : ''}`;
             div.innerHTML = `
-                <span class="sender">${m.senderName}</span>
+                <span class="sender" style="display:block; font-size:10px; font-weight:bold; margin-bottom:2px; opacity:0.8;">${m.senderName}</span>
                 <span class="text">${this.escapeHtml(m.text)}</span>
             `;
             this.chatMessagesEl.appendChild(div);
         });
 
-        // Auto-scroll
-        this.chatMessagesEl.scrollTop = this.chatMessagesEl.scrollHeight;
+        // Auto-scroll Fix for Android & iOS
+        setTimeout(() => {
+            this.chatMessagesEl.scrollTo({
+                top: this.chatMessagesEl.scrollHeight,
+                behavior: 'smooth'
+            });
+        }, 100);
     }
 
     escapeHtml(text) {
@@ -1440,6 +1477,12 @@ class GameManager {
         if (playerId === this.topOppId && this.oppAvatar) {
             this.oppAvatar.classList.toggle('speaking', isSpeaking);
         }
+
+        // 4. Score results
+        const scoreAvatars = document.querySelectorAll(`.player-result-section[data-player-id="${playerId}"] .avatar img`);
+        scoreAvatars.forEach(img => {
+            img.parentElement.classList.toggle('speaking', isSpeaking);
+        });
     }
 }
 
