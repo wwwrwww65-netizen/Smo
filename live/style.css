@@ -158,6 +158,7 @@ body {
     background: linear-gradient(to right, #fff 20%, rgba(255,255,255,0.7) 50%, #fff 80%);
     background-size: 200% auto;
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     animation: textShine 3s linear infinite;
     filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
@@ -198,14 +199,6 @@ body {
     border-radius: 2px;
 }
 
-
-.top-right {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
-
 .user-main-info {
     display: flex;
     align-items: center;
@@ -228,8 +221,10 @@ body {
 }
 
 .user-display-id {
-    font-size: 10px;
-    color: var(--text-gray);
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: bold;
+    display: block;
 }
 
 .profile-square {
@@ -241,13 +236,6 @@ body {
 
 .arrow-r-white {
     margin-right: 4px;
-}
-
-.user-display-id {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: bold;
-    display: block;
 }
 
 /* 3) المنطقة الرئيسية */
@@ -349,7 +337,6 @@ body {
     height: 100%;
 }
 
-
 /* Unmute Overlay */
 .unmute-overlay {
     position: absolute;
@@ -404,15 +391,6 @@ body {
 
 .yt-brand {
     opacity: 0.9;
-    flex-shrink: 0;
-}
-
-.mini-preview {
-    width: 45px;
-    height: 30px;
-    border-radius: 6px;
-    object-fit: cover;
-    border: 1.5px solid rgba(255,255,255,0.15);
     flex-shrink: 0;
 }
 
@@ -475,18 +453,6 @@ body {
     object-fit: cover;
 }
 
-/* Speaking Pulsing Glow */
-.avatar-circle-frame.speaking {
-    border-color: var(--accent-turquoise);
-    box-shadow: 0 0 15px var(--accent-turquoise);
-    animation: speaking-pulse 1.5s infinite;
-}
-@keyframes speaking-pulse {
-    0% { transform: scale(1); box-shadow: 0 0 5px var(--accent-turquoise); }
-    50% { transform: scale(1.05); box-shadow: 0 0 20px var(--accent-turquoise); }
-    100% { transform: scale(1); box-shadow: 0 0 5px var(--accent-turquoise); }
-}
-
 .avatar-circle-frame.green-border {
     border-color: #00e676;
 }
@@ -501,14 +467,6 @@ body {
     border-radius: 12px;
     margin-top: -10px;
     z-index: 2;
-}
-
-.seat-badges {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    display: flex;
-    gap: 2px;
 }
 
 /* 5) شريط التحكم */
@@ -927,6 +885,7 @@ body {
     color: #fff;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -1073,6 +1032,7 @@ body {
     margin-bottom: 4px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
