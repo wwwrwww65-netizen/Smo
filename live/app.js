@@ -1276,27 +1276,53 @@ class LiveManager {
         this.activeCalls[call.peer] = call;
 
         const onStreamReceived = (remoteStream) => {
-            // 1. Assign to Audio Pool for HTML element playback
+            if (call._streamHandled) return;
+            call._streamHandled = true;
+            
+            console.log('%c[AUDIO-ENGINE] بدأ ربط التدفق الصوتي المزدوج...', 'background: #2ecc71; color: #fff; padding: 5px;');
+            
+            // 1. Path A: HTML5 Audio Element (Standard)
             let audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer) || this.audioPool.find(el => !el.srcObject);
             if (audio) {
                 audio.setAttribute('data-peer-id', call.peer);
                 audio.srcObject = remoteStream;
-                audio.play().catch(e => console.warn("Autoplay block:", e));
+                audio.volume = 1.0;
+                audio.muted = false;
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => {
+                        console.warn("[HTML5-AUDIO] Autoplay blocked, waiting for user click.", e);
+                        this.showToast("⚠️ اضغط على الشاشة لتفعيل الصوت");
+                    });
+                }
             }
             
-            // 2. Setup AudioContext Boost (Parallel path for guaranteed volume)
+            // 2. Path B: Web Audio API (Pro Boost)
             try {
                 if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 if (this.audioContext.state === 'suspended') this.audioContext.resume();
                 
                 const source = this.audioContext.createMediaStreamSource(remoteStream);
                 const gainNode = this.audioContext.createGain();
-                gainNode.gain.value = 3.5; // Massive boost 350%
-                source.connect(gainNode).connect(this.audioContext.destination);
-                console.log('%c[AUDIO-BOOST] تم تفعيل مضخم الصوت المباشر (350%)', 'color: #00ff00; font-weight: bold;');
-            } catch(e) { console.warn("GainNode setup failed:", e); }
+                const compressor = this.audioContext.createDynamicsCompressor();
+                
+                gainNode.gain.value = 3.0; // 300% Boost
+                
+                // Compressor settings for clarity
+                compressor.threshold.setValueAtTime(-50, this.audioContext.currentTime);
+                compressor.knee.setValueAtTime(40, this.audioContext.currentTime);
+                compressor.ratio.setValueAtTime(12, this.audioContext.currentTime);
+                compressor.attack.setValueAtTime(0, this.audioContext.currentTime);
+                compressor.release.setValueAtTime(0.25, this.audioContext.currentTime);
 
-            this.logVoiceActivity(`تم استلام صوت ${call.peer.split('_')[0]} ✅`, 'success');
+                source.connect(gainNode);
+                gainNode.connect(compressor);
+                compressor.connect(this.audioContext.destination);
+                
+                console.log('%c[WEB-AUDIO] تم تفعيل المسار المطور (Boost + Compressor)', 'color: #00ff00; font-weight: bold;');
+            } catch(e) { console.warn("WebAudio path failed:", e); }
+
+            this.logVoiceActivity(`استلام صوت من ${call.peer.split('_')[0]} 🔊`, 'success');
             this.startVolumeDetection(remoteStream, call.peer);
         };
 
