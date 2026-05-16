@@ -23,7 +23,7 @@
         <div class="header-left">
             <button id="btn-settings" class="btn-hexagon">⚙️</button>
             <button id="btn-exit" class="btn-hexagon" onclick="window.location.href='./index.html'">🚪</button>
-            <div id="game-timer-capsule" class="timer-capsule capsule hidden">
+            <div id="game-timer-capsule" class="timer-capsule capsule">
                 ⏱️ <span id="game-timer">02:31</span>
             </div>
         </div>
@@ -63,7 +63,7 @@
 
     <main class="ono-container">
 
-        <section id="section-lobby" class="active">
+        <section id="section-lobby" class="hidden">
             <div class="hero-section">
                 <div class="sparkles-container" id="sparkles"></div>
                 <div class="cards-fan">
@@ -103,7 +103,8 @@
             </div>
         </section>
 
-        <section id="section-game" class="hidden">
+        <section id="section-game" class="active">
+            
             <div class="arena-center">
                 <div class="table-direction-indicator top-indicator">«««</div>
                 <div class="table-direction-indicator bottom-indicator">»»»</div>
@@ -153,17 +154,27 @@
                     <div class="card blue" style="transform: rotate(30deg) translateY(48px);"><div class="card-inner"><span class="card-number" style="color:#3498db;">0</span><span class="card-icon" style="color:#3498db;">♣</span></div></div>
                 </div>
 
-                <button id="btn-ono-action" class="btn-ono-action hidden">ONO</button>
+                <button id="btn-ono-action" class="btn-ono-action">ONO</button>
             </div>
 
-            <div class="game-chat-history" id="game-chat-history">
-                <div class="message">
-                    <span class="sender">تخاريف:</span> المنغله
-                </div>
-                <div class="message">
-                    <span class="sender">فخريه 🌹:</span> بجيكم بعدين تم نضحك علي والله اني مت ضحك الله يسعدكم 🤍🤣
+            <div class="game-chat-wrapper">
+                <button class="btn-collapse-chat">^</button>
+                <div class="game-chat-history" id="game-chat-history">
+                    <div class="message">
+                        <img src="https://via.placeholder.com/30" class="chat-avatar" alt="avatar">
+                        <div class="msg-content">
+                            <span class="sender">تخاريف:</span> المنغله
+                        </div>
+                    </div>
+                    <div class="message">
+                        <img src="https://via.placeholder.com/30" class="chat-avatar" alt="avatar">
+                        <div class="msg-content">
+                            <span class="sender">فخريه 🌹:</span> بجيكم بعدين تم نضحك علي والله اني مت ضحك الله يسعدكم 🤍🤣
+                        </div>
+                    </div>
                 </div>
             </div>
+
         </section>
 
     </main>
