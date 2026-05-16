@@ -32,6 +32,7 @@ class OnoGameManager {
 
         this.myId = null;
         this.isHost = false;
+        this.isSpectator = false;
         this.players = []; // Array of objects
         this.gameState = 'lobby'; // lobby, game, over
         this.turnIndex = 0;
@@ -56,6 +57,7 @@ class OnoGameManager {
     }
 
     initDOM() {
+        this.elBtnExit = document.getElementById('btn-exit');
         this.elDisplayRoomId = document.getElementById('display-room-id');
         this.elSystemBanner = document.getElementById('system-banner');
         this.elSectionLobby = document.getElementById('section-lobby');
@@ -83,6 +85,10 @@ class OnoGameManager {
         // Modals
         this.modalColorPicker = document.getElementById('modal-color-picker');
         this.modalOnoPenalty = document.getElementById('modal-ono-penalty');
+        this.modalExitConfirm = document.getElementById('modal-exit-confirm');
+        this.modalResults = document.getElementById('modal-results');
+        this.elResultsBody = document.getElementById('results-body');
+        this.elResultsTimeoutBar = document.getElementById('results-timeout-bar');
         this.toast = document.getElementById('main-toast');
 
         this.elDisplayRoomId.textContent = this.roomId;
@@ -108,6 +114,21 @@ class OnoGameManager {
         if(this.elDrawPile) this.elDrawPile.addEventListener('click', () => this.drawCardAction());
         if(this.elBtnOno) this.elBtnOno.addEventListener('click', () => this.claimOno());
 
+        if (this.elBtnExit) {
+            this.elBtnExit.addEventListener('click', () => this.showExitConfirm());
+        }
+        document.getElementById('btn-exit-yes').addEventListener('click', () => this.quitGame());
+        document.getElementById('btn-exit-no').addEventListener('click', () => {
+            this.modalExitConfirm.classList.add('hidden');
+        });
+
+        // Intercept browser back button
+        window.history.pushState(null, null, window.location.href);
+        window.onpopstate = () => {
+            this.showExitConfirm();
+            window.history.pushState(null, null, window.location.href);
+        };
+
         if(this.elBtnSendChat) this.elBtnSendChat.addEventListener('click', () => this.sendChat());
         if(this.elChatInput) this.elChatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.sendChat();
@@ -123,6 +144,10 @@ class OnoGameManager {
         document.getElementById('btn-accept-penalty').addEventListener('click', () => {
             this.modalOnoPenalty.classList.add('hidden');
         });
+    }
+
+    showExitConfirm() {
+        this.modalExitConfirm.classList.remove('hidden');
     }
 
     showToast(msg) {
@@ -155,12 +180,20 @@ class OnoGameManager {
         const data = snap.val();
         this.isHost = data.config.hostId === this.myId;
 
+        // Spectator mode if game is already in progress
+        if (data.config.gameState === 'game') {
+            this.isSpectator = true;
+            this.showToast("اللعبة بدأت بالفعل، أنت تشاهد الآن 👀");
+        }
+
         // Avatar generation
         const seed = Math.random().toString(36).substring(7);
         const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}`;
 
         const playerRef = ref(this.db, `rooms/${this.roomId}/players/${this.myId}`);
-        onDisconnect(playerRef).remove();
+
+        // Use a flag for online status instead of pure removal to handle "surrendered" state
+        onDisconnect(playerRef).update({ isOnline: false });
 
         await update(playerRef, {
             name: this.playerName,
@@ -168,7 +201,10 @@ class OnoGameManager {
             joinedAt: serverTimestamp(),
             hand: [],
             cardsCount: 0,
-            hasSaidOno: false
+            hasSaidOno: false,
+            isOnline: true,
+            isSpectator: this.isSpectator,
+            surrendered: false
         });
 
         this.listenToRoom();
@@ -198,6 +234,15 @@ class OnoGameManager {
 
             // Update Config/GameState
             if (data.config) {
+                // Host Migration logic
+                const hostOnline = this.players.find(p => p.id === data.config.hostId && p.isOnline);
+                if (!hostOnline && this.players.length > 0) {
+                    const firstOnline = this.players.find(p => p.isOnline);
+                    if (firstOnline && firstOnline.id === this.myId) {
+                        update(ref(this.db, `rooms/${this.roomId}/config`), { hostId: this.myId });
+                    }
+                }
+
                 this.isHost = data.config.hostId === this.myId;
 
                 if (this.isHost && this.players.length >= 2 && data.config.gameState === 'lobby') {
@@ -210,6 +255,19 @@ class OnoGameManager {
                     this.gameState = data.config.gameState;
                     if (this.gameState === 'game') {
                         this.transitionToGame();
+                    } else if (this.gameState === 'results') {
+                        this.showResultsUI(data.config.winnerId);
+                        if (this.isHost) {
+                            setTimeout(async () => {
+                                const currentSnap = await get(ref(this.db, `rooms/${this.roomId}/config/gameState`));
+                                if (currentSnap.val() === 'results') {
+                                    await update(ref(this.db, `rooms/${this.roomId}/config`), {
+                                        gameState: 'lobby',
+                                        winnerId: null
+                                    });
+                                }
+                            }, 5000);
+                        }
                     } else if (this.gameState === 'lobby') {
                         this.transitionToLobby();
                     }
@@ -249,6 +307,14 @@ class OnoGameManager {
                     if (this.isHost && this.players.length > 0 && prevTurnIndex !== this.turnIndex) {
                         this.handleBotTurn();
                     }
+
+                    // Host checks for auto-skip of surrendered players
+                    if (this.isHost) {
+                        const currentPlayer = this.players[this.turnIndex];
+                        if (currentPlayer && currentPlayer.surrendered) {
+                             this.passTurn();
+                        }
+                    }
                 }
             }
 
@@ -270,8 +336,9 @@ class OnoGameManager {
 
             if (i < this.players.length) {
                 const p = this.players[i];
+                const avatar = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
                 slot.innerHTML = `
-                    <img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">
+                    ${avatar}
                     <div class="name">${this.escapeHtml(p.name)}</div>
                     ${this.isHostPlayer(p.id) ? '<div class="host-icon">👑</div>' : ''}
                 `;
@@ -318,7 +385,8 @@ class OnoGameManager {
             hand: [],
             cardsCount: 0,
             hasSaidOno: false,
-            isBot: true
+            isBot: true,
+            surrendered: false
         });
     }
 
@@ -331,6 +399,10 @@ class OnoGameManager {
         this.elSectionLobby.classList.remove('active');
         this.elSectionGame.classList.remove('hidden');
         this.elSectionGame.classList.add('active');
+        if (this.isSpectator) {
+            this.elBtnDraw.classList.add('hidden');
+            this.elBtnOno.classList.add('hidden');
+        }
     }
 
     transitionToLobby() {
@@ -340,6 +412,15 @@ class OnoGameManager {
         this.elSectionLobby.classList.add('active');
         if (this.elGameTimerCapsule) this.elGameTimerCapsule.classList.add('hidden');
         if (this.globalGameTimerInterval) clearInterval(this.globalGameTimerInterval);
+
+        this.modalResults.classList.add('hidden');
+        // Reset spectator flag for next round
+        this.isSpectator = false;
+        // Update my state in Firebase to not be spectator anymore
+        update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), {
+            isSpectator: false,
+            surrendered: false
+        });
     }
 
     // ==========================================
@@ -355,14 +436,22 @@ class OnoGameManager {
 
         // Deal 7 cards to each player
         const updates = {};
-        for (let i = 0; i < this.players.length; i++) {
+        // Reset all players to not be spectators/surrendered for the new game
+        this.players.forEach(p => {
+            updates[`players/${p.id}/isSpectator`] = false;
+            updates[`players/${p.id}/surrendered`] = false;
+        });
+
+        const activePlayers = this.players; // Everyone in the room
+
+        for (let i = 0; i < activePlayers.length; i++) {
             const hand = newDeck.splice(0, 7);
-            updates[`players/${this.players[i].id}/hand`] = hand;
-            updates[`players/${this.players[i].id}/cardsCount`] = hand.length;
-            updates[`players/${this.players[i].id}/hasSaidOno`] = false;
+            updates[`players/${activePlayers[i].id}/hand`] = hand;
+            updates[`players/${activePlayers[i].id}/cardsCount`] = hand.length;
+            updates[`players/${activePlayers[i].id}/hasSaidOno`] = false;
         }
 
-        // First card for pile (ensure it's not a wild card or +2/skip/reverse for simplicity of first turn)
+        // First card for pile
         let firstCardIndex = newDeck.findIndex(c => c.type === 'number');
         if(firstCardIndex === -1) firstCardIndex = 0;
         const firstCard = newDeck.splice(firstCardIndex, 1)[0];
@@ -393,10 +482,9 @@ class OnoGameManager {
             }
 
             timeLeft--;
-            if (timeLeft % 5 === 0) {
-                // Sync every 5 seconds to reduce writes
-                update(ref(this.db, `rooms/${this.roomId}/config`), { gameTimeLeft: timeLeft });
-            }
+
+            // Literal countdown sync every second to be "literal" as requested
+            update(ref(this.db, `rooms/${this.roomId}/config`), { gameTimeLeft: timeLeft });
 
             if (timeLeft <= 0) {
                 clearInterval(this.globalGameTimerInterval);
@@ -420,29 +508,56 @@ class OnoGameManager {
     async endGameDueToTime() {
         if (!this.isHost) return;
 
-        // Find player with the fewest cards
+        // Find player with the fewest cards (excluding spectators)
         let winner = null;
         let minCards = Infinity;
 
-        this.players.forEach(p => {
+        this.players.filter(p => !p.isSpectator).forEach(p => {
             if (p.cardsCount < minCards) {
                 minCards = p.cardsCount;
                 winner = p;
             }
         });
 
-        const updates = {};
-        updates[`config/gameState`] = 'lobby';
+        await this.showResults(winner);
+    }
 
-        await update(ref(this.db, `rooms/${this.roomId}`), updates);
-
-        if (winner) {
-            push(ref(this.db, `rooms/${this.roomId}/chat`), {
-                senderId: 'system',
-                text: `انتهى الوقت! الفائز هو ${winner.name} بـ ${minCards} بطاقات!`,
-                timestamp: serverTimestamp()
+    async showResults(winner) {
+        // Winner or Host can trigger results state
+        if (this.isHost || (winner && winner.id === this.myId)) {
+            await update(ref(this.db, `rooms/${this.roomId}/config`), {
+                gameState: 'results',
+                winnerId: winner ? winner.id : null
             });
         }
+    }
+
+    showResultsUI(winnerId) {
+        const results = this.players.filter(p => !p.isSpectator).sort((a,b) => a.cardsCount - b.cardsCount);
+        let html = '<div style="margin-top:10px">';
+        results.forEach((p, i) => {
+            const isWinner = p.id === winnerId;
+            html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; padding: 10px; background: ${isWinner ? 'rgba(56, 239, 125, 0.2)' : 'rgba(255,255,255,0.1)'}; border-radius: 8px; border: ${isWinner ? '1px solid #38ef7d' : 'none'}">
+                <span>${i+1}. ${p.name} ${isWinner ? '🏆' : ''}</span>
+                <span>${p.cardsCount} بطاقات</span>
+            </div>`;
+        });
+        html += '</div>';
+
+        this.elResultsBody.innerHTML = html;
+        this.modalResults.classList.remove('hidden');
+
+        // Animate progress bar
+        this.elResultsTimeoutBar.style.width = '100%';
+        this.elResultsTimeoutBar.style.transition = 'none';
+        setTimeout(() => {
+            this.elResultsTimeoutBar.style.transition = 'width 5s linear';
+            this.elResultsTimeoutBar.style.width = '0%';
+        }, 50);
+
+        setTimeout(() => {
+            this.modalResults.classList.add('hidden');
+        }, 5000);
     }
 
     startTurnTimer() {
@@ -465,7 +580,7 @@ class OnoGameManager {
 
             if (timeLeft <= 0) {
                 clearInterval(this.turnInterval);
-                // Host handles timeout action to prevent multiple triggers
+                // Host handles timeout action
                 if (this.isHost && currentPlayer) {
                     await this.handleTurnTimeout(currentPlayer);
                 }
@@ -475,11 +590,10 @@ class OnoGameManager {
     }
 
     async handleTurnTimeout(player) {
-        // Re-verify it's still their turn
         const snap = await get(ref(this.db, `rooms/${this.roomId}/config/turnIndex`));
         if (snap.val() !== this.turnIndex) return;
 
-        if (player.isBot) return; // Bots handle their own logic
+        if (player.isBot) return;
 
         const hand = player.hand || [];
         const validPlays = [];
@@ -490,7 +604,6 @@ class OnoGameManager {
         });
 
         if (validPlays.length > 0) {
-            // Auto play a random valid card
             const play = validPlays[Math.floor(Math.random() * validPlays.length)];
             const { card, index } = play;
             let chosenColor = card.color;
@@ -499,39 +612,24 @@ class OnoGameManager {
             const newHand = [...hand];
             newHand.splice(index, 1);
             await this.commitPlayForPlayer(player, card, newHand, chosenColor);
-
-            push(ref(this.db, `rooms/${this.roomId}/chat`), {
-                senderId: 'system',
-                text: `انتهى وقت ${player.name} وتم لعب ورقة عشوائية`,
-                timestamp: serverTimestamp()
-            });
         } else {
-            // Auto draw
             await this.drawCardForPlayer(player);
-            push(ref(this.db, `rooms/${this.roomId}/chat`), {
-                senderId: 'system',
-                text: `انتهى وقت ${player.name} وتم سحب ورقة`,
-                timestamp: serverTimestamp()
-            });
         }
     }
 
     generateDeck() {
         let deck = [];
-        // Numbers 0-9
         COLORS.forEach(color => {
             deck.push({ id: Math.random().toString(), color: color, type: 'number', value: '0' });
             for (let i = 1; i <= 9; i++) {
                 deck.push({ id: Math.random().toString(), color: color, type: 'number', value: i.toString() });
                 deck.push({ id: Math.random().toString(), color: color, type: 'number', value: i.toString() });
             }
-            // Actions
             ACTION_TYPES.forEach(type => {
                 deck.push({ id: Math.random().toString(), color: color, type: type, value: type });
                 deck.push({ id: Math.random().toString(), color: color, type: type, value: type });
             });
         });
-        // Wilds
         for (let i = 0; i < 4; i++) {
             deck.push({ id: Math.random().toString(), color: 'black', type: 'wild', value: 'wild' });
             deck.push({ id: Math.random().toString(), color: 'black', type: 'wild+4', value: 'wild+4' });
@@ -557,18 +655,15 @@ class OnoGameManager {
 
     isMyTurn() {
         if (this.players.length === 0) return false;
-        return this.players[this.turnIndex].id === this.myId;
+        return this.players[this.turnIndex].id === this.myId && !this.isSpectator;
     }
 
     isValidPlay(card) {
-        if (card.color === 'black') return true; // Wilds are always playable
+        if (card.color === 'black') return true;
         const topCard = this.getTopCard();
         if (!topCard) return true;
 
-        // Match color (use currentColor if wild was played)
         if (card.color === this.currentColor) return true;
-
-        // Match number/type
         if (card.value === topCard.value) return true;
 
         return false;
@@ -578,7 +673,7 @@ class OnoGameManager {
         if (!this.isMyTurn()) return;
 
         const me = this.players.find(p => p.id === this.myId);
-        if (!me || !me.hand) return;
+        if (!me || !me.hand || me.surrendered) return;
 
         const card = me.hand[cardIndex];
         if (!this.isValidPlay(card)) {
@@ -586,7 +681,6 @@ class OnoGameManager {
             return;
         }
 
-        // Remove card from hand
         const newHand = [...me.hand];
         newHand.splice(cardIndex, 1);
 
@@ -594,7 +688,6 @@ class OnoGameManager {
         this._pendingHand = newHand;
 
         if (card.color === 'black') {
-            // Wait for color selection
             this.modalColorPicker.classList.remove('hidden');
         } else {
             await this.commitPlay(card, newHand, card.color);
@@ -622,13 +715,10 @@ class OnoGameManager {
         updates[`players/${player.id}/hand`] = newHand;
         updates[`players/${player.id}/cardsCount`] = cardsCount;
 
-        // Check ONO penalty BEFORE applying the rest of the updates
         let penaltyCards = [];
         if (cardsCount === 1 && !player.hasSaidOno) {
             if (player.id === this.myId) {
-                // Player forgot to say ONO!
                 this.showToast("عقوبة ONO! سحب ورقتين");
-                // Also we could trigger the modal locally
                 this.modalOnoPenalty.classList.remove('hidden');
             } else {
                 push(ref(this.db, `rooms/${this.roomId}/chat`), {
@@ -638,7 +728,6 @@ class OnoGameManager {
                 });
             }
 
-            // Draw 2 penalty cards
             const deckSnap = await get(ref(this.db, `rooms/${this.roomId}/deck`));
             let currentDeck = deckSnap.val() || [];
             if (currentDeck.length < 2) {
@@ -646,28 +735,25 @@ class OnoGameManager {
             }
             penaltyCards = currentDeck.splice(0, 2);
 
-            // Add penalty cards to hand
             updates[`players/${player.id}/hand`] = [...newHand, ...penaltyCards];
             updates[`players/${player.id}/cardsCount`] = newHand.length + penaltyCards.length;
-            cardsCount = updates[`players/${player.id}/cardsCount`]; // Update to prevent win condition
+            cardsCount = updates[`players/${player.id}/cardsCount`];
 
             updates[`deck`] = currentDeck;
         }
 
-        updates[`players/${player.id}/hasSaidOno`] = false; // Reset
+        updates[`players/${player.id}/hasSaidOno`] = false;
 
         const newPile = [...(this.playedPile || []), card];
         updates[`playedPile`] = newPile;
         updates[`config/currentColor`] = chosenColor;
 
-        // Handle Action Effects & Next Turn Calculation
         let nextTurnDelta = this.direction;
         let cardsToDrawNext = 0;
         let newDirection = this.direction;
 
         if (card.type === 'reverse') {
             if (this.players.length === 2) {
-                // In 2 player game, reverse acts like skip
                 nextTurnDelta = this.direction * 2;
             } else {
                 newDirection = this.direction * -1;
@@ -677,27 +763,23 @@ class OnoGameManager {
         } else if (card.type === 'skip') {
             nextTurnDelta = this.direction * 2;
         } else if (card.type === '+2') {
-            nextTurnDelta = this.direction * 2; // Skip next player after they draw
+            nextTurnDelta = this.direction * 2;
             cardsToDrawNext = 2;
         } else if (card.type === 'wild+4') {
-            nextTurnDelta = this.direction * 2; // Skip next player
+            nextTurnDelta = this.direction * 2;
             cardsToDrawNext = 4;
         }
 
-        // Calculate next turn index safely
         let nextTurn = (this.turnIndex + nextTurnDelta) % this.players.length;
         if (nextTurn < 0) nextTurn += this.players.length;
         updates[`config/turnIndex`] = nextTurn;
         updates[`config/turnStartedAt`] = serverTimestamp();
 
-        // Draw cards for next player if needed
         if (cardsToDrawNext > 0) {
             const nextPlayerTargetIndex = (this.turnIndex + newDirection) % this.players.length;
             const targetIndex = nextPlayerTargetIndex < 0 ? nextPlayerTargetIndex + this.players.length : nextPlayerTargetIndex;
             const targetPlayer = this.players[targetIndex];
 
-            // This is complex in P2P. Since we are the current player, we will update the target player's hand.
-            // We need to fetch current deck, pop X cards, add to their hand.
             const deckSnap = await get(ref(this.db, `rooms/${this.roomId}/deck`));
             let currentDeck = deckSnap.val() || [];
 
@@ -708,7 +790,6 @@ class OnoGameManager {
             const drawnCards = currentDeck.splice(0, cardsToDrawNext);
             updates[`deck`] = currentDeck;
 
-            // Target player data might be slightly stale if they draw/played concurrently, but fine for turn-based.
             const targetHandSnap = await get(ref(this.db, `rooms/${this.roomId}/players/${targetPlayer.id}/hand`));
             let targetHand = targetHandSnap.val() || [];
             targetHand = [...targetHand, ...drawnCards];
@@ -718,23 +799,18 @@ class OnoGameManager {
             updates[`players/${targetPlayer.id}/hasSaidOno`] = false;
         }
 
-        // Check Win Condition
         if (cardsCount === 0) {
-            updates[`config/gameState`] = 'lobby';
-            this.showToast("🎉 لقد فزت!");
-            // Optional: update scores
+            await this.showResults(player);
+            return;
         }
 
         await update(ref(this.db, `rooms/${this.roomId}`), updates);
     }
 
     reshufflePileIntoDeck(currentDeck, currentPile) {
-        // Keep top card, shuffle rest
         const top = currentPile.pop();
         let newDeck = [...currentDeck, ...currentPile];
         this.shuffle(newDeck);
-        // We modify currentPile array directly (it's passed by reference, but we are overwriting it in updates)
-        // Actually, this should happen in a transaction ideally.
         return newDeck;
     }
 
@@ -742,16 +818,13 @@ class OnoGameManager {
         const currentPlayer = this.players[this.turnIndex];
         if (!currentPlayer || !currentPlayer.isBot) return;
 
-        // Bot waits for ~2 seconds then plays
         setTimeout(async () => {
-            // Re-verify it's still their turn
             const snap = await get(ref(this.db, `rooms/${this.roomId}/config/turnIndex`));
             if (snap.val() !== this.turnIndex) return;
 
             const botHand = currentPlayer.hand || [];
             if (botHand.length === 0) return;
 
-            // Simple bot logic: find valid plays
             const validPlays = [];
             botHand.forEach((card, index) => {
                 if (this.isValidPlay(card)) {
@@ -760,7 +833,6 @@ class OnoGameManager {
             });
 
             if (validPlays.length > 0) {
-                // Prefer action cards or wilds, else pick first valid
                 let chosenPlay = validPlays.find(p => p.card.type !== 'number');
                 if (!chosenPlay) {
                     chosenPlay = validPlays[0];
@@ -769,7 +841,6 @@ class OnoGameManager {
                 const { card, index } = chosenPlay;
                 let chosenColor = card.color;
                 if (chosenColor === 'black') {
-                    // Pick the color bot has the most of
                     const colorCounts = { red: 0, blue: 0, green: 0, yellow: 0 };
                     botHand.forEach(c => {
                         if (c.color !== 'black') colorCounts[c.color]++;
@@ -780,21 +851,14 @@ class OnoGameManager {
                 const newHand = [...botHand];
                 newHand.splice(index, 1);
 
-                // Bot says ONO if they will have 1 card left
                 if (newHand.length === 1) {
                     await update(ref(this.db, `rooms/${this.roomId}/players/${currentPlayer.id}`), {
                         hasSaidOno: true
-                    });
-                    push(ref(this.db, `rooms/${this.roomId}/chat`), {
-                        senderId: 'system',
-                        text: `${currentPlayer.name} قال ONO!`,
-                        timestamp: serverTimestamp()
                     });
                 }
 
                 await this.commitPlayForPlayer(currentPlayer, card, newHand, chosenColor);
             } else {
-                // Draw card
                 await this.drawCardForPlayer(currentPlayer);
             }
         }, 2000);
@@ -803,6 +867,7 @@ class OnoGameManager {
     async drawCardAction() {
         if (!this.isMyTurn()) return;
         const me = this.players.find(p => p.id === this.myId);
+        if (me.surrendered) return;
         await this.drawCardForPlayer(me);
     }
 
@@ -811,7 +876,6 @@ class OnoGameManager {
         let currentDeck = [...this.deck];
         if (currentDeck.length === 0) {
             currentDeck = this.reshufflePileIntoDeck([], [...this.playedPile]);
-            // Not perfectly synced without transaction, but acceptable for now
         }
 
         const card = currentDeck.splice(0, 1)[0];
@@ -824,14 +888,11 @@ class OnoGameManager {
         updates[`players/${player.id}/hasSaidOno`] = false;
         updates[`deck`] = currentDeck;
 
-        // If the drawn card is playable, allow the player to play it immediately (unless bot, then just pass for simplicity)
         if (this.isValidPlay(card) && !player.isBot) {
-            // Keep the turn on this player and let them play it
             if(player.id === this.myId) {
                 this.showToast("يمكنك لعب البطاقة المسحوبة فوراً!");
             }
         } else {
-            // Pass turn
             let nextTurn = (this.turnIndex + this.direction) % this.players.length;
             if (nextTurn < 0) nextTurn += this.players.length;
             updates[`config/turnIndex`] = nextTurn;
@@ -839,6 +900,16 @@ class OnoGameManager {
         }
 
         await update(ref(this.db, `rooms/${this.roomId}`), updates);
+    }
+
+    async passTurn() {
+        if (!this.isHost) return;
+        let nextTurn = (this.turnIndex + this.direction) % this.players.length;
+        if (nextTurn < 0) nextTurn += this.players.length;
+        await update(ref(this.db, `rooms/${this.roomId}/config`), {
+            turnIndex: nextTurn,
+            turnStartedAt: serverTimestamp()
+        });
     }
 
     async claimOno() {
@@ -849,7 +920,6 @@ class OnoGameManager {
             });
             this.showToast("قلت ONO!");
 
-            // Broadcast it
             push(ref(this.db, `rooms/${this.roomId}/chat`), {
                 senderId: 'system',
                 text: `${this.playerName} قال ONO!`,
@@ -872,7 +942,6 @@ class OnoGameManager {
         }
 
         let content = topCard.type === 'number' ? topCard.value : this.getIconForType(topCard.type);
-        // Show color indicator for wilds if played
         let bgClass = topCard.color;
         let typeClass = topCard.type;
         if (topCard.type.startsWith('wild')) {
@@ -915,31 +984,40 @@ class OnoGameManager {
             const translateY = Math.abs(angle) * 0.5; // Arc effect
 
             const el = document.createElement('div');
-            el.className = `card ${card.color} ${card.type}`;
+
+            // If spectator or surrendered, show card backs instead
+            const isHidden = this.isSpectator || me.surrendered;
+
+            if (isHidden) {
+                el.className = `card back`;
+                el.innerHTML = `<div class="card-inner" style="background: url('https://www.unorules.com/wp-content/uploads/2021/03/uno-card-back.png') center/cover;"></div>`;
+            } else {
+                el.className = `card ${card.color} ${card.type}`;
+                let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
+                el.innerHTML = `
+                    <div class="card-inner">
+                        ${card.type === 'number' ? `<div class="card-number">${content}</div>` : `<div class="card-icon">${content}</div>`}
+                    </div>
+                `;
+            }
+
             el.style.transform = `rotate(${angle}deg) translateY(${translateY}px)`;
 
-            let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
-            el.innerHTML = `
-                <div class="card-inner">
-                    ${card.type === 'number' ? `<div class="card-number">${content}</div>` : `<div class="card-icon">${content}</div>`}
-                </div>
-            `;
-
-            if (this.isMyTurn() && this.isValidPlay(card)) {
+            if (!isHidden && this.isMyTurn() && this.isValidPlay(card)) {
                 el.style.boxShadow = '0 0 10px #38ef7d';
                 el.onclick = () => this.playCard(index);
-            } else if (this.isMyTurn()) {
+            } else if (!isHidden && this.isMyTurn()) {
                 el.style.opacity = '0.7';
                 el.onclick = () => this.showToast("لا يمكنك لعب هذه البطاقة!");
-            } else {
+            } else if (!isHidden) {
                 el.onclick = () => this.showToast("ليس دورك!");
             }
 
             this.elMyHand.appendChild(el);
         });
 
-        // Show/Hide ONO button (if 2 cards, they can press it before playing the 2nd to last card)
-        if (count === 2 && !me.hasSaidOno) {
+        // Show/Hide ONO button
+        if (!this.isSpectator && !me.surrendered && count === 2 && !me.hasSaidOno) {
             this.elBtnOno.classList.remove('hidden');
         } else {
             this.elBtnOno.classList.add('hidden');
@@ -949,11 +1027,9 @@ class OnoGameManager {
     renderGameNodes() {
         this.elPlayerNodesContainer.innerHTML = '';
 
-        // Determine the layout order starting from the next player after me
         let myIndex = this.players.findIndex(p => p.id === this.myId);
-        if (myIndex === -1) myIndex = 0; // fallback if not found
+        if (myIndex === -1) myIndex = 0;
 
-        // Create an ordered array starting with the player to my left (clockwise)
         const orderedOthers = [];
         for (let i = 1; i < this.players.length; i++) {
             const idx = (myIndex + i) % this.players.length;
@@ -963,16 +1039,11 @@ class OnoGameManager {
         const totalOthers = orderedOthers.length;
 
         orderedOthers.forEach((p, index) => {
-            // Distribute evenly along an arc
-            // We want to map index 0 .. totalOthers-1 to an angle between PI and 2*PI
-            // Example: 1 other player -> 3/2 PI (top center)
-            // 2 other players -> 5/4 PI (top left), 7/4 PI (top right)
-
             let angle;
             if (totalOthers === 1) {
-                angle = Math.PI * 1.5; // Top center
+                angle = Math.PI * 1.5;
             } else if (totalOthers === 2) {
-                angle = Math.PI + (Math.PI / 3) * (index + 1); // e.g. 4/3 PI, 5/3 PI
+                angle = Math.PI + (Math.PI / 3) * (index + 1);
             } else if (totalOthers === 3) {
                 angle = Math.PI + (Math.PI / 4) * (index + 1);
             } else if (totalOthers === 4) {
@@ -992,16 +1063,17 @@ class OnoGameManager {
             const el = document.createElement('div');
             el.className = `player-node`;
 
-            // To position absolute relative to container (which covers arena-center)
             el.style.left = `calc(50% + ${x}px)`;
             el.style.top = `calc(50% + ${y}px)`;
 
             const isTurn = this.players[this.turnIndex]?.id === p.id;
             if (isTurn) el.classList.add('active-turn');
 
+            const avatar = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
+
             el.innerHTML = `
                 <div class="turn-arrow">▼</div>
-                <img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">
+                <div class="avatar-container">${avatar}</div>
                 <div class="name">${this.escapeHtml(p.name)}</div>
                 <div class="cards-count">${p.cardsCount || 0}</div>
                 ${isTurn && !p.isBot ? `<div class="turn-timer" id="timer-${p.id}" style="color:#ff4b2b; font-weight:bold; position:absolute; top:-15px; left:50%; transform:translateX(-50%); text-shadow:0 0 3px #000;">10</div>` : ''}
@@ -1009,7 +1081,6 @@ class OnoGameManager {
             this.elPlayerNodesContainer.appendChild(el);
         });
 
-        // Update my own turn styling if needed
         if (this.isMyTurn()) {
             this.elDrawPile.style.boxShadow = '0 0 15px #38ef7d';
             const myTurnIndicator = document.getElementById('my-turn-indicator');
@@ -1051,12 +1122,12 @@ class OnoGameManager {
 
     renderChat(chatObj) {
         const messages = Object.values(chatObj).sort((a,b) => a.timestamp - b.timestamp);
-        if (messages.length === this.chatMessages.length) return; // Prevent full redraw if nothing new
+        if (messages.length === this.chatMessages.length) return;
         this.chatMessages = messages;
 
         this.elGameChatHistory.innerHTML = '';
 
-        messages.slice(-10).forEach(m => { // show only last 10
+        messages.slice(-10).forEach(m => {
             const el = document.createElement('div');
             el.className = 'message';
 
@@ -1072,6 +1143,30 @@ class OnoGameManager {
         setTimeout(() => {
             this.elGameChatHistory.scrollTop = this.elGameChatHistory.scrollHeight;
         }, 100);
+    }
+
+    async quitGame() {
+        if (this.gameState === 'game' && !this.isSpectator) {
+            // Mark as surrendered
+            await update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), {
+                surrendered: true
+            });
+
+            push(ref(this.db, `rooms/${this.roomId}/chat`), {
+                senderId: 'system',
+                text: `${this.playerName} استسلم من اللعبة! 🏳️`,
+                timestamp: serverTimestamp()
+            });
+
+            // If it was my turn, pass it
+            if (this.isMyTurn()) {
+                // Since update might be slow, we trigger it locally if we're host or wait for listener
+            }
+        } else {
+             await remove(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`));
+        }
+
+        window.location.href = './index.html';
     }
 
     escapeHtml(text) {
