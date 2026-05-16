@@ -152,6 +152,7 @@ class GameManager {
         this.btnJoinRoom = document.getElementById('btn-join-room');
         this.btnCreateRoom = document.getElementById('btn-create-room');
         this.btnCreateViewingRoom = document.getElementById('btn-create-viewing-room');
+        this.btnOnoRoom = document.getElementById('btn-ono-room');
         this.overlayStart = document.getElementById('overlay-start');
 
         // Opponent progress
@@ -231,6 +232,11 @@ class GameManager {
         if (this.btnCreateViewingRoom) {
             this.btnCreateViewingRoom.addEventListener('click', () => this.createRoom('viewing'));
         }
+
+        if (this.btnOnoRoom) {
+            this.btnOnoRoom.addEventListener('click', () => this.handleOnoRoomClick());
+        }
+
         this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
         document.getElementById('btn-ready').addEventListener('click', () => this.setReady());
         document.getElementById('btn-stop').addEventListener('click', () => this.stopGame());
@@ -276,6 +282,7 @@ class GameManager {
                 if (this.roomId) {
                     this.initPeer();
                 }
+                this.listenToGlobalOnoRoom();
             } else {
                 console.log("Firebase Auth: Attempting anonymous login...");
                 signInAnonymously(this.auth).catch((err) => {
@@ -483,6 +490,81 @@ class GameManager {
         }
     }
 
+    listenToGlobalOnoRoom() {
+        const globalOnoRef = ref(this.db, 'global/public_ono_room');
+        onValue(globalOnoRef, (snapshot) => {
+            const data = snapshot.val();
+            if (this.btnOnoRoom) {
+                if (data && data.roomId) {
+                    this.btnOnoRoom.innerHTML = `
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                        انضمام للعب الاونو
+                    `;
+                    this.activeOnoRoomId = data.roomId;
+                } else {
+                    this.btnOnoRoom.innerHTML = `
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><circle cx="15.5" cy="8.5" r="1.5"></circle><circle cx="15.5" cy="15.5" r="1.5"></circle><circle cx="8.5" cy="15.5" r="1.5"></circle></svg>
+                        إنشاء غرفة لعبة اونو
+                    `;
+                    this.activeOnoRoomId = null;
+                }
+            }
+        });
+    }
+
+    async handleOnoRoomClick() {
+        if (!this.myId) {
+            this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
+            let attempts = 0;
+            while (!this.myId && attempts < 15) {
+                await new Promise(r => setTimeout(r, 400));
+                attempts++;
+            }
+            if (!this.myId) {
+                this.showToast("❌ فشل الاتصال، يرجى التحقق من الإنترنت");
+                return;
+            }
+        }
+
+        this.playerName = this.playerNameInput.value.trim();
+        if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
+
+        this.setLoading('btn-ono-room', true);
+
+        try {
+            if (this.activeOnoRoomId) {
+                // Join existing ONO room
+                window.location.href = `./ono.html?roomID=${this.activeOnoRoomId}&username=${encodeURIComponent(this.playerName)}`;
+            } else {
+                // Create new ONO room
+                const roomId = Math.floor(100000 + Math.random() * 900000).toString();
+                const roomRef = ref(this.db, `rooms/${roomId}`);
+                await set(roomRef, {
+                    roomType: 'ono',
+                    config: {
+                        hostId: this.myId,
+                        gameState: 'lobby',
+                        createdAt: serverTimestamp()
+                    }
+                });
+
+                // Set as global public ONO room
+                await set(ref(this.db, 'global/public_ono_room'), {
+                    roomId: roomId,
+                    hostId: this.myId,
+                    createdAt: serverTimestamp()
+                });
+
+                window.location.href = `./ono.html?roomID=${roomId}&username=${encodeURIComponent(this.playerName)}&role=owner`;
+            }
+        } catch(e) {
+            console.error(e);
+            this.showToast("❌ حدث خطأ");
+        } finally {
+            this.setLoading('btn-ono-room', false);
+        }
+    }
+
     async createRoom(type = 'game') {
         if (!this.myId) {
             this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
@@ -503,7 +585,7 @@ class GameManager {
         this.setLoading(btnId, true);
         try {
             this.isHost = true;
-            this.roomId = Math.floor(100000000 + Math.random() * 900000000).toString();
+            this.roomId = Math.floor(100000 + Math.random() * 900000).toString();
 
             if (type === 'viewing') {
                 const roomRef = ref(this.db, `rooms/${this.roomId}`);
@@ -552,7 +634,7 @@ class GameManager {
         }
         this.playerName = this.playerNameInput.value.trim();
         this.roomId = this.roomIdInput.value.trim();
-        if (!this.playerName || this.roomId.length !== 9) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
+        if (!this.playerName || (this.roomId.length !== 9 && this.roomId.length !== 6)) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
 
         this.setLoading('btn-join-room', true);
         try {
@@ -562,6 +644,11 @@ class GameManager {
 
             if (roomData.roomType === 'viewing') {
                 window.location.href = `./live/?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=guest`;
+                return;
+            }
+
+            if (roomData.roomType === 'ono') {
+                window.location.href = `./ono.html?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}`;
                 return;
             }
 
