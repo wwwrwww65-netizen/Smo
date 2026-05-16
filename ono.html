@@ -7,38 +7,36 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#1e88e5">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/ono.css">
 </head>
 <body>
 
-    <!-- خلفية اللعبة (شعاعي داكن مع نمط) -->
     <div class="ono-bg">
         <div class="ono-bg-pattern"></div>
+        <div class="center-glow-ring ring-1"></div>
+        <div class="center-glow-ring ring-2"></div>
     </div>
 
-    <!-- الشريط العلوي -->
     <header class="top-header">
         <div class="header-left">
             <button id="btn-settings" class="btn-hexagon">⚙️</button>
             <button id="btn-exit" class="btn-hexagon" onclick="window.location.href='./index.html'">🚪</button>
+            <div id="game-timer-capsule" class="timer-capsule capsule hidden">
+                ⏱️ <span id="game-timer">02:31</span>
+            </div>
         </div>
         <div class="header-right">
             <div class="ping-indicator capsule">
-                <span class="ping-dot"></span> <span id="ping-text">0 ms</span>
+                <span id="ping-text">201ms</span> <span class="ping-dot"></span> 
             </div>
             <div class="viewers-indicator capsule">
-                👁️ <span id="viewers-count">0</span>
-            </div>
-            <div id="game-timer-capsule" class="timer-capsule capsule hidden">
-                ⏱️ <span id="game-timer">0</span>
+                <span id="viewers-count">1</span> 👁️
             </div>
         </div>
     </header>
 
-    <!-- النوافذ المنبثقة (Modals) -->
-    <!-- نافذة اختيار اللون للبطاقات السوداء -->
     <div id="modal-color-picker" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">اختر لوناً جديداً</div>
@@ -51,7 +49,6 @@
         </div>
     </div>
 
-    <!-- نافذة ONO Penalty -->
     <div id="modal-ono-penalty" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header" style="color: #ff4b2b;">عقوبة ONO!</div>
@@ -66,21 +63,18 @@
 
     <main class="ono-container">
 
-        <!-- قسم الانتظار (Lobby) -->
         <section id="section-lobby" class="active">
-            <!-- Hero Section: Logo, Cards, Sparkles -->
             <div class="hero-section">
                 <div class="sparkles-container" id="sparkles"></div>
                 <div class="cards-fan">
-                    <div class="card card-demo green" style="--rotation: -30deg;"></div>
-                    <div class="card card-demo blue reverse" style="--rotation: -10deg;"></div>
-                    <div class="card card-demo black wild4" style="--rotation: 10deg;"></div>
-                    <div class="card card-demo red seven" style="--rotation: 30deg;"></div>
+                    <div class="card card-demo green" style="--rotation: -30deg;"><div class="card-inner"><span class="card-number">7</span></div></div>
+                    <div class="card card-demo blue reverse" style="--rotation: -10deg;"><div class="card-inner"><span class="card-icon">↺</span></div></div>
+                    <div class="card card-demo black wild4" style="--rotation: 10deg;"><div class="card-inner"><span class="card-icon">+4</span></div></div>
+                    <div class="card card-demo red seven" style="--rotation: 30deg;"><div class="card-inner"><span class="card-number">5</span></div></div>
                 </div>
                 <div class="logo-3d">ONO</div>
             </div>
 
-            <!-- إشعار النظام -->
             <div class="system-banner" id="system-banner">
                 بانتظار انضمام اللاعبين...
             </div>
@@ -89,7 +83,6 @@
                 رمز الغرفة: <strong id="display-room-id">...</strong>
             </div>
 
-            <!-- المقاعد الدائرية (Player Slots) -->
             <div class="player-slots-container">
                 <div class="player-slots">
                     <div class="player-slot" id="lobby-slot-0"></div>
@@ -101,7 +94,6 @@
                 </div>
             </div>
 
-            <!-- أزرار الإجراءات -->
             <div class="lobby-actions">
                 <button id="btn-start-game" class="btn-start disabled">بدء اللعبة</button>
                 <div class="secondary-actions">
@@ -111,61 +103,80 @@
             </div>
         </section>
 
-        <!-- ساحة اللعب (Game Arena) -->
         <section id="section-game" class="hidden">
-            <!-- منطقة اللاعبين الموزعين دائرياً -->
             <div class="arena-center">
-                <!-- الكومة المركزية -->
-                <div class="center-stack" id="center-stack">
-                    <!-- Pile of played cards -->
-                    <div class="pile" id="played-pile"></div>
+                <div class="table-direction-indicator top-indicator">«««</div>
+                <div class="table-direction-indicator bottom-indicator">»»»</div>
+                <div class="table-direction-indicator left-indicator">«««</div>
+                <div class="table-direction-indicator right-indicator">»»»</div>
 
-                    <!-- Draw pile -->
-                    <div class="draw-pile" id="draw-pile">
-                        <div class="card back"></div>
-                        <div class="card back" style="transform: translate(-2px, -2px);"></div>
-                        <div class="card back" style="transform: translate(-4px, -4px);"></div>
+                <div class="center-stack" id="center-stack">
+                    <div class="pile" id="played-pile">
+                        <div class="card yellow" style="transform: rotate(15deg);">
+                            <div class="card-inner">
+                                <span class="card-number" style="font-size: 3rem; color: #ff9800;">6</span>
+                                <span class="card-icon" style="color: #ff9800;">♠</span>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- أسهم الاتجاه -->
+                    <div class="draw-pile" id="draw-pile">
+                        <div class="card back"></div>
+                        <div class="card back" style="transform: translate(-3px, -3px);"></div>
+                        <div class="card back" style="transform: translate(-6px, -6px);"></div>
+                    </div>
+
                     <div class="direction-arrows" id="direction-arrows"></div>
                 </div>
 
-                <!-- عقد اللاعبين (Nodes) -->
                 <div id="player-nodes-container">
-                    <!-- سيتم توليدها برمجياً لضبط الزوايا -->
-                </div>
+                    </div>
             </div>
 
-            <!-- منطقة أوراق اللاعب الحالي (أسفل الشاشة) -->
             <div class="bottom-hand-area">
                 <div id="my-turn-indicator" class="hidden" style="color:#38ef7d; font-weight:bold; margin-bottom:5px; text-shadow:0 0 5px #000; position:absolute; top:-25px; left:50%; transform:translateX(-50%);">▼ دورك الآن</div>
-                <div class="hand-cards" id="my-hand">
-                    <!-- سيتم إضافة البطاقات هنا برمجياً -->
+                
+                <div class="draw-badge-container">
+                    <button id="btn-draw-card" class="btn-draw-card badge-style">2</button>
                 </div>
 
-                <!-- أزرار الأكشن الجانبية -->
+                <div class="hand-cards" id="my-hand">
+                    <div class="card red" style="transform: rotate(-15deg) translateY(15px);"><div class="card-inner"><span class="card-number" style="color:#e74c3c;">0</span><span class="card-icon" style="color:#e74c3c;">♦</span></div></div>
+                    <div class="card red" style="transform: rotate(-10deg) translateY(8px);"><div class="card-inner"><span class="card-number" style="color:#e74c3c;">5</span><span class="card-icon" style="color:#e74c3c;">♦</span></div></div>
+                    <div class="card red" style="transform: rotate(-5deg) translateY(3px);"><div class="card-inner"><span class="card-number" style="color:#e74c3c;">+</span><span class="card-icon" style="color:#e74c3c;">♦</span></div></div>
+                    <div class="card yellow" style="transform: rotate(0deg) translateY(0px);"><div class="card-inner"><span class="card-number" style="color:#ff9800;">3</span><span class="card-icon" style="color:#ff9800;">♠</span></div></div>
+                    <div class="card yellow" style="transform: rotate(5deg) translateY(3px);"><div class="card-inner"><span class="card-number" style="color:#ff9800;">7</span><span class="card-icon" style="color:#ff9800;">♠</span></div></div>
+                    <div class="card green" style="transform: rotate(10deg) translateY(8px);"><div class="card-inner"><span class="card-number" style="color:#2ecc71;">4</span><span class="card-icon" style="color:#2ecc71;">♥</span></div></div>
+                    <div class="card green" style="transform: rotate(15deg) translateY(15px);"><div class="card-inner"><span class="card-number" style="color:#2ecc71;">5</span><span class="card-icon" style="color:#2ecc71;">♥</span></div></div>
+                    <div class="card green" style="transform: rotate(20deg) translateY(24px);"><div class="card-inner"><span class="card-number" style="color:#2ecc71;">8</span><span class="card-icon" style="color:#2ecc71;">♥</span></div></div>
+                    <div class="card green" style="transform: rotate(25deg) translateY(35px);"><div class="card-inner"><span class="card-icon" style="color:#2ecc71; font-size:2rem;">⊖</span></div></div>
+                    <div class="card blue" style="transform: rotate(30deg) translateY(48px);"><div class="card-inner"><span class="card-number" style="color:#3498db;">0</span><span class="card-icon" style="color:#3498db;">♣</span></div></div>
+                </div>
+
                 <button id="btn-ono-action" class="btn-ono-action hidden">ONO</button>
-                <button id="btn-draw-card" class="btn-draw-card">سحب</button>
             </div>
 
-            <!-- سجل الدردشة في اللعبة -->
             <div class="game-chat-history" id="game-chat-history">
-                <!-- رسائل الدردشة -->
+                <div class="message">
+                    <span class="sender">تخاريف:</span> المنغله
+                </div>
+                <div class="message">
+                    <span class="sender">فخريه 🌹:</span> بجيكم بعدين تم نضحك علي والله اني مت ضحك الله يسعدكم 🤍🤣
+                </div>
             </div>
         </section>
 
     </main>
 
-    <!-- شريط الإدخال السفلي (Footer Input) -->
     <footer class="footer-input">
         <div class="left-icons">
+            <button class="icon-btn" style="color: #4facfe;">●●●</button>
             <button class="icon-btn">🎁</button>
             <button class="icon-btn">🪙</button>
         </div>
 
         <div class="chat-input-wrapper">
-            <input type="text" id="chat-input" class="capsule-input" placeholder="اكتب رسالة...">
+            <input type="text" id="chat-input" class="capsule-input" placeholder="قل شيئاً">
             <div id="emoji-picker" class="emoji-picker hidden">
                 <div class="emoji-list">
                     <span>😊</span><span>😂</span><span>😍</span><span>🤣</span><span>👍</span><span>🙌</span><span>🔥</span><span>❤️</span>
@@ -178,13 +189,9 @@
             <button id="btn-emoji" class="icon-btn">😊</button>
             <button id="btn-mic" class="icon-btn">🎤</button>
             <button id="btn-speaker" class="icon-btn">🔊</button>
-            <button id="btn-send-chat" class="icon-btn" style="background:var(--accent-color);border-radius:50%;padding:4px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
         </div>
     </footer>
 
-    <!-- PeerJS for Voice Chat -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="js/ono.js"></script>
 
