@@ -874,12 +874,13 @@ class OnoGameManager {
         let content = topCard.type === 'number' ? topCard.value : this.getIconForType(topCard.type);
         // Show color indicator for wilds if played
         let bgClass = topCard.color;
+        let typeClass = topCard.type;
         if (topCard.type.startsWith('wild')) {
             bgClass = this.currentColor || 'black';
         }
 
         this.elPlayedPile.innerHTML = `
-            <div class="card ${bgClass}">
+            <div class="card ${bgClass} ${typeClass}">
                 <div class="card-inner">
                     ${topCard.type === 'number' ? `<div class="card-number">${content}</div>` : `<div class="card-icon">${content}</div>`}
                 </div>
@@ -914,7 +915,7 @@ class OnoGameManager {
             const translateY = Math.abs(angle) * 0.5; // Arc effect
 
             const el = document.createElement('div');
-            el.className = `card ${card.color}`;
+            el.className = `card ${card.color} ${card.type}`;
             el.style.transform = `rotate(${angle}deg) translateY(${translateY}px)`;
 
             let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
