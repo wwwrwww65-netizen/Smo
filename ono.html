@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>لعبة ONO (أونو)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/ono.css">
+</head>
+<body>
+
+    <!-- خلفية اللعبة (شعاعي داكن مع نمط) -->
+    <div class="ono-bg">
+        <div class="ono-bg-pattern"></div>
+    </div>
+
+    <!-- الشريط العلوي -->
+    <header class="top-header">
+        <div class="header-left">
+            <button id="btn-settings" class="btn-hexagon">⚙️</button>
+            <button id="btn-exit" class="btn-hexagon" onclick="window.location.href='./index.html'">🚪</button>
+        </div>
+        <div class="header-right">
+            <div class="ping-indicator capsule">
+                <span class="ping-dot"></span> <span id="ping-text">0 ms</span>
+            </div>
+            <div class="viewers-indicator capsule">
+                👁️ <span id="viewers-count">0</span>
+            </div>
+            <div id="game-timer-capsule" class="timer-capsule capsule hidden">
+                ⏱️ <span id="game-timer">0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- النوافذ المنبثقة (Modals) -->
+    <!-- نافذة اختيار اللون للبطاقات السوداء -->
+    <div id="modal-color-picker" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">اختر لوناً جديداً</div>
+            <div class="color-options">
+                <div class="color-option color-red" data-color="red"></div>
+                <div class="color-option color-blue" data-color="blue"></div>
+                <div class="color-option color-green" data-color="green"></div>
+                <div class="color-option color-yellow" data-color="yellow"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة ONO Penalty -->
+    <div id="modal-ono-penalty" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header" style="color: #ff4b2b;">عقوبة ONO!</div>
+            <div id="modal-penalty-message">لقد نسيت الضغط على زر ONO وتم كشفك! سيتم سحب بطاقتين كعقوبة.</div>
+            <div class="modal-actions">
+                <button id="btn-accept-penalty" class="btn-primary">حسناً</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-toast" class="toast hidden"></div>
+
+    <main class="ono-container">
+
+        <!-- قسم الانتظار (Lobby) -->
+        <section id="section-lobby" class="active">
+            <!-- Hero Section: Logo, Cards, Sparkles -->
+            <div class="hero-section">
+                <div class="sparkles-container" id="sparkles"></div>
+                <div class="cards-fan">
+                    <div class="card card-demo green" style="--rotation: -30deg;"></div>
+                    <div class="card card-demo blue reverse" style="--rotation: -10deg;"></div>
+                    <div class="card card-demo black wild4" style="--rotation: 10deg;"></div>
+                    <div class="card card-demo red seven" style="--rotation: 30deg;"></div>
+                </div>
+                <div class="logo-3d">ONO</div>
+            </div>
+
+            <!-- إشعار النظام -->
+            <div class="system-banner" id="system-banner">
+                بانتظار انضمام اللاعبين...
+            </div>
+
+            <div class="room-id-display">
+                رمز الغرفة: <strong id="display-room-id">...</strong>
+            </div>
+
+            <!-- المقاعد الدائرية (Player Slots) -->
+            <div class="player-slots-container">
+                <div class="player-slots">
+                    <div class="player-slot" id="lobby-slot-0"></div>
+                    <div class="player-slot" id="lobby-slot-1"></div>
+                    <div class="player-slot" id="lobby-slot-2"></div>
+                    <div class="player-slot" id="lobby-slot-3"></div>
+                    <div class="player-slot" id="lobby-slot-4"></div>
+                    <div class="player-slot" id="lobby-slot-5"></div>
+                </div>
+            </div>
+
+            <!-- أزرار الإجراءات -->
+            <div class="lobby-actions">
+                <button id="btn-start-game" class="btn-start disabled">بدء اللعبة</button>
+                <div class="secondary-actions">
+                    <button id="btn-match-others" class="btn-match" style="display:none;">مطابقة الآخرين</button>
+                    <button id="btn-invite-friends" class="btn-invite" onclick="copyRoomLink()">ادعو الاصدقاء</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ساحة اللعب (Game Arena) -->
+        <section id="section-game" class="hidden">
+            <!-- منطقة اللاعبين الموزعين دائرياً -->
+            <div class="arena-center">
+                <!-- الكومة المركزية -->
+                <div class="center-stack" id="center-stack">
+                    <!-- Pile of played cards -->
+                    <div class="pile" id="played-pile"></div>
+
+                    <!-- Draw pile -->
+                    <div class="draw-pile" id="draw-pile">
+                        <div class="card back"></div>
+                        <div class="card back" style="transform: translate(-2px, -2px);"></div>
+                        <div class="card back" style="transform: translate(-4px, -4px);"></div>
+                    </div>
+
+                    <!-- أسهم الاتجاه -->
+                    <div class="direction-arrows" id="direction-arrows"></div>
+                </div>
+
+                <!-- عقد اللاعبين (Nodes) -->
+                <div id="player-nodes-container">
+                    <!-- سيتم توليدها برمجياً لضبط الزوايا -->
+                </div>
+            </div>
+
+            <!-- منطقة أوراق اللاعب الحالي (أسفل الشاشة) -->
+            <div class="bottom-hand-area">
+                <div class="hand-cards" id="my-hand">
+                    <!-- سيتم إضافة البطاقات هنا برمجياً -->
+                </div>
+
+                <!-- أزرار الأكشن الجانبية -->
+                <button id="btn-ono-action" class="btn-ono-action hidden">ONO</button>
+                <button id="btn-draw-card" class="btn-draw-card">سحب</button>
+            </div>
+
+            <!-- سجل الدردشة في اللعبة -->
+            <div class="game-chat-history" id="game-chat-history">
+                <!-- رسائل الدردشة -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- شريط الإدخال السفلي (Footer Input) -->
+    <footer class="footer-input">
+        <div class="left-icons">
+            <button class="icon-btn">🎁</button>
+            <button class="icon-btn">🪙</button>
+        </div>
+
+        <div class="chat-input-wrapper">
+            <input type="text" id="chat-input" class="capsule-input" placeholder="اكتب رسالة...">
+            <div id="emoji-picker" class="emoji-picker hidden">
+                <div class="emoji-list">
+                    <span>😊</span><span>😂</span><span>😍</span><span>🤣</span><span>👍</span><span>🙌</span><span>🔥</span><span>❤️</span>
+                    <span>👋</span><span>🎉</span><span>🤔</span><span>😢</span><span>😡</span><span>🤯</span><span>👏</span><span>💪</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-icons">
+            <button id="btn-emoji" class="icon-btn">😊</button>
+            <button id="btn-mic" class="icon-btn">🎤</button>
+            <button id="btn-speaker" class="icon-btn">🔊</button>
+            <button id="btn-send-chat" class="icon-btn" style="background:var(--accent-color);border-radius:50%;padding:4px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+        </div>
+    </footer>
+
+    <!-- PeerJS for Voice Chat -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script type="module" src="js/ono.js"></script>
+
+    <script>
+        function copyRoomLink() {
+            const el = document.createElement('textarea');
+            const roomId = new URLSearchParams(window.location.search).get('roomID');
+            el.value = window.location.origin + window.location.pathname.replace('ono.html', '') + '?roomID=' + roomId;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+
+            const toast = document.getElementById('main-toast');
+            toast.textContent = "تم نسخ رابط الغرفة! ✅";
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3500);
+        }
+    </script>
+</body>
+</html>
