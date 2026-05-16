@@ -1,16 +1,17 @@
 /*
-  ONO Game Styles
-  Follows modern Glassmorphism 'Night Mode' aesthetic with Almarai font.
+  ONO Game Styles - Professional 3D Edition
+  Updated to match high-quality reference image.
 */
 
 :root {
-  --ono-red: #ff4b2b;
-  --ono-blue: #007bff;
-  --ono-green: #28a745;
-  --ono-yellow: #ffc107;
+  --ono-red: #e74c3c;
+  --ono-blue: #3498db;
+  --ono-green: #2ecc71;
+  --ono-yellow: #ff9800; /* Adjusted to an orange-yellow like the picture */
   --ono-black: #2c3e50;
 
-  --bg-gradient: radial-gradient(circle at center, #1e3c72 0%, #2a5298 50%, #0f172a 100%);
+  /* Vibrant blue gradient matching the screenshot */
+  --bg-gradient: radial-gradient(circle at center, #2980b9 0%, #1a5276 50%, #0d2847 100%);
 }
 
 body, html {
@@ -20,6 +21,7 @@ body, html {
   height: 100%;
   overflow: hidden;
   font-family: 'Almarai', sans-serif;
+  background-color: #0d2847;
 }
 
 /* Background */
@@ -30,7 +32,8 @@ body, html {
   width: 100%;
   height: 100%;
   background: var(--bg-gradient);
-  z-index: 1; /* Lowest */
+  z-index: 1; 
+  overflow: hidden;
 }
 
 .ono-bg-pattern {
@@ -39,10 +42,22 @@ body, html {
   left: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.05;
-  background-image: radial-gradient(#ffffff 1px, transparent 1px);
-  background-size: 20px 20px;
+  opacity: 0.1;
+  background-image: radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px);
+  background-size: 30px 30px;
 }
+
+/* Concentric rings for the center glow */
+.center-glow-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+.ring-1 { width: 40vh; height: 40vh; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); }
+.ring-2 { width: 70vh; height: 70vh; border-style: dashed; }
 
 /* Container Z-index Hierarchy */
 .ono-container {
@@ -50,7 +65,7 @@ body, html {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 130px); /* Leave space for header and footer */
+  height: calc(100vh - 130px); 
   margin-top: 60px;
 }
 
@@ -76,36 +91,38 @@ body, html {
 }
 
 .btn-hexagon {
-  width: 40px;
-  height: 40px;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 8px;
   backdrop-filter: blur(10px);
   color: white;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
 }
 
 .capsule {
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(5px);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
   border-radius: 20px;
   padding: 5px 12px;
-  color: white;
-  font-size: 0.9rem;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: bold;
   display: flex;
   align-items: center;
-  gap: 5px;
-  border: 1px solid rgba(255,255,255,0.1);
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
 }
 
+.ping-indicator { color: #f1c40f; }
 .ping-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background-color: #28a745;
   border-radius: 50%;
   box-shadow: 0 0 5px #28a745;
@@ -123,36 +140,37 @@ body, html {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 70px;
-  background: rgba(15, 23, 42, 0.8);
+  height: 60px;
+  background: rgba(10, 20, 40, 0.9);
   backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
   box-sizing: border-box;
-  z-index: 30; /* Above chat history */
-  border-top: 1px solid rgba(255,255,255,0.1);
+  z-index: 30; 
 }
 
 .left-icons, .right-icons {
   display: flex;
-  gap: 8px;
+  gap: 5px;
   align-items: center;
 }
 
 .icon-btn {
   background: transparent;
   border: none;
-  color: white;
-  font-size: 1.2rem;
+  color: rgba(255,255,255,0.7);
+  font-size: 1.3rem;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
   width: 35px;
   height: 35px;
+  transition: color 0.2s;
 }
+.icon-btn:hover { color: #fff; }
 
 .chat-input-wrapper {
   flex-grow: 1;
@@ -162,18 +180,20 @@ body, html {
 
 .capsule-input {
   width: 100%;
-  height: 40px;
-  border-radius: 25px;
-  background: #1e293b;
-  border: 1px solid rgba(255,255,255,0.1);
+  height: 38px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.1);
+  border: none;
   color: white;
   padding: 0 15px;
   box-sizing: border-box;
   font-family: 'Almarai', sans-serif;
+  text-align: right;
 }
+.capsule-input::placeholder { color: rgba(255,255,255,0.5); }
 .capsule-input:focus {
   outline: none;
-  border-color: #4a90e2;
+  background: rgba(255,255,255,0.15);
 }
 
 /* Lobby Section */
@@ -206,192 +226,6 @@ body, html {
   z-index: 3;
 }
 
-.cards-fan {
-  position: absolute;
-  z-index: 2;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-}
-
-.card {
-  width: 60px;
-  height: 90px;
-  border-radius: 8px;
-  background-color: white;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-  position: absolute;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: bold;
-  font-size: 1.5rem;
-  color: white;
-  border: 3px solid white;
-  box-sizing: border-box;
-  transition: transform 0.3s;
-}
-
-.card.green { background: var(--ono-green); }
-.card.blue { background: var(--ono-blue); }
-.card.red { background: var(--ono-red); }
-.card.yellow { background: var(--ono-yellow); }
-.card.black { background: var(--ono-black); }
-
-.card.back {
-  background: #111;
-  border-color: #ff4b2b;
-  background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,0,0,0.2) 10px, rgba(255,0,0,0.2) 20px);
-}
-
-.card-demo {
-  transform: rotate(var(--rotation)) translateY(-20px);
-}
-
-.sparkles-container {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-}
-
-.sparkle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 0 10px white;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(0.8); opacity: 0.5; }
-  50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(0.8); opacity: 0.5; }
-}
-
-.system-banner {
-  background: rgba(30, 60, 114, 0.8);
-  color: white;
-  text-align: center;
-  padding: 10px;
-  font-size: 0.9rem;
-  backdrop-filter: blur(5px);
-  margin-bottom: 10px;
-}
-
-.room-id-display {
-  text-align: center;
-  color: #ccc;
-  margin-bottom: 20px;
-}
-
-.player-slots-container {
-  padding: 0 10px;
-}
-
-.player-slots {
-  display: flex;
-  justify-content: space-evenly;
-  width: 100%;
-}
-
-.player-slot {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.4);
-  border: 1px dashed rgba(255,255,255,0.3);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-}
-
-.player-slot img {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.player-slot .name {
-  position: absolute;
-  bottom: -20px;
-  font-size: 0.7rem;
-  color: white;
-  white-space: nowrap;
-  background: rgba(0,0,0,0.6);
-  padding: 2px 5px;
-  border-radius: 10px;
-}
-
-.player-slot .host-icon {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  font-size: 0.8rem;
-  background: var(--ono-yellow);
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: black;
-}
-
-.lobby-actions {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.btn-start {
-  width: 100%;
-  padding: 15px;
-  border-radius: 25px;
-  border: none;
-  font-size: 1.2rem;
-  font-weight: bold;
-  font-family: 'Almarai', sans-serif;
-  cursor: pointer;
-  background: linear-gradient(135deg, #00b09b, #96c93d);
-  color: white;
-  box-shadow: 0 5px 15px rgba(0, 176, 155, 0.4);
-  transition: all 0.3s;
-}
-
-.btn-start.disabled {
-  background: #555;
-  color: #888;
-  box-shadow: inset 0 3px 5px rgba(0,0,0,0.5);
-  cursor: not-allowed;
-}
-
-.secondary-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-match, .btn-invite {
-  flex: 1;
-  padding: 10px;
-  border-radius: 20px;
-  border: none;
-  color: white;
-  font-family: 'Almarai', sans-serif;
-  cursor: pointer;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-}
-
-.btn-match { background: linear-gradient(135deg, #4facfe, #00f2fe); }
-.btn-invite { background: linear-gradient(135deg, #11998e, #38ef7d); }
-
 /* Game Arena */
 .arena-center {
   flex: 1;
@@ -401,10 +235,68 @@ body, html {
   align-items: center;
 }
 
+/* 3D Realistic Cards */
+.card {
+  width: 55px;
+  height: 85px;
+  border-radius: 6px;
+  background-color: #f4f6f9; /* Realistic slightly off-white */
+  box-shadow: 2px 3px 8px rgba(0,0,0,0.4), inset 0 0 2px rgba(255,255,255,0.8);
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 800;
+  border: 1px solid #ddd;
+  box-sizing: border-box;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.card-number { font-size: 1.8rem; }
+.card-icon { font-size: 1.2rem; }
+
+/* The back of the card */
+.card.back {
+  background-color: #111;
+  border: 3px solid #ff4b2b;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.1) 5px, rgba(255,255,255,0.1) 10px);
+  box-shadow: 1px 2px 5px rgba(0,0,0,0.5);
+}
+
+/* Directional Chevrons (Yellow arrows around center) */
+.table-direction-indicator {
+  position: absolute;
+  color: #ffeb3b;
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: 2px;
+  text-shadow: 0 0 5px rgba(255, 235, 59, 0.8);
+  opacity: 0.8;
+  animation: flashArrow 1.5s infinite alternate;
+}
+.top-indicator { top: 20%; transform: rotate(90deg); }
+.bottom-indicator { bottom: 30%; transform: rotate(-90deg); }
+.left-indicator { left: 20%; }
+.right-indicator { right: 20%; transform: rotate(180deg); }
+
+@keyframes flashArrow {
+  from { opacity: 0.4; text-shadow: 0 0 2px rgba(255, 235, 59, 0.5); }
+  to { opacity: 1; text-shadow: 0 0 10px rgba(255, 235, 59, 1); }
+}
+
 .center-stack {
   position: relative;
-  width: 140px;
-  height: 100px;
+  width: 150px;
+  height: 150px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -417,118 +309,82 @@ body, html {
   height: 90px;
 }
 
-.pile { left: 10px; }
-.draw-pile { right: 10px; cursor: pointer; }
+.pile { left: 20px; z-index: 2; }
+.draw-pile { right: 20px; cursor: pointer; z-index: 1; }
 
-.draw-pile:active {
-  transform: scale(0.95);
-}
+.draw-pile:active { transform: scale(0.95); }
 
-.pile .card {
-  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-}
-
-.direction-arrows {
-  position: absolute;
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  border: 2px dashed rgba(255, 193, 7, 0.5);
-  animation: spin 10s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes spin {
-  100% { transform: rotate(360deg); }
-}
-
+/* Player Nodes (Avatars) */
 #player-nodes-container {
   position: absolute;
   width: 100%;
   height: 100%;
   top: 0;
   left: 0;
-  pointer-events: none; /* Let clicks pass through to center */
+  pointer-events: none;
 }
 
 .player-node {
   position: absolute;
-  width: 50px;
-  height: 50px;
-  transform: translate(-50%, -50%); /* Center the node on its calculated coords */
+  width: 60px;
+  height: 60px;
+  transform: translate(-50%, -50%);
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .player-node img {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.3);
-  background: rgba(0,0,0,0.5);
+  border: 3px solid #8bd8e3; /* Metallic crystal border */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 0 10px rgba(255,255,255,0.5);
+  background: #2c3e50;
+  object-fit: cover;
 }
 
 .player-node.active-turn img {
   border-color: #38ef7d;
-  box-shadow: 0 0 15px #38ef7d;
+  box-shadow: 0 0 15px #38ef7d, 0 4px 10px rgba(0,0,0,0.5);
 }
 
 .player-node .name {
-  position: absolute;
-  bottom: -20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
+  margin-top: 5px;
   color: white;
-  font-size: 0.7rem;
-  padding: 2px 5px;
-  border-radius: 10px;
+  font-size: 0.8rem;
+  text-shadow: 1px 1px 2px black;
   white-space: nowrap;
 }
 
+/* Card count badge styled as a mini black card */
 .player-node .cards-count {
   position: absolute;
   top: -5px;
-  right: -5px;
-  background: black;
-  color: white;
-  font-size: 0.7rem;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  right: -10px;
+  background: #111;
+  color: #ff9800;
+  font-size: 0.85rem;
+  font-weight: 800;
+  width: 20px;
+  height: 28px;
+  border-radius: 3px;
   display: flex;
   justify-content: center;
   align-items: center;
-  border: 1px solid rgba(255,255,255,0.5);
-}
-
-.turn-arrow {
-  position: absolute;
-  top: -25px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #38ef7d;
-  font-size: 1.2rem;
-  animation: bounce 0.5s infinite alternate;
-  display: none;
-}
-
-.player-node.active-turn .turn-arrow {
-  display: block;
-}
-
-@keyframes bounce {
-  from { transform: translate(-50%, 0); }
-  to { transform: translate(-50%, 5px); }
+  border: 1px solid #ccc;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
 
 /* Bottom Hand Area */
 .bottom-hand-area {
-  height: 120px;
+  height: 140px;
   position: relative;
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  padding-bottom: 20px;
+  padding-bottom: 10px;
   z-index: 15;
 }
 
@@ -537,88 +393,98 @@ body, html {
   justify-content: center;
   align-items: flex-end;
   position: relative;
+  width: 80%;
+  height: 100px;
 }
 
 .hand-cards .card {
-  position: relative;
-  margin-left: -20px; /* Overlap */
+  position: absolute;
+  bottom: 0;
   transform-origin: bottom center;
-  transition: all 0.2s;
   cursor: pointer;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+  box-shadow: -3px -2px 8px rgba(0,0,0,0.3);
 }
 
 .hand-cards .card:hover {
-  transform: translateY(-20px) !important;
+  transform: translateY(-25px) scale(1.05) !important;
   z-index: 100 !important;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.5);
 }
 
+/* ONO Action Button (Big 3D Pill) */
 .btn-ono-action {
   position: absolute;
-  right: 20px;
-  bottom: 20px;
-  width: 60px;
-  height: 60px;
+  right: 15px;
+  bottom: 40px;
+  width: 65px;
+  height: 65px;
   border-radius: 50%;
-  background: radial-gradient(circle at top left, #ff416c, #ff4b2b);
-  border: 3px solid #fff;
+  background: radial-gradient(circle at 30% 30%, #ff758c, #ff0844);
+  border: 3px solid #f1c40f;
   color: white;
   font-weight: 900;
-  font-size: 1.1rem;
-  box-shadow: 0 10px 20px rgba(255, 75, 43, 0.5);
+  font-size: 1.2rem;
+  box-shadow: 0 6px 0 #c2185b, 0 15px 20px rgba(0,0,0,0.4), inset 0 2px 5px rgba(255,255,255,0.5);
   cursor: pointer;
   font-family: 'Almarai', sans-serif;
-  animation: pulse 1s infinite;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  transition: all 0.1s;
+  z-index: 20;
 }
 
-.btn-draw-card {
+.btn-ono-action:active {
+  transform: translateY(6px);
+  box-shadow: 0 0 0 #c2185b, 0 5px 10px rgba(0,0,0,0.4), inset 0 2px 5px rgba(255,255,255,0.5);
+}
+
+/* Draw Button styled as badge on the left */
+.draw-badge-container {
   position: absolute;
   left: 20px;
-  bottom: 20px;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: radial-gradient(circle at top left, #4facfe, #00f2fe);
-  border: 2px solid #fff;
+  bottom: 50px;
+  z-index: 20;
+}
+.btn-draw-card.badge-style {
+  width: 35px;
+  height: 45px;
+  border-radius: 20px;
+  background: rgba(0,0,0,0.6);
+  border: 2px solid #3498db;
   color: white;
   font-weight: bold;
-  font-size: 0.9rem;
-  box-shadow: 0 5px 10px rgba(0, 242, 254, 0.5);
+  font-size: 1.2rem;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   cursor: pointer;
-  font-family: 'Almarai', sans-serif;
 }
 
 /* Game Chat History */
 .game-chat-history {
   position: absolute;
-  bottom: 120px; /* Above hand cards */
-  left: 10px;
-  width: 250px;
-  max-height: 150px;
-  overflow-y: auto;
+  bottom: 0;
+  left: 5px;
+  width: 280px;
+  background: rgba(15, 25, 40, 0.85);
+  border-radius: 12px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   z-index: 5;
-  padding-right: 5px;
-  pointer-events: none; /* Let user click cards behind chat */
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255,255,255,0.05);
 }
 
 .game-chat-history .message {
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 10px;
-  padding: 5px 10px;
   color: white;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   align-self: flex-start;
   max-width: 100%;
   word-wrap: break-word;
-  pointer-events: auto;
+  line-height: 1.4;
 }
 
 .game-chat-history .message .sender {
-  color: #ffc107;
-  font-weight: bold;
+  color: #ccc;
   margin-left: 5px;
 }
 
@@ -634,9 +500,7 @@ body, html {
   backdrop-filter: blur(5px);
 }
 
-.modal.hidden {
-  display: none !important;
-}
+.modal.hidden { display: none !important; }
 
 .modal-content {
   background: #1e293b;
@@ -673,38 +537,16 @@ body, html {
   transition: transform 0.2s;
 }
 
-.color-option:active {
-  transform: scale(0.9);
-}
-
+.color-option:active { transform: scale(0.9); }
 .color-red { background: var(--ono-red); }
 .color-blue { background: var(--ono-blue); }
 .color-green { background: var(--ono-green); }
 .color-yellow { background: var(--ono-yellow); }
 
-.modal-actions {
-  margin-top: 20px;
-}
+.modal-actions { margin-top: 20px; }
 
 #modal-penalty-message {
   color: #ccc;
   font-size: 0.9rem;
   margin-bottom: 15px;
-}
-
-.card-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
-.card-number {
-  font-size: 2rem;
-}
-
-.card-icon {
-  font-size: 1.5rem;
 }
