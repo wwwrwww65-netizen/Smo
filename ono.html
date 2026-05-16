@@ -105,7 +105,7 @@
             <div class="lobby-actions">
                 <button id="btn-start-game" class="btn-start disabled">بدء اللعبة</button>
                 <div class="secondary-actions">
-                    <button id="btn-match-others" class="btn-match" style="display:none;">مطابقة الآخرين</button>
+                    <button id="btn-add-bot" class="btn-match" style="display:none;">إضافة بوت 🤖</button>
                     <button id="btn-invite-friends" class="btn-invite" onclick="copyRoomLink()">ادعو الاصدقاء</button>
                 </div>
             </div>
@@ -139,6 +139,7 @@
 
             <!-- منطقة أوراق اللاعب الحالي (أسفل الشاشة) -->
             <div class="bottom-hand-area">
+                <div id="my-turn-indicator" class="hidden" style="color:#38ef7d; font-weight:bold; margin-bottom:5px; text-shadow:0 0 5px #000; position:absolute; top:-25px; left:50%; transform:translateX(-50%);">▼ دورك الآن</div>
                 <div class="hand-cards" id="my-hand">
                     <!-- سيتم إضافة البطاقات هنا برمجياً -->
                 </div>
