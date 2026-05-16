@@ -491,7 +491,7 @@ class GameManager {
     }
 
     listenToGlobalOnoRoom() {
-        const globalOnoRef = ref(this.db, 'global/public_ono_room');
+        const globalOnoRef = ref(this.db, 'rooms/public_ono_room');
         onValue(globalOnoRef, (snapshot) => {
             const data = snapshot.val();
             if (this.btnOnoRoom) {
@@ -549,7 +549,7 @@ class GameManager {
                 });
 
                 // Set as global public ONO room
-                await set(ref(this.db, 'global/public_ono_room'), {
+                await set(ref(this.db, 'rooms/public_ono_room'), {
                     roomId: roomId,
                     hostId: this.myId,
                     createdAt: serverTimestamp()
