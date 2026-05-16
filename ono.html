@@ -22,7 +22,7 @@
     <header class="top-header">
         <div class="header-left">
             <button id="btn-settings" class="btn-hexagon">⚙️</button>
-            <button id="btn-exit" class="btn-hexagon" onclick="window.location.href='./index.html'">🚪</button>
+            <button id="btn-exit" class="btn-hexagon">🚪</button>
             <div id="game-timer-capsule" class="timer-capsule capsule">
                 ⏱️ <span id="game-timer">02:31</span>
             </div>
@@ -55,6 +55,29 @@
             <div id="modal-penalty-message">لقد نسيت الضغط على زر ONO وتم كشفك! سيتم سحب بطاقتين كعقوبة.</div>
             <div class="modal-actions">
                 <button id="btn-accept-penalty" class="btn-primary">حسناً</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-exit-confirm" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">خروج من اللعبة</div>
+            <div>هل تود الخروج من اللعبة؟ سيتم اعتبارك منسحباً.</div>
+            <div class="modal-actions">
+                <button id="btn-exit-yes" class="btn-primary" style="background: #ff4b2b;">نعم، خروج</button>
+                <button id="btn-exit-no" class="btn-secondary">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-results" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">نتائج اللعبة</div>
+            <div id="results-body">
+                <!-- النتائج هنا -->
+            </div>
+            <div class="loading-bar-container" style="margin-top: 15px;">
+                <div id="results-timeout-bar" style="height: 4px; background: #38ef7d; width: 100%;"></div>
             </div>
         </div>
     </div>
