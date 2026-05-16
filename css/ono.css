@@ -1,16 +1,14 @@
 /*
   ONO Game Styles - Professional 3D Edition
-  Updated to match high-quality reference image.
+  تم التعديل لضبط المسافات العمودية مطابقة للصورة 100%
 */
 
 :root {
   --ono-red: #e74c3c;
   --ono-blue: #3498db;
   --ono-green: #2ecc71;
-  --ono-yellow: #ff9800; /* Adjusted to an orange-yellow like the picture */
+  --ono-yellow: #ff9800; 
   --ono-black: #2c3e50;
-
-  /* Vibrant blue gradient matching the screenshot */
   --bg-gradient: radial-gradient(circle at center, #2980b9 0%, #1a5276 50%, #0d2847 100%);
 }
 
@@ -27,27 +25,17 @@ body, html {
 /* Background */
 .ono-bg {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0; width: 100%; height: 100%;
   background: var(--bg-gradient);
-  z-index: 1; 
-  overflow: hidden;
+  z-index: 1; overflow: hidden;
 }
-
 .ono-bg-pattern {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0; width: 100%; height: 100%;
   opacity: 0.1;
   background-image: radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px);
   background-size: 30px 30px;
 }
-
-/* Concentric rings for the center glow */
 .center-glow-ring {
   position: absolute;
   top: 50%; left: 50%;
@@ -59,494 +47,259 @@ body, html {
 .ring-1 { width: 40vh; height: 40vh; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); }
 .ring-2 { width: 70vh; height: 70vh; border-style: dashed; }
 
-/* Container Z-index Hierarchy */
 .ono-container {
   position: relative;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 130px); 
-  margin-top: 60px;
+  height: 100vh;
 }
 
 /* Top Header */
 .top-header {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 60px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 15px;
-  box-sizing: border-box;
-  z-index: 20;
+  top: 0; left: 0; width: 100%; height: 60px;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 15px; box-sizing: border-box; z-index: 20;
 }
-
-.header-left, .header-right {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
+.header-left, .header-right { display: flex; gap: 10px; align-items: center; }
 .btn-hexagon {
-  width: 36px;
-  height: 36px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  color: white;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 1.1rem;
+  width: 36px; height: 36px; background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255,255,255,0.3); border-radius: 8px;
+  backdrop-filter: blur(10px); color: white; cursor: pointer;
+  display: flex; justify-content: center; align-items: center; font-size: 1.1rem;
 }
-
 .capsule {
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(8px);
-  border-radius: 20px;
-  padding: 5px 12px;
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  background: rgba(0, 0, 0, 0.3); backdrop-filter: blur(8px);
+  border-radius: 20px; padding: 5px 12px; color: #fff;
+  font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px;
   border: 1px solid rgba(255,255,255,0.2);
 }
-
 .ping-indicator { color: #f1c40f; }
-.ping-dot {
-  width: 10px;
-  height: 10px;
-  background-color: #28a745;
-  border-radius: 50%;
-  box-shadow: 0 0 5px #28a745;
-}
+.ping-dot { width: 10px; height: 10px; background-color: #28a745; border-radius: 50%; box-shadow: 0 0 5px #28a745; }
+.timer-capsule { background: #1e3c72; border: 1px solid #4a90e2; animation: pulse 2s infinite; }
 
-.timer-capsule {
-  background: #1e3c72;
-  border: 1px solid #4a90e2;
-  animation: pulse 2s infinite;
-}
-
-/* Footer Input */
+/* 1. Footer Input (أقصى الأسفل) */
 .footer-input {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 60px;
-  background: rgba(10, 20, 40, 0.9);
-  backdrop-filter: blur(10px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
-  box-sizing: border-box;
-  z-index: 30; 
+  bottom: 0; left: 0; width: 100%; height: 60px;
+  background: rgba(10, 20, 40, 0.9); backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px; box-sizing: border-box; z-index: 30; 
 }
-
-.left-icons, .right-icons {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-}
-
+.left-icons, .right-icons { display: flex; gap: 5px; align-items: center; }
 .icon-btn {
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,0.7);
-  font-size: 1.3rem;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 35px;
-  height: 35px;
-  transition: color 0.2s;
+  background: transparent; border: none; color: rgba(255,255,255,0.7);
+  font-size: 1.3rem; cursor: pointer; display: flex;
+  justify-content: center; align-items: center; width: 35px; height: 35px;
 }
 .icon-btn:hover { color: #fff; }
-
-.chat-input-wrapper {
-  flex-grow: 1;
-  position: relative;
-  margin: 0 10px;
-}
-
+.chat-input-wrapper { flex-grow: 1; margin: 0 10px; position: relative; }
 .capsule-input {
-  width: 100%;
-  height: 38px;
-  border-radius: 20px;
-  background: rgba(255,255,255,0.1);
-  border: none;
-  color: white;
-  padding: 0 15px;
-  box-sizing: border-box;
-  font-family: 'Almarai', sans-serif;
-  text-align: right;
+  width: 100%; height: 38px; border-radius: 20px;
+  background: rgba(255,255,255,0.1); border: none; color: white;
+  padding: 0 15px; box-sizing: border-box; font-family: 'Almarai', sans-serif; text-align: right;
 }
 .capsule-input::placeholder { color: rgba(255,255,255,0.5); }
-.capsule-input:focus {
-  outline: none;
-  background: rgba(255,255,255,0.15);
+.capsule-input:focus { outline: none; background: rgba(255,255,255,0.15); }
+
+/* 2. منطقة الدردشة (فوق الفوتر مباشرة وتأخذ ربع الشاشة تقريباً) */
+.game-chat-wrapper {
+  position: absolute;
+  bottom: 70px; 
+  right: 10px;
+  left: 10px;
+  height: 16vh; 
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  z-index: 15;
 }
 
-/* Lobby Section */
-#section-lobby, #section-game {
-  width: 100%;
-  height: 100%;
+.btn-collapse-chat {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
+  color: white; font-weight: bold; cursor: pointer; backdrop-filter: blur(5px);
+  margin-bottom: 5px;
+}
+
+.game-chat-history {
+  flex-grow: 1;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  overflow-y: hidden;
+  margin-bottom: 5px;
 }
 
-#section-lobby.hidden, #section-game.hidden {
-  display: none !important;
+.game-chat-history .message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 25, 45, 0.85);
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: white;
+  font-size: 0.9rem;
+  align-self: flex-start;
+  max-width: 90%;
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
-.hero-section {
-  flex: 1;
+.chat-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.msg-content { display: flex; align-items: center; flex-wrap: wrap; }
+.msg-content .sender { color: #ccc; font-weight: bold; margin-left: 5px; }
+
+/* 3. منطقة الأوراق (تطفو فوق الدردشة تماماً) */
+.bottom-hand-area {
+  position: absolute;
+  bottom: calc(70px + 16vh); 
+  left: 0;
+  width: 100%;
+  height: 120px;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-end;
+  z-index: 20;
+  pointer-events: none; /* للسماح بالضغط على ما خلفها إن لزم */
+}
+
+.hand-cards {
   position: relative;
+  width: 70%;
+  height: 100px;
+  display: flex; justify-content: center; align-items: flex-end;
+  pointer-events: auto;
 }
 
-.logo-3d {
-  font-size: 5rem;
-  font-weight: 800;
-  background: linear-gradient(to bottom, #ffe259, #ffa751, #ff4b2b);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0px 10px 5px rgba(0,0,0,0.5));
-  z-index: 3;
+.hand-cards .card {
+  position: absolute; bottom: 0;
+  transform-origin: bottom center; cursor: pointer;
+  box-shadow: -3px -2px 8px rgba(0,0,0,0.3);
 }
 
-/* Game Arena */
+.hand-cards .card:hover {
+  transform: translateY(-25px) scale(1.05) !important;
+  z-index: 100 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+}
+
+/* زر السحب على يسار الأوراق */
+.draw-badge-container {
+  position: absolute; left: 20px; bottom: 20px; pointer-events: auto;
+}
+.btn-draw-card.badge-style {
+  width: 45px; height: 45px; border-radius: 50%;
+  background: rgba(10, 30, 60, 0.8); border: 2px solid #3498db;
+  color: white; font-weight: bold; font-size: 1.2rem;
+  display: flex; justify-content: center; align-items: center; 
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5); cursor: pointer;
+}
+
+/* زر ONO على يمين الأوراق */
+.btn-ono-action {
+  position: absolute; right: 20px; bottom: 10px; pointer-events: auto;
+  width: 70px; height: 70px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ff758c, #ff0844);
+  border: 3px solid #64b5f6;
+  color: #fff; font-weight: 900; font-size: 1.3rem;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5), inset 0 -4px 8px rgba(0,0,0,0.3);
+  cursor: pointer; font-family: 'Almarai', sans-serif;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+.btn-ono-action:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3);
+}
+
+/* 4. الطاولة واللاعبين (النصف العلوي المتبقي) */
 .arena-center {
-  flex: 1;
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position: absolute;
+  top: 60px; /* تحت الهيدر */
+  bottom: calc(70px + 16vh + 120px); /* تنتهي فوق الأوراق */
+  left: 0;
+  width: 100%;
+  display: flex; justify-content: center; align-items: center;
 }
 
 /* 3D Realistic Cards */
 .card {
-  width: 55px;
-  height: 85px;
-  border-radius: 6px;
-  background-color: #f4f6f9; /* Realistic slightly off-white */
+  width: 55px; height: 85px; border-radius: 6px;
+  background-color: #f4f6f9; 
   box-shadow: 2px 3px 8px rgba(0,0,0,0.4), inset 0 0 2px rgba(255,255,255,0.8);
-  position: absolute;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: 800;
-  border: 1px solid #ddd;
-  box-sizing: border-box;
+  position: absolute; display: flex; justify-content: center; align-items: center;
+  font-weight: 800; border: 1px solid #ddd; box-sizing: border-box;
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-
-.card-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
+.card-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
 .card-number { font-size: 1.8rem; }
 .card-icon { font-size: 1.2rem; }
-
-/* The back of the card */
 .card.back {
-  background-color: #111;
-  border: 3px solid #ff4b2b;
+  background-color: #111; border: 3px solid #ff4b2b;
   background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.1) 5px, rgba(255,255,255,0.1) 10px);
-  box-shadow: 1px 2px 5px rgba(0,0,0,0.5);
 }
 
-/* Directional Chevrons (Yellow arrows around center) */
+/* أسهم الطاولة الصفراء */
 .table-direction-indicator {
-  position: absolute;
-  color: #ffeb3b;
-  font-weight: 800;
-  font-size: 1.5rem;
-  letter-spacing: 2px;
-  text-shadow: 0 0 5px rgba(255, 235, 59, 0.8);
-  opacity: 0.8;
-  animation: flashArrow 1.5s infinite alternate;
+  position: absolute; color: #ffeb3b; font-weight: 800; font-size: 1.5rem; letter-spacing: 2px;
+  text-shadow: 0 0 5px rgba(255, 235, 59, 0.8); opacity: 0.8; animation: flashArrow 1.5s infinite alternate;
 }
-.top-indicator { top: 20%; transform: rotate(90deg); }
-.bottom-indicator { bottom: 30%; transform: rotate(-90deg); }
-.left-indicator { left: 20%; }
-.right-indicator { right: 20%; transform: rotate(180deg); }
+.top-indicator { top: 15%; transform: rotate(90deg); }
+.bottom-indicator { bottom: 15%; transform: rotate(-90deg); }
+.left-indicator { left: 15%; }
+.right-indicator { right: 15%; transform: rotate(180deg); }
 
 @keyframes flashArrow {
   from { opacity: 0.4; text-shadow: 0 0 2px rgba(255, 235, 59, 0.5); }
   to { opacity: 1; text-shadow: 0 0 10px rgba(255, 235, 59, 1); }
 }
 
-.center-stack {
-  position: relative;
-  width: 150px;
-  height: 150px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 10;
-}
-
-.pile, .draw-pile {
-  position: absolute;
-  width: 60px;
-  height: 90px;
-}
-
+.center-stack { position: relative; width: 150px; height: 150px; display: flex; justify-content: center; align-items: center; z-index: 10; }
+.pile, .draw-pile { position: absolute; width: 60px; height: 90px; }
 .pile { left: 20px; z-index: 2; }
 .draw-pile { right: 20px; cursor: pointer; z-index: 1; }
 
-.draw-pile:active { transform: scale(0.95); }
-
-/* Player Nodes (Avatars) */
-#player-nodes-container {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-}
-
+#player-nodes-container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; }
 .player-node {
-  position: absolute;
-  width: 60px;
-  height: 60px;
-  transform: translate(-50%, -50%);
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  position: absolute; width: 60px; height: 60px; transform: translate(-50%, -50%); pointer-events: auto;
+  display: flex; flex-direction: column; align-items: center;
 }
-
 .player-node img {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 3px solid #8bd8e3; /* Metallic crystal border */
-  box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 0 10px rgba(255,255,255,0.5);
-  background: #2c3e50;
-  object-fit: cover;
+  width: 100%; height: 100%; border-radius: 50%; border: 3px solid #8bd8e3;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 0 10px rgba(255,255,255,0.5); object-fit: cover;
 }
-
-.player-node.active-turn img {
-  border-color: #38ef7d;
-  box-shadow: 0 0 15px #38ef7d, 0 4px 10px rgba(0,0,0,0.5);
-}
-
-.player-node .name {
-  margin-top: 5px;
-  color: white;
-  font-size: 0.8rem;
-  text-shadow: 1px 1px 2px black;
-  white-space: nowrap;
-}
-
-/* Card count badge styled as a mini black card */
+.player-node .name { margin-top: 5px; color: white; font-size: 0.8rem; text-shadow: 1px 1px 2px black; white-space: nowrap; }
 .player-node .cards-count {
-  position: absolute;
-  top: -5px;
-  right: -10px;
-  background: #111;
-  color: #ff9800;
-  font-size: 0.85rem;
-  font-weight: 800;
-  width: 20px;
-  height: 28px;
-  border-radius: 3px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid #ccc;
-  box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  position: absolute; top: -5px; right: -10px; background: #111; color: #ff9800;
+  font-size: 0.85rem; font-weight: 800; width: 20px; height: 28px; border-radius: 3px;
+  display: flex; justify-content: center; align-items: center; border: 1px solid #ccc; box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
 
-/* Bottom Hand Area */
-.bottom-hand-area {
-  height: 140px;
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  padding-bottom: 10px;
-  z-index: 15;
-}
+/* النوافذ المنبثقة للوبّي واللعبة */
+#section-lobby, #section-game { display: flex; flex-direction: column; width: 100%; height: 100%; }
+#section-lobby.hidden, #section-game.hidden { display: none !important; }
 
-.hand-cards {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  position: relative;
-  width: 80%;
-  height: 100px;
-}
-
-.hand-cards .card {
-  position: absolute;
-  bottom: 0;
-  transform-origin: bottom center;
-  cursor: pointer;
-  box-shadow: -3px -2px 8px rgba(0,0,0,0.3);
-}
-
-.hand-cards .card:hover {
-  transform: translateY(-25px) scale(1.05) !important;
-  z-index: 100 !important;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.5);
-}
-
-/* ONO Action Button (Big 3D Pill) */
-.btn-ono-action {
-  position: absolute;
-  right: 15px;
-  bottom: 40px;
-  width: 65px;
-  height: 65px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #ff758c, #ff0844);
-  border: 3px solid #f1c40f;
-  color: white;
-  font-weight: 900;
-  font-size: 1.2rem;
-  box-shadow: 0 6px 0 #c2185b, 0 15px 20px rgba(0,0,0,0.4), inset 0 2px 5px rgba(255,255,255,0.5);
-  cursor: pointer;
-  font-family: 'Almarai', sans-serif;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-  transition: all 0.1s;
-  z-index: 20;
-}
-
-.btn-ono-action:active {
-  transform: translateY(6px);
-  box-shadow: 0 0 0 #c2185b, 0 5px 10px rgba(0,0,0,0.4), inset 0 2px 5px rgba(255,255,255,0.5);
-}
-
-/* Draw Button styled as badge on the left */
-.draw-badge-container {
-  position: absolute;
-  left: 20px;
-  bottom: 50px;
-  z-index: 20;
-}
-.btn-draw-card.badge-style {
-  width: 35px;
-  height: 45px;
-  border-radius: 20px;
-  background: rgba(0,0,0,0.6);
-  border: 2px solid #3498db;
-  color: white;
-  font-weight: bold;
-  font-size: 1.2rem;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-  cursor: pointer;
-}
-
-/* Game Chat History */
-.game-chat-history {
-  position: absolute;
-  bottom: 0;
-  left: 5px;
-  width: 280px;
-  background: rgba(15, 25, 40, 0.85);
-  border-radius: 12px;
-  padding: 8px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  z-index: 5;
-  backdrop-filter: blur(5px);
-  border: 1px solid rgba(255,255,255,0.05);
-}
-
-.game-chat-history .message {
-  color: white;
-  font-size: 0.85rem;
-  align-self: flex-start;
-  max-width: 100%;
-  word-wrap: break-word;
-  line-height: 1.4;
-}
-
-.game-chat-history .message .sender {
-  color: #ccc;
-  margin-left: 5px;
-}
-
-/* Modals */
+/* Modals / النوافذ الإضافية */
 .modal {
-  position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.8);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(5px);
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center;
+  z-index: 1000; backdrop-filter: blur(5px);
 }
-
 .modal.hidden { display: none !important; }
-
 .modal-content {
-  background: #1e293b;
-  border-radius: 20px;
-  padding: 20px;
-  width: 80%;
-  max-width: 300px;
-  text-align: center;
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  background: #1e293b; border-radius: 20px; padding: 20px; width: 80%; max-width: 300px;
+  text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
-
-.modal-header {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: white;
-  margin-bottom: 15px;
-}
-
-.color-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-}
-
+.modal-header { font-size: 1.2rem; font-weight: bold; color: white; margin-bottom: 15px; }
+.color-options { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .color-option {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  cursor: pointer;
-  border: 3px solid white;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-  transition: transform 0.2s;
+  width: 60px; height: 60px; border-radius: 50%; cursor: pointer;
+  border: 3px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: transform 0.2s;
 }
-
 .color-option:active { transform: scale(0.9); }
 .color-red { background: var(--ono-red); }
 .color-blue { background: var(--ono-blue); }
 .color-green { background: var(--ono-green); }
 .color-yellow { background: var(--ono-yellow); }
-
 .modal-actions { margin-top: 20px; }
-
-#modal-penalty-message {
-  color: #ccc;
-  font-size: 0.9rem;
-  margin-bottom: 15px;
-}
+#modal-penalty-message { color: #ccc; font-size: 0.9rem; margin-bottom: 15px; }
