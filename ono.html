@@ -1,252 +1,562 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>لعبة ONO (أونو)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
-    <meta name="theme-color" content="#1e88e5">
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/ono.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="color-scheme" content="light only">
+  <title>TopTop Game UI - Perfect Match</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Original stylesheets needed for modals and lobby -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/ono.css">
+  <style>
+    :root {
+      color-scheme: light only;
+      --bg1:#4fa8ff; --bg2:#1671da; --bg3:#0e41b7; --text:#f8fbff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0;}
+    body{
+      display:grid; place-items:center; font-family:'Cairo',Tahoma,Arial,sans-serif; overflow:hidden;
+      background-color: #0b2c86;
+    }
+     .phone{
+      width:min(100vw, 1003px); height: 100vh; position:relative; overflow:hidden; color:var(--text);
+      background:
+        radial-gradient(circle at 50% 30%, rgba(255,255,255,.18) 0 8%, transparent 9%),
+        radial-gradient(circle at 50% 30%, rgba(255,255,255,.08) 0 18%, transparent 19%),
+        radial-gradient(circle at 50% 30%, rgba(109,225,255,.28) 0 26%, transparent 27%),
+        radial-gradient(circle at 50% 30%, rgba(20,214,255,.10) 0 40%, transparent 41%),
+        linear-gradient(180deg, #4d9af3 0%, #2f86ef 18%, #1d6fe2 55%, #1757cd 78%, #0b2c86 100%);
+    }
+
+    .topbar{position:absolute; left:0; right:0; top:0; height:8.5%; padding:1% 4% 0; display:flex; align-items:flex-start; justify-content:space-between; z-index:10;}
+    .top-left, .top-right{display:flex; align-items:center; gap:3.2vw}
+    .icon{width:6.2vw; height:6.2vw; min-width:26px; min-height:26px; max-width:58px; max-height:58px; position:relative; opacity:.98; cursor: pointer;}
+    .icon.gear, .icon.refresh, .icon.cup{filter:drop-shadow(0 2px 2px rgba(0,0,0,.25))}
+
+    .gear{border:3.5px solid #fff; border-radius:50%;}
+    .gear::before,.gear::after{content:""; position:absolute; inset:18%; border:3px solid #fff; border-radius:50%}
+    .gear::after{inset:34%; border-width:4px}
+
+    .refresh{ border: 2.2px solid #fff; border-radius: 50%; border-top-color: transparent; }
+    .refresh::after{ content:""; position:absolute; top:-2px; right:-2px; border:4px solid transparent; border-bottom-color:#fff; transform:rotate(45deg); }
+
+    .cup{font-size:clamp(16px, 6vw, 30px); line-height:1; text-align:center}
+    .cup::before{content:"🏆"; position:absolute; inset:0; display:grid; place-items:center; font-size:inherit}
+
+    .top-right{gap:2vw}
+    .pill{height:4.3vw; min-height:30px; max-height:46px; padding:0 1.3vw; border-radius:999px; background:rgba(33,52,80,.72); display:flex; align-items:center; gap:.7vw; box-shadow:0 2px 0 rgba(255,255,255,.08) inset; font-weight:700;}
+    .pill .num{font-size:clamp(11px, 1.55vw, 16px); color:#d2ff63; min-width:fit-content}
+
+    .wifi-bars{width:14px; height:10px; display:flex; align-items:flex-end; gap:1.5px;}
+    .wifi-bars span{width:2.5px; background:#fff; opacity:0.3; border-radius:1px;}
+    .wifi-bars span:nth-child(1){height:30%; opacity:1; background:#d2ff63;}
+    .wifi-bars span:nth-child(2){height:50%; opacity:1; background:#d2ff63;}
+    .wifi-bars span:nth-child(3){height:75%; opacity:1; background:#d2ff63;}
+    .wifi-bars span:nth-child(4){height:100%; opacity:1; background:#d2ff63;}
+
+    .eye-icon{font-size: 1.7vw; position:relative; top:1px;}
+    .chev{font-size:clamp(20px, 5.2vw, 30px); line-height:1; font-weight:900; margin-top:-.6vw}
+
+    .timer{position:absolute; left:4%; top:6%; display:flex; align-items:center; gap:1vw; z-index:9;}
+    .clock{
+      width:5.5vw; height:5.5vw; min-width:32px; min-height:32px; max-width:60px; max-height:60px; border-radius:50%;
+      background: radial-gradient(circle at 34% 30%, #ffd6ff 0 13%, #ff6dc3 14% 26%, #cb2cff 27% 38%, #3e0b59 39% 100%);
+      border:3px solid rgba(255,255,255,.9); box-shadow:0 0 0 3px rgba(0,0,0,.08), 0 5px 12px rgba(0,0,0,.25); position:relative;
+    }
+    .clock::before{content:"⏰"; position:absolute; inset:0; display:grid; place-items:center; font-size:clamp(14px, 3.2vw, 24px); filter:drop-shadow(0 2px 2px rgba(0,0,0,.3));}
+    .timer .time{
+      padding:2px 10px; border-radius:999px; background:rgba(33,52,80,.72); border:2px solid rgba(255,255,255,.22);
+      font-size:clamp(14px, 2.8vw, 22px); font-weight:800; letter-spacing:.03em; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); direction:ltr; min-width:70px; text-align:center;
+    }
+
+    .table{position:absolute; inset:8.5% 0 10% 0;}
+
+    .center-stack{border: none !important; position:absolute; left:50%; top:24%; transform:translate(-50%,-50%); width:22vw; max-width:220px; aspect-ratio:1; display:grid; place-items:center; z-index: 2;}
+    .center-stack .halo{border: none !important; position:absolute; inset:-10%; border-radius:50%; background:radial-gradient(circle, rgba(130,255,255,.35) 0, rgba(83,211,255,.15) 40%, rgba(0,0,0,0) 70%); filter:blur(4px);}
+    .pile{position:absolute; inset:22% 18% 24% 18%; border-radius:12px; transform:rotate(-7deg); background:linear-gradient(180deg,#fff,#f4f4f4); box-shadow:0 8px 12px rgba(0,0,0,.22);}
+    .pile:nth-child(2){transform:rotate(6deg) translate(2%,2%); background:linear-gradient(180deg,#fafafa,#ececec)}
+    .pile:nth-child(3){transform:rotate(0deg) translate(0,0); background:linear-gradient(180deg,#fff,#f4f4f4)}
+
+    .card-top{background: #fff !important;
+      position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) rotate(-11deg);
+      width:17vw; max-width:150px; aspect-ratio: 1 / 1.45; border-radius:12px;
+      background-color: #ffffff !important; color: #000000 !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.24); z-index:3; display:flex; padding:1.2vw; overflow:hidden;
+    }
+    .card-top::before { content:""; position:absolute; inset:0; background:#ffffff; z-index:-1; }
+
+    .card-top .top-info {
+      position: absolute; top: 6%; left: 10%; display: flex; flex-direction: column; align-items: center; line-height: 1;
+    }
+    .card-top .rank-num { font-size: clamp(16px, 4.5vw, 32px); font-weight: 900; color: #db8b00; }
+    .card-top .mini-suit { font-size: clamp(12px, 3vw, 20px); color: #db8b00; margin-top: 2px; }
+
+    .card-top .center-suit {
+      position: absolute; left: 50%; top: 55%; transform: translate(-50%,-50%);
+      font-size: clamp(35px, 12vw, 85px); color: #db8b00;
+    }
+
+    .draw-pile-container {
+      position: absolute;
+      right: 18%;
+      top: -2.5%;
+      width: 8vw;
+      height: 12vw;
+      z-index: 5;
+      cursor: pointer;
+    }
+
+    .draw-card {
+      position: absolute; inset: 0; border-radius: 6px;
+      background: #181818; border: 2px solid rgba(255,255,255,0.4);
+      box-shadow: 2px 4px 10px rgba(0,0,0,0.3); display: grid; place-items: center;
+    }
+    .draw-card::after {
+      content: ""; width: 70%; height: 75%; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
+    }
+    .draw-card .logo {
+       width: 80%; height: auto; opacity: 0.9; transform: scale(0.85);
+    }
+    .draw-card:nth-child(1) { transform: translate(0, 0); z-index: 3; }
+    .draw-card:nth-child(2) { transform: translate(4px, -4px); z-index: 2; }
+    .draw-card:nth-child(3) { transform: translate(8px, -8px); z-index: 1; }
+
+    .toptop-logo {
+      font-size: 10px; font-weight: 800; color: #ffe9b0; text-align: center; line-height: 1.1;
+    }
+
+    .arrows{position:absolute; left:50%; top:24%; transform:translateX(-50%); width:40%; display:flex; justify-content:center; gap:1vw; opacity:.95; z-index: 1;}
+    .arrows.bottom{top:auto; bottom:33%;}
+    .arrows.left{top:32%; left:27%; transform:none; width:13%}
+    .arrows.right{top:32%; left:auto; right:27%; transform:none; width:13%}
+    .arrow{color:#e6ff5f; font-weight:900; font-size:clamp(16px, 4vw, 30px); line-height:1; letter-spacing:-2px; filter: drop-shadow(0 0 5px rgba(255,255,90,0.8));}
+    .arrow.small{font-size:clamp(14px, 3.5vw, 24px);}
+
+    .players-group {
+      position: absolute;
+      inset: 0;
+      transform: translateY(-14%);
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    .player{
+      position:absolute; width:20vw; max-width:200px; display:flex; flex-direction:column; align-items:center; gap:4px;
+      pointer-events: auto;
+    }
+
+    .player .avatar{
+      width:13vw; height:13vw; max-width:90px; max-height:90px; min-width: 50px; min-height: 50px; border-radius:50%; overflow:hidden; border:3.5px solid rgba(255,255,255,.92); box-shadow:0 0 0 4px rgba(0,0,0,.05), 0 8px 18px rgba(0,0,0,.18); position:relative; background:#111; background-size:cover; background-position:center;
+    }
+    .player .avatar img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .player .avatar::after{content:""; position:absolute; inset:0; background:radial-gradient(circle at 38% 32%, rgba(255,255,255,.18), transparent 40%); pointer-events:none;}
+    .player .name{
+      padding:4px 10px; border-radius:10px; background:rgba(19,56,114,.48); color:#f5f9ff;
+      font-size:clamp(12px, 1.9vw, 16px);
+      line-height:1; min-width:60px; text-align:center; white-space:nowrap; box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+      overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+    }
+    .player .badge{
+      position:absolute; right:-2%; top:-8%; background:#ff8a20; color:#fff; min-width:25px; height:25px; border-radius:8px; display:grid; place-items:center; font-size:12px; font-weight:900; border:2px solid #fff; box-shadow:0 5px 10px rgba(0,0,0,.2);
+    }
+    .player .topcard{
+      position:absolute; right:10%; top:10%; width:28px; height:42px; border-radius:4px; background:#181818; border:2px solid rgba(255,255,255,.4); box-shadow:0 4px 10px rgba(0,0,0,.35);
+      transform:rotate(-15deg); display:grid; place-items:center; color:#ffe9b0; font-size:16px; font-weight:800;
+    }
+    .player .voice{position:absolute; right:-3%; bottom:5%; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 5px 10px rgba(0,0,0,.15); display:grid; place-items:center; color:#28c45d; font-size:12px;}
+    .voice::before{content:"◔"; transform:scaleX(-1) rotate(90deg); font-size:14px; font-weight:900}
+
+    .p-top{left:50%; top:9%; transform:translateX(-50%); width:18vw;}
+    .p-top .avatar{background:linear-gradient(180deg,#7dfd78 0 38%, #d8d8d8 38% 100%), radial-gradient(circle at 55% 40%, #b55 0 10%, transparent 11%)}
+    .p-top .status{
+      position:absolute; top:-12%; left:50%; transform:translateX(-50%);
+      width:22px; height:18px; background:#c4ff00;
+      clip-path:polygon(0 0, 100% 0, 50% 100%); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+    .p-top .topcard{right:auto; left:95%; top:22%; transform:translateX(0) rotate(8deg)}
+
+    .p-left-top{left:2%; top:22%}
+    .p-left-top .avatar{background:linear-gradient(180deg,#0f0f0f 0 70%, #444 70% 100%); border-color: #8ed0ff;}
+    .p-right-top{right:2%; top:22%}
+    .p-right-top .avatar{background:linear-gradient(180deg,#0f0f0f 0 60%, #422 60% 100%); border-color: #8ed0ff;}
+
+    .p-left-mid{left:2%; top:45%}
+    .p-left-mid .avatar{background:linear-gradient(180deg,#2a2a2a, #000); border-color: #cfd8dc;}
+    .p-right-mid{right:2%; top:45%}
+    .p-right-mid .avatar{background:linear-gradient(180deg,#111 0 52%, #555 52% 100%); border-color: #cfd8dc;}
+
+    .p-bottom{left:50%; bottom:32%; transform:translateX(-50%); width:18vw}
+    .p-bottom .avatar{background:linear-gradient(180deg,#44352e,#080808)}
+    .p-bottom .voice{right:12%; bottom:20%}
+    .p-bottom .badge{right:6%; top:14%;}
+    .p-bottom .topcard{right:-5%; top:8%; transform:rotate(-10deg)}
+
+    /* Turn styling */
+    .player.active-turn .avatar {
+      box-shadow: 0 0 0 4px #38ef7d, 0 8px 18px rgba(0,0,0,.18);
+    }
+    .player .turn-timer {
+      position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+      color: #ff4b2b; font-weight: bold; text-shadow: 0 0 3px #000; font-size: 16px;
+    }
+
+    .side-btn{
+      position:absolute; right:4%; bottom:45%; width:12vw; height:12vw; max-width:65px; max-height:65px; min-width: 45px; min-height: 45px;
+      border-radius:50%; background:radial-gradient(circle at 30% 28%, #fff 0 8%, #ffb5c4 9% 19%, #ff5460 20% 42%, #cf0f46 43% 100%);
+      box-shadow:0 8px 18px rgba(0,0,0,.25), inset 0 -8px 15px rgba(255,255,255,.12), inset 0 10px 18px rgba(255,255,255,.22);
+      display:grid; place-items:center; transform:rotate(-10deg);
+      font-size:clamp(12px, 3.5vw, 20px); font-weight:900; color:#ffe765; text-shadow:0 2px 2px rgba(0,0,0,.25); z-index:7;
+      cursor: pointer;
+    }
+    .side-btn::before{content:"ONO"; transform:rotate(8deg)}
+    .side-btn.hidden { display: none; }
+
+    .left-counter{
+      position:absolute; left:4%; bottom:40%; width:35px; height:35px; border-radius:50%;
+      background:linear-gradient(180deg, #3789ff, #1548bc); box-shadow:0 8px 14px rgba(0,0,0,.22), inset 0 0 0 3px rgba(255,255,255,.12);
+      display:grid; place-items:center; font-size:16px; font-weight:800; z-index:7;
+    }
+    .left-counter.hidden { display: none; }
+
+    .hand{
+      position:absolute;
+      left:50%;
+      bottom:21%;
+      transform:translateX(-50%);
+      width:66%;
+      max-width:480px;
+      height:25vw;
+      max-height:180px;
+      z-index:6;
+      direction: ltr;
+    }
+    .hand .base{position:absolute; left:50%; bottom:2%; transform:translateX(-50%); width:90%; height:20%; background:rgba(0,0,0,0.15); filter:blur(15px); border-radius:50%;}
+
+    .playing-card{
+      position:absolute;
+      bottom:44%;
+      width:22%;
+      height:auto;
+      aspect-ratio: 1 / 1.45;
+      background-color: #ffffff !important;
+      color: #000000 !important;
+      border-radius:6px;
+      box-shadow:-3px 5px 12px rgba(0,0,0,0.25);
+      border:1px solid rgba(0,0,0,.1);
+      transform-origin: bottom center;
+      direction: ltr;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .playing-card:hover {
+      box-shadow: -3px 8px 15px rgba(0,0,0,0.4);
+    }
+    .playing-card.valid-play {
+      box-shadow: 0 0 10px #38ef7d;
+    }
+    .playing-card.invalid-play {
+      opacity: 0.7;
+    }
+    .playing-card::before { content:""; position:absolute; inset:0; background:#ffffff; z-index:-1; }
+
+    .card-top-left {
+      position: absolute;
+      top: 5%;
+      left: 8%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1;
+    }
+
+    .card-top-left .num{font-size:clamp(18px, 5.5vw, 32px); font-weight:900;}
+    .card-top-left .tiny-suit{font-size:clamp(14px, 3.5vw, 22px); margin-top:2px;}
+
+    .playing-card .big{position:absolute; bottom:8%; right:12%; font-size:clamp(28px, 11vw, 60px); line-height:1; opacity:.98}
+    .playing-card .mid{position:absolute; bottom:18%; right:18%; font-size:clamp(24px, 8vw, 48px); line-height:1; opacity:.98}
+
+    .red{color:#d62c41 !important}
+    .orange{color:#e88604 !important} /* Used as yellow visually */
+    .green{color:#1fb154 !important}
+    .blue{color:#1e6ac5 !important}
+    .black{color:#222 !important}
+
+    /* Used for the dynamic card classes in hand */
+    /* Hand positions generated dynamically via JS, but we keep the base style */
+
+    .chat-area {
+      position: absolute; left: 4%; right: 4%; bottom: 8%;
+      display: flex; flex-direction: column;
+      align-items: flex-start;
+      gap: 8px; z-index: 8; pointer-events: auto;
+      max-height: 22vh;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .chat-area::-webkit-scrollbar { display: none; }
+
+    .chat-group {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 85%; flex-shrink: 0;
+    }
+    .chat-header {
+      display: flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.9); font-size: clamp(14px, 1.8vw, 18px); font-weight: bold;
+    }
+    .chat-header .tiny-avatar {
+      width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #fff;
+    }
+    .chat-header .tiny-avatar img {
+      width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+    }
+
+    .chat-bubble {
+      background: #0b1f3b; border-radius: 14px 0 14px 14px; padding: 6px 14px;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.25); text-align: right;
+      font-size: clamp(14px, 2.1vw, 19px); line-height: 1.4; color: #fff; border: 1px solid rgba(255,255,255,0.1); width: fit-content;
+      word-wrap: break-word;
+    }
+
+    .chat-group.system-style .chat-bubble {
+      background: rgba(10, 25, 55, 0.7);
+      border-radius: 14px 0 14px 14px;
+      color: #eaf4ff;
+    }
+
+    .inputbar{
+      position:absolute; left:3.2%; right:3.2%; bottom:1.5%; height:45px; display:flex; align-items:center; gap:10px; z-index:9;
+    }
+    .btn-circle{width:34px; height:34px; border-radius:50%; display:grid; place-items:center; box-shadow:0 8px 166px rgba(0,0,0,.2); flex:0 0 auto; cursor:pointer;}
+    .btn-chat{background:linear-gradient(180deg,#49f3d8,#11a6c7); color:#fff; font-size:15px}
+    .btn-gift{background:linear-gradient(180deg,#ffb74a,#ff7f00); color:#fff; font-size:15px}
+    .btn-coin{background:linear-gradient(180deg,#ffd86a,#c38b06); color:#fff; font-size:15px}
+
+    .input-wrapper {
+      flex: 1; height: 40px; position: relative;
+    }
+    .input{
+      width: 100%; height: 100%; border-radius:999px; background:rgba(122,136,160,.82); color:rgba(255,255,255,.9);
+      font-size:clamp(14px, 2.5vw, 18px); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); padding:0 15px; border:none; outline:none;
+      font-family: inherit;
+    }
+    .input::placeholder { color: rgba(255,255,255,0.7); }
+
+    .input-icons{display:flex; gap:8px; align-items:center}
+    .circle-ic{width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.12); display:grid; place-items:center; color:#fff; font-size:15px; box-shadow:0 8px 16px rgba(0,0,0,.12); cursor:pointer;}
+    .circle-ic.mic::before{content:"🎤"}
+    .circle-ic.smile::before{content:"☺"; font-size:18px}
+    .circle-ic.speaker::before{content:"🔊"}
+    .circle-ic.send { background: #38ef7d; color: #111; font-weight: bold; font-size: 18px; }
+    .circle-ic.send::before { content: "➤"; }
+
+    /* LOBBY AND MODALS FIXES OVERLAY */
+    #section-lobby {
+      position: absolute; inset: 0; z-index: 100; background: rgba(11,44,134,0.95);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    #section-lobby.hidden { display: none; }
+    #section-game.hidden { display: none; }
+
+    .modal { z-index: 200; }
+    .toast { z-index: 300; }
+  </style>
 </head>
 <body>
 
-    <div class="ono-bg">
-        <div class="ono-bg-pattern"></div>
-        <div class="center-glow-ring ring-1"></div>
-        <div class="center-glow-ring ring-2"></div>
+  <!-- MODALS FROM ORIGINAL -->
+  <div id="modal-color-picker" class="modal hidden">
+      <div class="modal-content">
+          <div class="modal-header">اختر لوناً جديداً</div>
+          <div class="color-options">
+              <div class="color-option color-red" data-color="red"></div>
+              <div class="color-option color-blue" data-color="blue"></div>
+              <div class="color-option color-green" data-color="green"></div>
+              <div class="color-option color-yellow" data-color="yellow"></div>
+          </div>
+      </div>
+  </div>
+
+  <div id="modal-ono-penalty" class="modal hidden">
+      <div class="modal-content">
+          <div class="modal-header" style="color: #ff4b2b;">عقوبة ONO!</div>
+          <div id="modal-penalty-message">لقد نسيت الضغط على زر ONO وتم كشفك! سيتم سحب بطاقتين كعقوبة.</div>
+          <div class="modal-actions">
+              <button id="btn-accept-penalty" class="btn-primary">حسناً</button>
+          </div>
+      </div>
+  </div>
+
+  <div id="modal-exit-confirm" class="modal hidden">
+      <div class="modal-content">
+          <div class="modal-header">خروج من اللعبة</div>
+          <div>هل تود الخروج من اللعبة؟ سيتم اعتبارك منسحباً.</div>
+          <div class="modal-actions">
+              <button id="btn-exit-yes" class="btn-primary" style="background: #ff4b2b;">نعم، خروج</button>
+              <button id="btn-exit-no" class="btn-secondary">إلغاء</button>
+          </div>
+      </div>
+  </div>
+
+  <div id="modal-results" class="modal hidden">
+      <div class="modal-content">
+          <div class="modal-header">نتائج اللعبة</div>
+          <div id="results-body"></div>
+          <div class="loading-bar-container" style="margin-top: 15px;">
+              <div id="results-timeout-bar" style="height: 4px; background: #38ef7d; width: 100%;"></div>
+          </div>
+      </div>
+  </div>
+
+  <div id="main-toast" class="toast hidden"></div>
+
+  <!-- LOBBY OVERLAY -->
+  <section id="section-lobby" class="active">
+    <div class="hero-section">
+        <div class="sparkles-container" id="sparkles"></div>
+        <div class="cards-fan">
+            <div class="card card-demo green" style="--rotation: -30deg;"><div class="card-inner"><span class="card-number">7</span></div></div>
+            <div class="card card-demo blue reverse" style="--rotation: -10deg;"><div class="card-inner"><span class="card-icon">↺</span></div></div>
+            <div class="card card-demo black wild4" style="--rotation: 10deg;"><div class="card-inner"><span class="card-icon">+4</span></div></div>
+            <div class="card card-demo red seven" style="--rotation: 30deg;"><div class="card-inner"><span class="card-number">5</span></div></div>
+        </div>
+        <div class="logo-3d">ONO</div>
     </div>
 
-    <header class="top-header">
-        <div class="header-left">
-            <button id="btn-settings" class="btn-hexagon">⚙️</button>
-            <button id="btn-exit" class="btn-hexagon">🚪</button>
-            <div id="game-timer-capsule" class="timer-capsule capsule">
-                ⏱️ <span id="game-timer">02:31</span>
-            </div>
-        </div>
-        <div class="header-right">
-            <div class="ping-indicator capsule">
-                <span id="ping-text">201ms</span> <span class="ping-dot"></span> 
-            </div>
-            <div class="viewers-indicator capsule">
-                <span id="viewers-count">1</span> 👁️
-            </div>
-        </div>
-    </header>
+    <div class="system-banner" id="system-banner">
+        بانتظار انضمام اللاعبين...
+    </div>
 
-    <div id="modal-color-picker" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">اختر لوناً جديداً</div>
-            <div class="color-options">
-                <div class="color-option color-red" data-color="red"></div>
-                <div class="color-option color-blue" data-color="blue"></div>
-                <div class="color-option color-green" data-color="green"></div>
-                <div class="color-option color-yellow" data-color="yellow"></div>
-            </div>
+    <div class="room-id-display">
+        رمز الغرفة: <strong id="display-room-id">...</strong>
+    </div>
+
+    <div class="player-slots-container">
+        <div class="player-slots">
+            <div class="player-slot" id="lobby-slot-0"></div>
+            <div class="player-slot" id="lobby-slot-1"></div>
+            <div class="player-slot" id="lobby-slot-2"></div>
+            <div class="player-slot" id="lobby-slot-3"></div>
+            <div class="player-slot" id="lobby-slot-4"></div>
+            <div class="player-slot" id="lobby-slot-5"></div>
         </div>
     </div>
 
-    <div id="modal-ono-penalty" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header" style="color: #ff4b2b;">عقوبة ONO!</div>
-            <div id="modal-penalty-message">لقد نسيت الضغط على زر ONO وتم كشفك! سيتم سحب بطاقتين كعقوبة.</div>
-            <div class="modal-actions">
-                <button id="btn-accept-penalty" class="btn-primary">حسناً</button>
-            </div>
+    <div class="lobby-actions">
+        <button id="btn-start-game" class="btn-start disabled">بدء اللعبة</button>
+        <div class="secondary-actions">
+            <button id="btn-add-bot" class="btn-match" style="display:none;">إضافة بوت 🤖</button>
+            <button id="btn-invite-friends" class="btn-invite" onclick="copyRoomLink()">ادعو الاصدقاء</button>
         </div>
     </div>
+  </section>
 
-    <div id="modal-exit-confirm" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">خروج من اللعبة</div>
-            <div>هل تود الخروج من اللعبة؟ سيتم اعتبارك منسحباً.</div>
-            <div class="modal-actions">
-                <button id="btn-exit-yes" class="btn-primary" style="background: #ff4b2b;">نعم، خروج</button>
-                <button id="btn-exit-no" class="btn-secondary">إلغاء</button>
-            </div>
+  <!-- MAIN GAME UI (New Design) -->
+  <section id="section-game" class="hidden">
+    <div class="phone">
+
+      <div class="topbar">
+        <div class="top-left">
+          <div class="icon gear" id="btn-exit"></div>
+          <div class="icon refresh"></div>
+          <div class="icon cup"></div>
         </div>
+        <div class="top-right">
+          <div class="pill"><span class="num" id="ping-text">201ms</span><div class="wifi-bars"><span></span><span></span><span></span><span></span></div></div>
+          <div class="pill"><span id="viewers-count">1</span><span class="eye-icon">👁</span></div>
+          <div class="chev">›</div>
+        </div>
+      </div>
+
+      <div class="timer" id="game-timer-capsule">
+        <div class="clock"></div>
+        <div class="time" id="game-timer">02:31</div>
+      </div>
+
+      <div class="table">
+
+        <div class="draw-pile-container" id="draw-pile">
+          <div class="draw-card"><div class="toptop-logo">Top<br>Top</div></div>
+          <div class="draw-card"><div class="toptop-logo">Top<br>Top</div></div>
+          <div class="draw-card"><div class="toptop-logo">Top<br>Top</div></div>
+        </div>
+
+        <div class="players-group" id="player-nodes-container">
+          <!-- Players injected dynamically -->
+        </div>
+
+        <div class="center-stack" aria-hidden="true" id="center-stack">
+          <div class="halo"></div>
+          <div class="pile"></div>
+          <div class="pile"></div>
+          <div class="pile"></div>
+          <div class="pile"></div>
+          <div id="played-pile">
+            <!-- Top card injected here -->
+          </div>
+        </div>
+
+        <div id="direction-arrows">
+            <div class="arrows"><div class="arrow">««««</div></div>
+            <div class="arrows left"><div class="arrow small">««««</div></div>
+            <div class="arrows right"><div class="arrow small">««««</div></div>
+            <div class="arrows bottom"><div class="arrow">»»»»</div></div>
+        </div>
+
+        <div class="side-btn hidden" id="btn-ono-action"></div>
+        <div class="left-counter hidden" id="btn-draw-card"></div> <!-- Kept hidden logic for spectators -->
+
+        <div class="hand">
+          <div class="base"></div>
+          <div id="my-hand" style="position: absolute; width: 100%; height: 100%;">
+            <!-- Cards injected here -->
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-area" id="game-chat-history">
+        <!-- Chat injected here -->
+      </div>
+
+      <div class="inputbar">
+        <div class="btn-circle btn-chat">⋯</div>
+        <div class="btn-circle btn-gift">🎁</div>
+        <div class="btn-circle btn-coin">♠</div>
+        <div class="input-wrapper">
+            <input type="text" id="chat-input" class="input" placeholder="قل شيئاً">
+        </div>
+        <div class="input-icons">
+          <div class="circle-ic smile"></div>
+          <div class="circle-ic mic"></div>
+          <div class="circle-ic send" id="btn-send-chat"></div>
+        </div>
+      </div>
+
     </div>
+  </section>
 
-    <div id="modal-results" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">نتائج اللعبة</div>
-            <div id="results-body">
-                <!-- النتائج هنا -->
-            </div>
-            <div class="loading-bar-container" style="margin-top: 15px;">
-                <div id="results-timeout-bar" style="height: 4px; background: #38ef7d; width: 100%;"></div>
-            </div>
-        </div>
-    </div>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script type="module" src="js/ono.js"></script>
 
-    <div id="main-toast" class="toast hidden"></div>
+  <script>
+      function copyRoomLink() {
+          const el = document.createElement('textarea');
+          const roomId = new URLSearchParams(window.location.search).get('roomID');
+          el.value = window.location.origin + window.location.pathname.replace('ono.html', '') + '?roomID=' + roomId;
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand('copy');
+          document.body.removeChild(el);
 
-    <main class="ono-container">
-
-        <section id="section-lobby" class="active">
-            <div class="hero-section">
-                <div class="sparkles-container" id="sparkles"></div>
-                <div class="cards-fan">
-                    <div class="card card-demo green" style="--rotation: -30deg;"><div class="card-inner"><span class="card-number">7</span></div></div>
-                    <div class="card card-demo blue reverse" style="--rotation: -10deg;"><div class="card-inner"><span class="card-icon">↺</span></div></div>
-                    <div class="card card-demo black wild4" style="--rotation: 10deg;"><div class="card-inner"><span class="card-icon">+4</span></div></div>
-                    <div class="card card-demo red seven" style="--rotation: 30deg;"><div class="card-inner"><span class="card-number">5</span></div></div>
-                </div>
-                <div class="logo-3d">ONO</div>
-            </div>
-
-            <div class="system-banner" id="system-banner">
-                بانتظار انضمام اللاعبين...
-            </div>
-
-            <div class="room-id-display">
-                رمز الغرفة: <strong id="display-room-id">...</strong>
-            </div>
-
-            <div class="player-slots-container">
-                <div class="player-slots">
-                    <div class="player-slot" id="lobby-slot-0"></div>
-                    <div class="player-slot" id="lobby-slot-1"></div>
-                    <div class="player-slot" id="lobby-slot-2"></div>
-                    <div class="player-slot" id="lobby-slot-3"></div>
-                    <div class="player-slot" id="lobby-slot-4"></div>
-                    <div class="player-slot" id="lobby-slot-5"></div>
-                </div>
-            </div>
-
-            <div class="lobby-actions">
-                <button id="btn-start-game" class="btn-start disabled">بدء اللعبة</button>
-                <div class="secondary-actions">
-                    <button id="btn-add-bot" class="btn-match" style="display:none;">إضافة بوت 🤖</button>
-                    <button id="btn-invite-friends" class="btn-invite" onclick="copyRoomLink()">ادعو الاصدقاء</button>
-                </div>
-            </div>
-        </section>
-
-        <section id="section-game" class="hidden">
-            
-            <div class="arena-center">
-                <div class="table-direction-indicator top-indicator">«««</div>
-                <div class="table-direction-indicator bottom-indicator">»»»</div>
-                <div class="table-direction-indicator left-indicator">«««</div>
-                <div class="table-direction-indicator right-indicator">»»»</div>
-
-                <div class="center-stack" id="center-stack">
-                    <div class="pile" id="played-pile">
-                        <div class="card yellow" style="transform: rotate(15deg);">
-                            <div class="card-inner">
-                                <span class="card-number" style="font-size: 3rem; color: #ff9800;">6</span>
-                                <span class="card-icon" style="color: #ff9800;">♠</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="draw-pile" id="draw-pile">
-                        <div class="card back"></div>
-                        <div class="card back" style="transform: translate(-3px, -3px);"></div>
-                        <div class="card back" style="transform: translate(-6px, -6px);"></div>
-                    </div>
-
-                    <div class="direction-arrows" id="direction-arrows"></div>
-                </div>
-
-                <div id="player-nodes-container">
-                    </div>
-            </div>
-
-            <div class="bottom-hand-area">
-                <div id="my-turn-indicator" class="hidden" style="color:#38ef7d; font-weight:bold; margin-bottom:5px; text-shadow:0 0 5px #000; position:absolute; top:-25px; left:50%; transform:translateX(-50%);">▼ دورك الآن</div>
-                
-                <div class="draw-badge-container">
-                    <button id="btn-draw-card" class="btn-draw-card badge-style">2</button>
-                </div>
-
-                <div class="hand-cards" id="my-hand">
-                    <div class="card red" style="transform: rotate(-15deg) translateY(15px);"><div class="card-inner"><span class="card-number" style="color:#e74c3c;">0</span><span class="card-icon" style="color:#e74c3c;">♦</span></div></div>
-                    <div class="card red" style="transform: rotate(-10deg) translateY(8px);"><div class="card-inner"><span class="card-number" style="color:#e74c3c;">5</span><span class="card-icon" style="color:#e74c3c;">♦</span></div></div>
-                    <div class="card red" style="transform: rotate(-5deg) translateY(3px);"><div class="card-inner"><span class="card-number" style="color:#e74c3c;">+</span><span class="card-icon" style="color:#e74c3c;">♦</span></div></div>
-                    <div class="card yellow" style="transform: rotate(0deg) translateY(0px);"><div class="card-inner"><span class="card-number" style="color:#ff9800;">3</span><span class="card-icon" style="color:#ff9800;">♠</span></div></div>
-                    <div class="card yellow" style="transform: rotate(5deg) translateY(3px);"><div class="card-inner"><span class="card-number" style="color:#ff9800;">7</span><span class="card-icon" style="color:#ff9800;">♠</span></div></div>
-                    <div class="card green" style="transform: rotate(10deg) translateY(8px);"><div class="card-inner"><span class="card-number" style="color:#2ecc71;">4</span><span class="card-icon" style="color:#2ecc71;">♥</span></div></div>
-                    <div class="card green" style="transform: rotate(15deg) translateY(15px);"><div class="card-inner"><span class="card-number" style="color:#2ecc71;">5</span><span class="card-icon" style="color:#2ecc71;">♥</span></div></div>
-                    <div class="card green" style="transform: rotate(20deg) translateY(24px);"><div class="card-inner"><span class="card-number" style="color:#2ecc71;">8</span><span class="card-icon" style="color:#2ecc71;">♥</span></div></div>
-                    <div class="card green" style="transform: rotate(25deg) translateY(35px);"><div class="card-inner"><span class="card-icon" style="color:#2ecc71; font-size:2rem;">⊖</span></div></div>
-                    <div class="card blue" style="transform: rotate(30deg) translateY(48px);"><div class="card-inner"><span class="card-number" style="color:#3498db;">0</span><span class="card-icon" style="color:#3498db;">♣</span></div></div>
-                </div>
-
-                <button id="btn-ono-action" class="btn-ono-action">ONO</button>
-            </div>
-
-            <div class="game-chat-wrapper">
-                <button class="btn-collapse-chat">^</button>
-                <div class="game-chat-history" id="game-chat-history">
-                    <div class="message">
-                        <img src="https://via.placeholder.com/30" class="chat-avatar" alt="avatar">
-                        <div class="msg-content">
-                            <span class="sender">تخاريف:</span> المنغله
-                        </div>
-                    </div>
-                    <div class="message">
-                        <img src="https://via.placeholder.com/30" class="chat-avatar" alt="avatar">
-                        <div class="msg-content">
-                            <span class="sender">فخريه 🌹:</span> بجيكم بعدين تم نضحك علي والله اني مت ضحك الله يسعدكم 🤍🤣
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </section>
-
-    </main>
-
-    <footer class="footer-input">
-        <div class="left-icons">
-            <button class="icon-btn" style="color: #4facfe;">●●●</button>
-            <button class="icon-btn">🎁</button>
-            <button class="icon-btn">🪙</button>
-        </div>
-
-        <div class="chat-input-wrapper">
-            <input type="text" id="chat-input" class="capsule-input" placeholder="قل شيئاً">
-            <div id="emoji-picker" class="emoji-picker hidden">
-                <div class="emoji-list">
-                    <span>😊</span><span>😂</span><span>😍</span><span>🤣</span><span>👍</span><span>🙌</span><span>🔥</span><span>❤️</span>
-                    <span>👋</span><span>🎉</span><span>🤔</span><span>😢</span><span>😡</span><span>🤯</span><span>👏</span><span>💪</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="right-icons">
-            <button id="btn-emoji" class="icon-btn">😊</button>
-            <button id="btn-mic" class="icon-btn">🎤</button>
-            <button id="btn-speaker" class="icon-btn">🔊</button>
-            <button id="btn-send-chat" class="icon-btn" style="color: #38ef7d;">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
-        </div>
-    </footer>
-
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script type="module" src="js/ono.js"></script>
-
-    <script>
-        function copyRoomLink() {
-            const el = document.createElement('textarea');
-            const roomId = new URLSearchParams(window.location.search).get('roomID');
-            el.value = window.location.origin + window.location.pathname.replace('ono.html', '') + '?roomID=' + roomId;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-
-            const toast = document.getElementById('main-toast');
-            toast.textContent = "تم نسخ رابط الغرفة! ✅";
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 3500);
-        }
-    </script>
+          const toast = document.getElementById('main-toast');
+          if(toast) {
+              toast.textContent = "تم نسخ رابط الغرفة! ✅";
+              toast.classList.remove('hidden');
+              setTimeout(() => toast.classList.add('hidden'), 3500);
+          }
+      }
+  </script>
 </body>
 </html>
