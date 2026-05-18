@@ -943,25 +943,40 @@ class OnoGameManager {
 
         let content = topCard.type === 'number' ? topCard.value : this.getIconForType(topCard.type);
         let bgClass = topCard.color;
-        let typeClass = topCard.type;
         if (topCard.type.startsWith('wild')) {
             bgClass = this.currentColor || 'black';
         }
 
         this.elPlayedPile.innerHTML = `
-            <div class="card ${bgClass} ${typeClass}">
-                <div class="card-inner">
-                    ${topCard.type === 'number' ? `<div class="card-number">${content}</div>` : `<div class="card-icon">${content}</div>`}
-                </div>
+            <div class="card-top">
+              <div class="top-info">
+                <span class="rank-num ${bgClass}">${content}</span>
+                <span class="mini-suit ${bgClass}">${this.getSuitIcon(bgClass)}</span>
+              </div>
+              <span class="center-suit ${bgClass}">${this.getSuitIcon(bgClass)}</span>
             </div>
         `;
     }
 
+    getSuitIcon(color) {
+        if(color === 'red') return '♦';
+        if(color === 'green') return '♥';
+        if(color === 'blue') return '♣';
+        if(color === 'yellow' || color === 'orange') return '♠';
+        return '★';
+    }
+
+    getTinySuitForType(type, suit) {
+        if(type === '+2') return '✚';
+        if(type === 'skip') return '⊖';
+        return suit;
+    }
+
     getIconForType(type) {
         switch(type) {
-            case 'skip': return '⊘';
+            case 'skip': return '⊖';
             case 'reverse': return '⇄';
-            case '+2': return '+2';
+            case '+2': return '+';
             case 'wild': return '🌈';
             case 'wild+4': return '+4';
             default: return '';
@@ -975,39 +990,45 @@ class OnoGameManager {
         if (!me || !me.hand) return;
 
         const count = me.hand.length;
-        const maxAngle = 60; // Max spread angle
-        const step = count > 1 ? maxAngle / (count - 1) : 0;
-        const startAngle = -maxAngle / 2;
 
         me.hand.forEach((card, index) => {
-            const angle = count === 1 ? 0 : startAngle + (step * index);
-            const translateY = Math.abs(angle) * 0.5; // Arc effect
-
             const el = document.createElement('div');
 
-            // If spectator or surrendered, show card backs instead
+            // Hardcode to exact CSS classes for perfect match
+            let positionClass = `card${(index % 10) + 1}`;
+
             const isHidden = this.isSpectator || me.surrendered;
 
             if (isHidden) {
-                el.className = `card back`;
-                el.innerHTML = `<div class="card-inner" style="background: url('https://www.unorules.com/wp-content/uploads/2021/03/uno-card-back.png') center/cover;"></div>`;
+                el.className = `playing-card ${positionClass} back`;
+                el.style.background = "#222";
             } else {
-                el.className = `card ${card.color} ${card.type}`;
+                let colorClass = card.color;
+                if(colorClass === 'yellow') colorClass = 'orange'; // CSS uses orange for yellow
+
+                el.className = `playing-card ${positionClass} ${colorClass}`;
                 let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
+
+                let mainSuit = this.getSuitIcon(colorClass);
+                let tinySuit = this.getTinySuitForType(card.type, mainSuit);
+
+                let sizeClass = (card.type === '+2' || card.type === 'skip') ? 'mid' : 'big';
+                let midSuit = (card.type === '+2') ? '✚' : ((card.type === 'skip') ? '⊖' : mainSuit);
+
                 el.innerHTML = `
-                    <div class="card-inner">
-                        ${card.type === 'number' ? `<div class="card-number">${content}</div>` : `<div class="card-icon">${content}</div>`}
+                    <div class="card-top-left ${colorClass}">
+                        <span class="num">${content}</span>
+                        <span class="tiny-suit">${tinySuit}</span>
                     </div>
+                    <div class="${sizeClass} ${colorClass}">${midSuit}</div>
                 `;
             }
 
-            el.style.transform = `rotate(${angle}deg) translateY(${translateY}px)`;
-
             if (!isHidden && this.isMyTurn() && this.isValidPlay(card)) {
-                el.style.boxShadow = '0 0 10px #38ef7d';
+                el.classList.add('valid-play');
                 el.onclick = () => this.playCard(index);
             } else if (!isHidden && this.isMyTurn()) {
-                el.style.opacity = '0.7';
+                el.classList.add('invalid-play');
                 el.onclick = () => this.showToast("لا يمكنك لعب هذه البطاقة!");
             } else if (!isHidden) {
                 el.onclick = () => this.showToast("ليس دورك!");
@@ -1016,7 +1037,6 @@ class OnoGameManager {
             this.elMyHand.appendChild(el);
         });
 
-        // Show/Hide ONO button
         if (!this.isSpectator && !me.surrendered && count === 2 && !me.hasSaidOno) {
             this.elBtnOno.classList.remove('hidden');
         } else {
@@ -1030,76 +1050,76 @@ class OnoGameManager {
         let myIndex = this.players.findIndex(p => p.id === this.myId);
         if (myIndex === -1) myIndex = 0;
 
-        const orderedOthers = [];
-        for (let i = 1; i < this.players.length; i++) {
-            const idx = (myIndex + i) % this.players.length;
-            orderedOthers.push(this.players[idx]);
-        }
+        const totalPlayers = this.players.length;
 
-        const totalOthers = orderedOthers.length;
-
-        orderedOthers.forEach((p, index) => {
-            let angle;
-            if (totalOthers === 1) {
-                angle = Math.PI * 1.5;
-            } else if (totalOthers === 2) {
-                angle = Math.PI + (Math.PI / 3) * (index + 1);
-            } else if (totalOthers === 3) {
-                angle = Math.PI + (Math.PI / 4) * (index + 1);
-            } else if (totalOthers === 4) {
-                angle = Math.PI + (Math.PI / 5) * (index + 1);
-            } else if (totalOthers === 5) {
-                angle = Math.PI + (Math.PI / 6) * (index + 1);
-            } else {
-                angle = Math.PI + (Math.PI / (totalOthers + 1)) * (index + 1);
+        const getPositionClass = (offset, total) => {
+            if (offset === 0) return 'p-bottom';
+            if (total === 2) { return offset === 1 ? 'p-top' : 'p-bottom'; }
+            if (total === 3) { return offset === 1 ? 'p-left-top' : 'p-right-top'; }
+            if (total === 4) {
+                if (offset === 1) return 'p-left-mid';
+                if (offset === 2) return 'p-top';
+                if (offset === 3) return 'p-right-mid';
             }
+            if (total === 5) {
+                if (offset === 1) return 'p-left-mid';
+                if (offset === 2) return 'p-left-top';
+                if (offset === 3) return 'p-right-top';
+                if (offset === 4) return 'p-right-mid';
+            }
+            if (offset === 1) return 'p-left-mid';
+            if (offset === 2) return 'p-left-top';
+            if (offset === 3) return 'p-top';
+            if (offset === 4) return 'p-right-top';
+            if (offset === 5) return 'p-right-mid';
+            return 'p-top';
+        };
 
-            const radiusX = Math.min(window.innerWidth * 0.4, 250);
-            const radiusY = Math.min(window.innerHeight * 0.3, 180);
-
-            const x = Math.cos(angle) * radiusX;
-            const y = Math.sin(angle) * radiusY;
+        for (let i = 0; i < totalPlayers; i++) {
+            const idx = (myIndex + i) % totalPlayers;
+            const p = this.players[idx];
+            const posClass = getPositionClass(i, totalPlayers);
 
             const el = document.createElement('div');
-            el.className = `player-node`;
+            el.className = `player ${posClass}`;
+            if (this.players[this.turnIndex]?.id === p.id) el.classList.add('active-turn');
 
-            el.style.left = `calc(50% + ${x}px)`;
-            el.style.top = `calc(50% + ${y}px)`;
+            const avatarHtml = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
 
-            const isTurn = this.players[this.turnIndex]?.id === p.id;
-            if (isTurn) el.classList.add('active-turn');
-
-            const avatar = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
-
-            el.innerHTML = `
-                <div class="turn-arrow">▼</div>
-                <div class="avatar-container">${avatar}</div>
+            let innerHtml = `
+                <div class="avatar">${avatarHtml}</div>
+                <div class="badge">${p.cardsCount || 0}</div>
                 <div class="name">${this.escapeHtml(p.name)}</div>
-                <div class="cards-count">${p.cardsCount || 0}</div>
-                ${isTurn && !p.isBot ? `<div class="turn-timer" id="timer-${p.id}" style="color:#ff4b2b; font-weight:bold; position:absolute; top:-15px; left:50%; transform:translateX(-50%); text-shadow:0 0 3px #000;">10</div>` : ''}
             `;
-            this.elPlayerNodesContainer.appendChild(el);
-        });
 
-        if (this.isMyTurn()) {
-            this.elDrawPile.style.boxShadow = '0 0 15px #38ef7d';
-            const myTurnIndicator = document.getElementById('my-turn-indicator');
-            if(myTurnIndicator) {
-                myTurnIndicator.classList.remove('hidden');
-                myTurnIndicator.innerHTML = `▼ دورك الآن <span id="timer-${this.myId}" style="color:#ff4b2b; margin-right:5px;">10</span>`;
+            if (this.players[this.turnIndex]?.id === p.id && !p.isBot) {
+                innerHtml += `<div class="turn-timer" id="timer-${p.id}">10</div>`;
             }
-        } else {
-            this.elDrawPile.style.boxShadow = 'none';
-            const myTurnIndicator = document.getElementById('my-turn-indicator');
-            if(myTurnIndicator) myTurnIndicator.classList.add('hidden');
+
+            if (p.isOnline === false || p.surrendered) el.style.opacity = '0.5';
+
+            el.innerHTML = innerHtml;
+            this.elPlayerNodesContainer.appendChild(el);
         }
     }
 
     updateArrows() {
+        const arrowsContainer = document.getElementById('direction-arrows');
+        if (!arrowsContainer) return;
         if (this.direction === 1) {
-            this.elDirectionArrows.style.animationDirection = 'normal';
+            arrowsContainer.innerHTML = `
+                <div class="arrows"><div class="arrow">««««</div></div>
+                <div class="arrows left"><div class="arrow small">««««</div></div>
+                <div class="arrows right"><div class="arrow small">««««</div></div>
+                <div class="arrows bottom"><div class="arrow">»»»»</div></div>
+            `;
         } else {
-            this.elDirectionArrows.style.animationDirection = 'reverse';
+            arrowsContainer.innerHTML = `
+                <div class="arrows"><div class="arrow">»»»»</div></div>
+                <div class="arrows left"><div class="arrow small">»»»»</div></div>
+                <div class="arrows right"><div class="arrow small">»»»»</div></div>
+                <div class="arrows bottom"><div class="arrow">««««</div></div>
+            `;
         }
     }
 
@@ -1129,20 +1149,28 @@ class OnoGameManager {
 
         messages.slice(-10).forEach(m => {
             const el = document.createElement('div');
-            el.className = 'message';
-
             if (m.senderId === 'system') {
-                el.innerHTML = `<span style="color:#ffc107">${this.escapeHtml(m.text)}</span>`;
+                el.className = 'chat-group system-style';
+                el.innerHTML = `
+                    <div class="chat-header">
+                      <div class="tiny-avatar" style="background:linear-gradient(180deg,#d9d9d9,#555);"></div>
+                      <span>النظام</span>
+                    </div>
+                    <div class="chat-bubble">${this.escapeHtml(m.text)}</div>
+                `;
             } else {
-                el.innerHTML = `<span class="sender">${this.escapeHtml(m.senderName)}:</span> ${this.escapeHtml(m.text)}`;
+                el.className = 'chat-group';
+                el.innerHTML = `
+                    <div class="chat-header">
+                      <div class="tiny-avatar" style="background:linear-gradient(180deg,#f1d1d1,#c77);"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=${m.senderName}" /></div>
+                      <span>${this.escapeHtml(m.senderName)}</span>
+                    </div>
+                    <div class="chat-bubble">${this.escapeHtml(m.text)}</div>
+                `;
             }
-
             this.elGameChatHistory.appendChild(el);
         });
-
-        setTimeout(() => {
-            this.elGameChatHistory.scrollTop = this.elGameChatHistory.scrollHeight;
-        }, 100);
+        setTimeout(() => { this.elGameChatHistory.scrollTop = this.elGameChatHistory.scrollHeight; }, 100);
     }
 
     async quitGame() {
