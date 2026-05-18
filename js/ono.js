@@ -87,6 +87,8 @@ class OnoGameManager {
         this.modalOnoPenalty = document.getElementById('modal-ono-penalty');
         this.modalExitConfirm = document.getElementById('modal-exit-confirm');
         this.modalResults = document.getElementById('modal-results');
+        this.modalSuspended = document.getElementById('modal-suspended');
+        this.modalPlayDrawn = document.getElementById('modal-play-drawn');
         this.elResultsBody = document.getElementById('results-body');
         this.elResultsTimeoutBar = document.getElementById('results-timeout-bar');
         this.toast = document.getElementById('main-toast');
@@ -120,6 +122,29 @@ class OnoGameManager {
         document.getElementById('btn-exit-yes').addEventListener('click', () => this.quitGame());
         document.getElementById('btn-exit-no').addEventListener('click', () => {
             this.modalExitConfirm.classList.add('hidden');
+        });
+
+        const btnResumePlay = document.getElementById('btn-resume-play');
+        if (btnResumePlay) {
+            btnResumePlay.addEventListener('click', () => this.resumePlay());
+        }
+
+        document.getElementById('btn-drawn-keep').addEventListener('click', async () => {
+            this.modalPlayDrawn.classList.add('hidden');
+            let nextTurn = (this.turnIndex + this.direction) % this.players.length;
+            if (nextTurn < 0) nextTurn += this.players.length;
+            const updates = {};
+            updates[`config/turnIndex`] = nextTurn;
+            updates[`config/turnStartedAt`] = serverTimestamp();
+            await update(ref(this.db, `rooms/${this.roomId}`), updates);
+        });
+
+        document.getElementById('btn-drawn-play').addEventListener('click', () => {
+            this.modalPlayDrawn.classList.add('hidden');
+            if (this.pendingDrawnCardIndex !== undefined) {
+                this.playCard(this.pendingDrawnCardIndex);
+                this.pendingDrawnCardIndex = undefined;
+            }
         });
 
         // Intercept browser back button
@@ -304,8 +329,18 @@ class OnoGameManager {
                     this.renderHand();
                     this.updateArrows();
 
+                    const me = this.players.find(p => p.id === this.myId);
+                    if (me && me.isSuspended && this.modalSuspended) {
+                        this.modalSuspended.classList.remove('hidden');
+                    } else if (this.modalSuspended) {
+                        this.modalSuspended.classList.add('hidden');
+                    }
+
                     if (this.isHost && this.players.length > 0 && prevTurnIndex !== this.turnIndex) {
-                        this.handleBotTurn();
+                        const currentPlayer = this.players[this.turnIndex];
+                        if (currentPlayer && (currentPlayer.isBot || currentPlayer.isSuspended)) {
+                            this.handleBotTurn();
+                        }
                     }
 
                     // Host checks for auto-skip of surrendered players
@@ -336,7 +371,8 @@ class OnoGameManager {
 
             if (i < this.players.length) {
                 const p = this.players[i];
-                const avatar = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
+                let avatar = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
+                if (p.isSuspended) avatar = `<div style="font-size: 2.5rem;">🤖</div>`;
                 slot.innerHTML = `
                     ${avatar}
                     <div class="name">${this.escapeHtml(p.name)}</div>
@@ -464,7 +500,7 @@ class OnoGameManager {
         updates['config/direction'] = 1;
         updates['config/currentColor'] = firstCard.color;
         updates['config/turnStartedAt'] = serverTimestamp();
-        updates['config/gameTimeLeft'] = 300; // 5 minutes
+        updates['config/gameTimeLeft'] = 270; // 4.5 minutes
 
         await update(ref(this.db, `rooms/${this.roomId}`), updates);
 
@@ -474,7 +510,7 @@ class OnoGameManager {
     startGameTimer() {
         if (this.globalGameTimerInterval) clearInterval(this.globalGameTimerInterval);
 
-        let timeLeft = 300;
+        let timeLeft = 270;
         this.globalGameTimerInterval = setInterval(async () => {
             if (this.gameState !== 'game') {
                 clearInterval(this.globalGameTimerInterval);
@@ -595,6 +631,11 @@ class OnoGameManager {
 
         if (player.isBot) return;
 
+        // Suspend the player
+        if (!player.isSuspended) {
+            await update(ref(this.db, `rooms/${this.roomId}/players/${player.id}`), { isSuspended: true });
+        }
+
         const hand = player.hand || [];
         const validPlays = [];
         hand.forEach((card, index) => {
@@ -667,6 +708,29 @@ class OnoGameManager {
         if (card.value === topCard.value) return true;
 
         return false;
+    }
+
+    playCardAnimation(el, callback) {
+        // Find coordinates of discard pile
+        const pile = document.getElementById('played-pile');
+        if (!pile) {
+            callback();
+            return;
+        }
+
+        const pileRect = pile.getBoundingClientRect();
+        const cardRect = el.getBoundingClientRect();
+
+        const diffX = pileRect.left + (pileRect.width / 2) - (cardRect.left + (cardRect.width / 2));
+        const diffY = pileRect.top + (pileRect.height / 2) - (cardRect.top + (cardRect.height / 2));
+
+        el.style.transition = 'all 0.4s ease-out';
+        el.style.transform = `translate(${diffX}px, ${diffY}px) scale(0.8) rotate(${Math.random() * 40 - 20}deg)`;
+        el.style.opacity = '0';
+
+        setTimeout(() => {
+            callback();
+        }, 400); // Wait for animation
     }
 
     async playCard(cardIndex) {
@@ -816,7 +880,7 @@ class OnoGameManager {
 
     async handleBotTurn() {
         const currentPlayer = this.players[this.turnIndex];
-        if (!currentPlayer || !currentPlayer.isBot) return;
+        if (!currentPlayer || (!currentPlayer.isBot && !currentPlayer.isSuspended)) return;
 
         setTimeout(async () => {
             const snap = await get(ref(this.db, `rooms/${this.roomId}/config/turnIndex`));
@@ -888,9 +952,48 @@ class OnoGameManager {
         updates[`players/${player.id}/hasSaidOno`] = false;
         updates[`deck`] = currentDeck;
 
-        if (this.isValidPlay(card) && !player.isBot) {
+        if (this.isValidPlay(card) && !player.isBot && !player.isSuspended) {
             if(player.id === this.myId) {
-                this.showToast("يمكنك لعب البطاقة المسحوبة فوراً!");
+                // Show modal for the drawn card
+                const previewContainer = document.getElementById('modal-play-drawn-card-preview');
+                previewContainer.innerHTML = '';
+
+                let colorClass = card.color;
+                if(colorClass === 'yellow') colorClass = 'orange';
+
+                const el = document.createElement('div');
+                el.className = `playing-card ${colorClass}`;
+                if (card.color === 'black') el.classList.add('black-card');
+                el.style.position = 'relative';
+                el.style.transform = 'scale(1.2)';
+
+                let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
+                let mainSuit = this.getSuitIcon(colorClass);
+                let sizeClass = (card.type === '+2' || card.type === 'skip') ? 'mid' : 'big';
+                let midSuit = (card.type === '+2') ? '✚' : ((card.type === 'skip') ? '⊖' : mainSuit);
+
+                if (card.color === 'black') {
+                    el.innerHTML = `
+                        <div class="tl-value" style="color:white; text-shadow:0 0 2px #000;">${content}</div>
+                        <div class="br-value" style="color:white; text-shadow:0 0 2px #000;">${content}</div>
+                        <div style="position:absolute; inset:35%; border-radius:50%; background:#111; display:grid; place-items:center; font-weight:bold; font-size:18px;">${card.type === 'wild' ? '🌈' : '+4'}</div>
+                    `;
+                } else {
+                    el.innerHTML = `
+                        <div class="tl-value">${content}</div>
+                        <div class="tl-suit">${mainSuit}</div>
+                        <div class="br-value">${content}</div>
+                        <div class="br-suit">${mainSuit}</div>
+                        <div class="center-symbol ${sizeClass}">${content === '0' ? mainSuit : (content.length > 1 ? midSuit : content)}</div>
+                    `;
+                }
+
+                previewContainer.appendChild(el);
+
+                this.pendingDrawnCardIndex = newHand.length - 1;
+                this.modalPlayDrawn.classList.remove('hidden');
+
+                // Do not change turn, wait for user decision
             }
         } else {
             let nextTurn = (this.turnIndex + this.direction) % this.players.length;
@@ -910,6 +1013,17 @@ class OnoGameManager {
             turnIndex: nextTurn,
             turnStartedAt: serverTimestamp()
         });
+    }
+
+    async resumePlay() {
+        if (!this.myId) return;
+        const me = this.players.find(p => p.id === this.myId);
+        if (me && me.isSuspended) {
+            await update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), { isSuspended: false });
+        }
+        if (this.modalSuspended) {
+            this.modalSuspended.classList.add('hidden');
+        }
     }
 
     async claimOno() {
@@ -1021,10 +1135,13 @@ class OnoGameManager {
 
         const cardsToRender = me.hand.slice(0, displayCount);
 
+        const isMyTurn = this.isMyTurn();
+
         cardsToRender.forEach((card, index) => {
             const el = document.createElement('div');
 
             const isHidden = this.isSpectator || me.surrendered;
+            const valid = isMyTurn ? this.isValidPlay(card) : false;
 
             // Calculate rotation and translation for curved hand
             let rotate = 0;
@@ -1059,9 +1176,20 @@ class OnoGameManager {
                 el.className = `playing-card ${colorClass}`;
                 if (card.color === 'black') el.classList.add('black-card');
 
+                if (isMyTurn) {
+                    if (valid) {
+                        translateY -= 20; // Lift valid cards
+                    } else {
+                        el.style.filter = 'brightness(0.6)'; // Darken invalid cards
+                    }
+                }
+
                 el.style.left = `${left}%`;
                 el.style.transform = `rotate(${rotate}deg) translateY(${translateY}%)`;
                 el.style.zIndex = index + 1;
+
+                // Save original transform for animation
+                el.dataset.originalTransform = el.style.transform;
 
                 let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
 
@@ -1092,10 +1220,10 @@ class OnoGameManager {
                 }
             }
 
-            if (!isHidden && this.isMyTurn() && this.isValidPlay(card)) {
+            if (valid && !isHidden) {
                 el.classList.add('valid-play');
-                el.onclick = () => this.playCard(me.hand.indexOf(card));
-            } else if (!isHidden && this.isMyTurn()) {
+                el.onclick = (e) => this.playCardAnimation(e.currentTarget, () => this.playCard(me.hand.indexOf(card)));
+            } else if (!isHidden && isMyTurn) {
                 el.classList.add('invalid-play');
                 el.onclick = () => this.showToast("لا يمكنك لعب هذه البطاقة!");
             } else if (!isHidden) {
@@ -1151,16 +1279,24 @@ renderGameNodes() {
             el.className = `player ${posClass}`;
             if (this.players[this.turnIndex]?.id === p.id) el.classList.add('active-turn');
 
-            const avatarHtml = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
+            let avatarHtml = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
+            if (p.isSuspended) avatarHtml = "🤖";
 
-            let innerHtml = `
-                <div class="avatar">${avatarHtml}</div>
-                <div class="badge">${p.cardsCount || 0}</div>
-                <div class="name">${this.escapeHtml(p.name)}</div>
-            `;
-
+            let innerHtml = '';
             if (this.players[this.turnIndex]?.id === p.id && !p.isBot) {
-                innerHtml += `<div class="turn-timer" id="timer-${p.id}">10</div>`;
+                innerHtml = `
+                    <div class="avatar" style="display: flex; justify-content: center; align-items: center; background: #000; border: 2px solid #ff4b2b;">
+                        <div class="turn-timer" id="timer-${p.id}" style="position: static; transform: none; font-size: 24px;">10</div>
+                    </div>
+                    <div class="badge">${p.cardsCount || 0}</div>
+                    <div class="name">${this.escapeHtml(p.name)}</div>
+                `;
+            } else {
+                innerHtml = `
+                    <div class="avatar" style="${p.isSuspended ? 'font-size: 2.5rem; display: flex; justify-content: center; align-items: center;' : ''}">${avatarHtml}</div>
+                    <div class="badge">${p.cardsCount || 0}</div>
+                    <div class="name">${this.escapeHtml(p.name)}</div>
+                `;
             }
 
             if (p.isOnline === false || p.surrendered) el.style.opacity = '0.5';
