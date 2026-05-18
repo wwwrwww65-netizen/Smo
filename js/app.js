@@ -48,7 +48,8 @@ class GameManager {
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
         this.myId = null;
-        this.avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)];
+        const seed = Math.random().toString(36).substr(2, 9);
+        this.avatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}`;
 
         this.gameTimer = null;
         this.timeLeft = 40;
@@ -414,7 +415,7 @@ class GameManager {
 
         const opp = progressData[this.topOppId];
         this.oppProgress.classList.remove('hidden');
-        this.oppAvatar.textContent = opp.avatar || '👤';
+        this.oppAvatar.innerHTML = opp.avatar ? `<img src="${opp.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />` : '👤';
         this.oppName.textContent = opp.name;
         this.oppStatus.textContent = `يكتب في: ${opp.currentField}`;
         this.oppCounter.textContent = `${opp.count}/5`;
@@ -656,7 +657,7 @@ class GameManager {
             const label = seat.querySelector('.player-name-label');
 
             wrapper.classList.remove('empty');
-            img.textContent = p.avatar || '👤';
+            img.innerHTML = p.avatar ? `<img src="${p.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />` : '👤';
             if (p.ready) readyIcon.classList.remove('hidden');
             else readyIcon.classList.add('hidden');
             label.textContent = p.name + (p.id === this.myId ? ' (أنت)' : '');

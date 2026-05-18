@@ -385,6 +385,29 @@
           </div>
       </div>
   </div>
+  <!-- Play Drawn Card Modal -->
+  <div id="modal-play-drawn" class="modal hidden">
+      <div class="modal-content">
+          <div class="modal-header">لقد سحبت بطاقة قابلة للعب!</div>
+          <p style="color: #ccc; margin-bottom: 20px;">هل ترغب في لعب البطاقة المسحوبة أم الاحتفاظ بها؟</p>
+          <div id="modal-play-drawn-card-preview" style="display:flex; justify-content:center; margin-bottom: 20px;"></div>
+          <div class="modal-actions" style="display:flex; justify-content:space-around;">
+              <button id="btn-drawn-play" class="btn-primary" style="background: linear-gradient(135deg, #38ef7d, #11998e);">العبها</button>
+              <button id="btn-drawn-keep" class="btn-primary" style="background: #444;">تخطي واحتفظ</button>
+          </div>
+      </div>
+  </div>
+
+  <!-- Suspended Screen Overlay -->
+  <div id="modal-suspended" class="modal hidden" style="background: rgba(0,0,0,0.85);">
+      <div class="modal-content" style="background: transparent; box-shadow: none;">
+          <div style="font-size: 3rem; margin-bottom: 20px;">🤖</div>
+          <div class="modal-header" style="color: #ff4b2b; font-size: 1.5rem;">أنت في وضع الخمول</div>
+          <p style="color: #ccc; margin-bottom: 20px;">النظام يلعب بدلاً منك حالياً.</p>
+          <button id="btn-resume-play" class="btn-primary" style="padding: 15px 30px; font-size: 1.2rem;">المس للعودة للعب</button>
+      </div>
+  </div>
+
   <div id="modal-results" class="modal hidden">
       <div class="modal-content">
           <div class="modal-header">نتائج اللعبة</div>
