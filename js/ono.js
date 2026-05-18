@@ -46,7 +46,7 @@ class OnoGameManager {
         this.chatMessages = [];
 
         if (!this.roomId || !this.playerName) {
-            window.location.href = './index.html';
+            // window.location.href = './index.html';
             return;
         }
 
@@ -173,7 +173,7 @@ class OnoGameManager {
 
         if (!snap.exists()) {
             alert("الغرفة غير موجودة");
-            window.location.href = './index.html';
+            // window.location.href = './index.html';
             return;
         }
 
@@ -1261,7 +1261,7 @@ renderGameNodes() {
              await remove(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`));
         }
 
-        window.location.href = './index.html';
+        // window.location.href = './index.html';
     }
 
     escapeHtml(text) {
