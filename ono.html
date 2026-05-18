@@ -7,6 +7,7 @@
   <title>TopTop Game UI - Perfect Match</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
+
     :root {
       color-scheme: light only;
       --bg1:#4fa8ff; --bg2:#1671da; --bg3:#0e41b7; --text:#f8fbff;
@@ -200,14 +201,14 @@
       font-size:clamp(12px, 3.5vw, 20px); font-weight:900; color:#ffe765; text-shadow:0 2px 2px rgba(0,0,0,.25); z-index:7; cursor:pointer;
     }
     .side-btn::before{content:"ONO"; transform:rotate(8deg)}
-    .side-btn.hidden{ display: none; }
+    .side-btn.hidden{ display: none !important; }
 
     .left-counter{
       position:absolute; left:4%; bottom:40%; width:35px; height:35px; border-radius:50%;
       background:linear-gradient(180deg, #3789ff, #1548bc); box-shadow:0 8px 14px rgba(0,0,0,.22), inset 0 0 0 3px rgba(255,255,255,.12);
-      display:grid; place-items:center; font-size:16px; font-weight:800; z-index:7;
+      display:grid; place-items:center; font-size:16px; font-weight:800; z-index:7; cursor:pointer;
     }
-    .left-counter.hidden{ display: none; }
+    .left-counter.hidden{ display: none !important; }
 
     .hand{
       position:absolute;
@@ -237,12 +238,18 @@
       transform-origin: bottom center;
       direction: ltr;
       overflow: hidden; cursor:pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, left 0.3s ease, bottom 0.3s ease;
     }
-    .playing-card:hover { box-shadow: -3px 8px 15px rgba(0,0,0,0.4); }
+    .playing-card:hover { box-shadow: -3px 8px 15px rgba(0,0,0,0.4); transform: translateY(-10px) scale(1.05) !important; z-index: 100 !important; }
     .playing-card.valid-play { box-shadow: 0 0 10px #38ef7d; }
     .playing-card.invalid-play { opacity: 0.7; }
     .playing-card::before { content:""; position:absolute; inset:0; background:#ffffff; z-index:-1; }
+
+    .playing-card.back { background-color: #222 !important; }
+    .playing-card.black-card {
+      background-color: #111 !important; color: #fff !important; border: 2px solid #555;
+    }
+    .playing-card.black-card::before { background: #111; }
 
     .card-top-left {
       position: absolute;
@@ -265,17 +272,6 @@
     .green{color:#1fb154 !important}
     .blue{color:#1e6ac5 !important}
     .black{color:#222 !important}
-
-    .card1{ left: 0%;    transform: rotate(-16deg) translateY(18%); z-index: 1;}
-    .card2{ left: 8.7%;  transform: rotate(-12deg) translateY(10%); z-index: 2;}
-    .card3{ left: 17.5%; transform: rotate(-8deg)  translateY(5%);  z-index: 3;}
-    .card4{ left: 26.3%; transform: rotate(-4deg)  translateY(1.5%);z-index: 4;}
-    .card5{ left: 35.1%; transform: rotate(-1deg)  translateY(0%);  z-index: 5;}
-    .card6{ left: 43.8%; transform: rotate(2deg)   translateY(0%);  z-index: 6;}
-    .card7{ left: 52.6%; transform: rotate(5deg)   translateY(1.5%);z-index: 7;}
-    .card8{ left: 61.4%; transform: rotate(9deg)   translateY(5%);  z-index: 8;}
-    .card9{ left: 70.2%; transform: rotate(13deg)  translateY(10%); z-index: 9;}
-    .card10{left: 79%;   transform: rotate(17deg)  translateY(18%); z-index: 10;}
 
     .chat-area {
       position: absolute; left: 4%; right: 4%; bottom: 8%;
@@ -357,7 +353,7 @@
     .room-id-display { margin: 10px 0; font-size: 1.2rem; }
     .system-banner { color: #f1c40f; margin-bottom: 20px; }
     #section-game.hidden { display: none; }
-  </style>
+</style>
 </head>
 <body>
 
