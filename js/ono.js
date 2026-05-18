@@ -943,14 +943,12 @@ class OnoGameManager {
 
         let content = topCard.type === 'number' ? topCard.value : this.getIconForType(topCard.type);
         let bgClass = topCard.color;
-        let typeClass = topCard.type;
         if (topCard.type.startsWith('wild')) {
             bgClass = this.currentColor || 'black';
         }
 
-        // New .card-top design
         this.elPlayedPile.innerHTML = `
-            <div class="card-top ${bgClass}">
+            <div class="card-top">
               <div class="top-info">
                 <span class="rank-num ${bgClass}">${content}</span>
                 <span class="mini-suit ${bgClass}">${this.getSuitIcon(bgClass)}</span>
@@ -968,11 +966,17 @@ class OnoGameManager {
         return '★';
     }
 
+    getTinySuitForType(type, suit) {
+        if(type === '+2') return '✚';
+        if(type === 'skip') return '⊖';
+        return suit;
+    }
+
     getIconForType(type) {
         switch(type) {
-            case 'skip': return '⊘';
+            case 'skip': return '⊖';
             case 'reverse': return '⇄';
-            case '+2': return '+2';
+            case '+2': return '+';
             case 'wild': return '🌈';
             case 'wild+4': return '+4';
             default: return '';
@@ -987,57 +991,38 @@ class OnoGameManager {
 
         const count = me.hand.length;
 
-        // Use mapping to the layout shown in CSS: card1 to card10 (or more if needed)
-        // .card1{ left: 0%; transform: rotate(-16deg) translateY(18%); }
-        // We can compute these styles dynamically or fallback to class approach
-
-        const maxAngle = 34; // from -17 to 17
-        const step = count > 1 ? maxAngle / (count - 1) : 0;
-        const startAngle = -maxAngle / 2;
-
-        const maxTranslateY = 18; // percent
-
         me.hand.forEach((card, index) => {
-            const angle = count === 1 ? 0 : startAngle + (step * index);
-
-            // Parabola shape for translateY: ax^2
-            // center index = (count-1)/2
-            // x = current_index - center_index
-            // x_max = (count-1)/2
-            // y = c * (x / x_max)^2
-            let x_val = count > 1 ? (index - (count - 1) / 2) / ((count - 1) / 2) : 0;
-            const translateY = Math.pow(x_val, 2) * maxTranslateY;
-
-            const leftPercent = count > 1 ? (index / (count - 1)) * 79 : 40; // max left is ~79% from CSS
-
             const el = document.createElement('div');
+
+            // Hardcode to exact CSS classes for perfect match
+            let positionClass = `card${(index % 10) + 1}`;
 
             const isHidden = this.isSpectator || me.surrendered;
 
             if (isHidden) {
-                el.className = `playing-card back`;
+                el.className = `playing-card ${positionClass} back`;
                 el.style.background = "#222";
             } else {
                 let colorClass = card.color;
-                if(colorClass === 'yellow') colorClass = 'orange'; // CSS uses orange for yellow suit visually
+                if(colorClass === 'yellow') colorClass = 'orange'; // CSS uses orange for yellow
 
-                el.className = `playing-card ${colorClass} ${card.type}`;
+                el.className = `playing-card ${positionClass} ${colorClass}`;
                 let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
 
-                let suit = this.getSuitIcon(colorClass);
+                let mainSuit = this.getSuitIcon(colorClass);
+                let tinySuit = this.getTinySuitForType(card.type, mainSuit);
+
+                let sizeClass = (card.type === '+2' || card.type === 'skip') ? 'mid' : 'big';
+                let midSuit = (card.type === '+2') ? '✚' : ((card.type === 'skip') ? '⊖' : mainSuit);
 
                 el.innerHTML = `
                     <div class="card-top-left ${colorClass}">
                         <span class="num">${content}</span>
-                        <span class="tiny-suit">${suit}</span>
+                        <span class="tiny-suit">${tinySuit}</span>
                     </div>
-                    <div class="big ${colorClass}">${suit}</div>
+                    <div class="${sizeClass} ${colorClass}">${midSuit}</div>
                 `;
             }
-
-            el.style.left = `${leftPercent}%`;
-            el.style.transform = `rotate(${angle}deg) translateY(${translateY}%)`;
-            el.style.zIndex = index + 1;
 
             if (!isHidden && this.isMyTurn() && this.isValidPlay(card)) {
                 el.classList.add('valid-play');
@@ -1067,16 +1052,10 @@ class OnoGameManager {
 
         const totalPlayers = this.players.length;
 
-        // Define positioning classes based on total players
-        // Classes: p-bottom (me), p-left-mid, p-left-top, p-top, p-right-top, p-right-mid
         const getPositionClass = (offset, total) => {
             if (offset === 0) return 'p-bottom';
-            if (total === 2) {
-                return offset === 1 ? 'p-top' : 'p-bottom';
-            }
-            if (total === 3) {
-                return offset === 1 ? 'p-left-top' : 'p-right-top';
-            }
+            if (total === 2) { return offset === 1 ? 'p-top' : 'p-bottom'; }
+            if (total === 3) { return offset === 1 ? 'p-left-top' : 'p-right-top'; }
             if (total === 4) {
                 if (offset === 1) return 'p-left-mid';
                 if (offset === 2) return 'p-top';
@@ -1088,7 +1067,6 @@ class OnoGameManager {
                 if (offset === 3) return 'p-right-top';
                 if (offset === 4) return 'p-right-mid';
             }
-            // 6 players
             if (offset === 1) return 'p-left-mid';
             if (offset === 2) return 'p-left-top';
             if (offset === 3) return 'p-top';
@@ -1104,9 +1082,7 @@ class OnoGameManager {
 
             const el = document.createElement('div');
             el.className = `player ${posClass}`;
-
-            const isTurn = this.players[this.turnIndex]?.id === p.id;
-            if (isTurn) el.classList.add('active-turn');
+            if (this.players[this.turnIndex]?.id === p.id) el.classList.add('active-turn');
 
             const avatarHtml = p.surrendered ? "🏳️" : `<img src="${p.avatar}" alt="${this.escapeHtml(p.name)}">`;
 
@@ -1116,33 +1092,20 @@ class OnoGameManager {
                 <div class="name">${this.escapeHtml(p.name)}</div>
             `;
 
-            if (isTurn && !p.isBot) {
+            if (this.players[this.turnIndex]?.id === p.id && !p.isBot) {
                 innerHtml += `<div class="turn-timer" id="timer-${p.id}">10</div>`;
             }
 
-            if (p.isOnline === false || p.surrendered) {
-                 el.style.opacity = '0.5';
-            }
+            if (p.isOnline === false || p.surrendered) el.style.opacity = '0.5';
 
             el.innerHTML = innerHtml;
             this.elPlayerNodesContainer.appendChild(el);
         }
-
-        if (this.isMyTurn()) {
-            this.elDrawPile.style.boxShadow = '0 0 15px #38ef7d';
-            // Hand validity is updated in renderHand
-        } else {
-            this.elDrawPile.style.boxShadow = 'none';
-        }
     }
 
     updateArrows() {
-        // Find the arrows container
         const arrowsContainer = document.getElementById('direction-arrows');
         if (!arrowsContainer) return;
-
-        // Let's use the actual elements from the user's HTML design
-        // We just need to reverse the direction visually if direction === -1
         if (this.direction === 1) {
             arrowsContainer.innerHTML = `
                 <div class="arrows"><div class="arrow">««««</div></div>
@@ -1186,7 +1149,6 @@ class OnoGameManager {
 
         messages.slice(-10).forEach(m => {
             const el = document.createElement('div');
-
             if (m.senderId === 'system') {
                 el.className = 'chat-group system-style';
                 el.innerHTML = `
@@ -1206,13 +1168,9 @@ class OnoGameManager {
                     <div class="chat-bubble">${this.escapeHtml(m.text)}</div>
                 `;
             }
-
             this.elGameChatHistory.appendChild(el);
         });
-
-        setTimeout(() => {
-            this.elGameChatHistory.scrollTop = this.elGameChatHistory.scrollHeight;
-        }, 100);
+        setTimeout(() => { this.elGameChatHistory.scrollTop = this.elGameChatHistory.scrollHeight; }, 100);
     }
 
     async quitGame() {

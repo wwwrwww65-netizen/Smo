@@ -1,4 +1,10 @@
-<!DOCTYPE html>
+import re
+
+with open('ono.html', 'r') as f:
+    original_html = f.read()
+
+# We want the exact user HTML structure to be our base.
+user_html_exact = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -523,4 +529,7 @@
       }
   </script>
 </body>
-</html>
+</html>"""
+
+with open('ono.html', 'w') as f:
+    f.write(user_html_exact)
