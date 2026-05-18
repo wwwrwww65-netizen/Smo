@@ -1033,15 +1033,17 @@ class OnoGameManager {
 
             if (displayCount > 1) {
                 const fraction = index / (displayCount - 1);
-                // Angle goes from -totalAngle/2 to +totalAngle/2
                 rotate = -totalAngle / 2 + fraction * totalAngle;
-                // left position goes from 0% to ~80%
-                left = (index / (displayCount - 1)) * 80;
-                // Parabola shape for translateY
+
+                // fan width depends on number of cards. Max fan width = 60%.
+                const maxFanWidth = Math.min(60, displayCount * 8);
+                const startLeft = 39 - (maxFanWidth / 2);
+                left = startLeft + (fraction * maxFanWidth);
+
                 const centeredIndex = index - (displayCount - 1) / 2;
                 translateY = Math.abs(centeredIndex) * 2;
             } else {
-                left = 40;
+                left = 39;
             }
 
             if (isHidden) {
@@ -1103,7 +1105,7 @@ class OnoGameManager {
             this.elMyHand.appendChild(el);
         });
 
-        if (!this.isSpectator && !me.surrendered && count === 2 && !me.hasSaidOno) {
+        if (!this.isSpectator && !me.surrendered) {
             this.elBtnOno.classList.remove('hidden');
         } else {
             this.elBtnOno.classList.add('hidden');
