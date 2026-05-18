@@ -46,7 +46,7 @@ class OnoGameManager {
         this.chatMessages = [];
 
         if (!this.roomId || !this.playerName) {
-            window.location.href = './index.html';
+            // window.location.href = './index.html';
             return;
         }
 
@@ -173,7 +173,7 @@ class OnoGameManager {
 
         if (!snap.exists()) {
             alert("الغرفة غير موجودة");
-            window.location.href = './index.html';
+            // window.location.href = './index.html';
             return;
         }
 
@@ -983,6 +983,7 @@ class OnoGameManager {
         }
     }
 
+
     renderHand() {
         const me = this.players.find(p => p.id === this.myId);
         this.elMyHand.innerHTML = '';
@@ -991,22 +992,77 @@ class OnoGameManager {
 
         const count = me.hand.length;
 
-        me.hand.forEach((card, index) => {
-            const el = document.createElement('div');
+        let displayCount = count;
+        if (count > 10 && !this.handExpanded) {
+            displayCount = 10;
+        } else if (count <= 10) {
+            this.handExpanded = false;
+        }
 
-            // Hardcode to exact CSS classes for perfect match
-            let positionClass = `card${(index % 10) + 1}`;
+        const extraCards = count - displayCount;
+
+        const counterBtn = document.getElementById('btn-draw-card');
+        if (counterBtn) {
+            if (count > 10) {
+                counterBtn.classList.remove('hidden');
+                counterBtn.textContent = extraCards > 0 ? extraCards : '↑';
+                counterBtn.onclick = () => {
+                    this.handExpanded = !this.handExpanded;
+                    this.renderHand();
+                };
+            } else {
+                counterBtn.classList.add('hidden');
+            }
+        }
+
+        const maxAngle = 35; // Total angle spread
+        const radius = 180; // Distance to rotation point
+        const totalAngle = Math.min(maxAngle, displayCount * 5); // Angle spread based on cards
+
+        const cardsToRender = me.hand.slice(0, displayCount);
+
+        cardsToRender.forEach((card, index) => {
+            const el = document.createElement('div');
 
             const isHidden = this.isSpectator || me.surrendered;
 
+            // Calculate rotation and translation for curved hand
+            let rotate = 0;
+            let translateY = 0;
+            let left = 50; // percentage
+
+            if (displayCount > 1) {
+                const fraction = index / (displayCount - 1);
+                rotate = -totalAngle / 2 + fraction * totalAngle;
+
+                // fan width depends on number of cards. Max fan width = 60%.
+                const maxFanWidth = Math.min(60, displayCount * 8);
+                const startLeft = 39 - (maxFanWidth / 2);
+                left = startLeft + (fraction * maxFanWidth);
+
+                const centeredIndex = index - (displayCount - 1) / 2;
+                translateY = Math.abs(centeredIndex) * 2;
+            } else {
+                left = 39;
+            }
+
             if (isHidden) {
-                el.className = `playing-card ${positionClass} back`;
+                el.className = `playing-card back`;
                 el.style.background = "#222";
+                el.style.left = `${left}%`;
+                el.style.transform = `rotate(${rotate}deg) translateY(${translateY}%)`;
+                el.style.zIndex = index + 1;
             } else {
                 let colorClass = card.color;
                 if(colorClass === 'yellow') colorClass = 'orange'; // CSS uses orange for yellow
 
-                el.className = `playing-card ${positionClass} ${colorClass}`;
+                el.className = `playing-card ${colorClass}`;
+                if (card.color === 'black') el.classList.add('black-card');
+
+                el.style.left = `${left}%`;
+                el.style.transform = `rotate(${rotate}deg) translateY(${translateY}%)`;
+                el.style.zIndex = index + 1;
+
                 let content = card.type === 'number' ? card.value : this.getIconForType(card.type);
 
                 let mainSuit = this.getSuitIcon(colorClass);
@@ -1015,18 +1071,30 @@ class OnoGameManager {
                 let sizeClass = (card.type === '+2' || card.type === 'skip') ? 'mid' : 'big';
                 let midSuit = (card.type === '+2') ? '✚' : ((card.type === 'skip') ? '⊖' : mainSuit);
 
-                el.innerHTML = `
-                    <div class="card-top-left ${colorClass}">
-                        <span class="num">${content}</span>
-                        <span class="tiny-suit">${tinySuit}</span>
-                    </div>
-                    <div class="${sizeClass} ${colorClass}">${midSuit}</div>
-                `;
+                if (card.color === 'black') {
+                    // Custom design for black cards
+                    el.innerHTML = `
+                        <div class="card-top-left ${colorClass}">
+                            <span class="num">${content}</span>
+                            <span class="tiny-suit">${tinySuit}</span>
+                        </div>
+                        <div style="position:absolute; inset:25%; border-radius:50%; background:conic-gradient(#d62c41 0 90deg, #1e6ac5 90deg 180deg, #1fb154 180deg 270deg, #e88604 270deg 360deg); box-shadow:0 2px 5px rgba(0,0,0,0.5); border: 2px solid #fff;"></div>
+                        <div style="position:absolute; inset:35%; border-radius:50%; background:#111; display:grid; place-items:center; font-weight:bold; font-size:18px;">${card.type === 'wild' ? '🌈' : '+4'}</div>
+                    `;
+                } else {
+                    el.innerHTML = `
+                        <div class="card-top-left ${colorClass}">
+                            <span class="num">${content}</span>
+                            <span class="tiny-suit">${tinySuit}</span>
+                        </div>
+                        <div class="${sizeClass} ${colorClass}">${midSuit}</div>
+                    `;
+                }
             }
 
             if (!isHidden && this.isMyTurn() && this.isValidPlay(card)) {
                 el.classList.add('valid-play');
-                el.onclick = () => this.playCard(index);
+                el.onclick = () => this.playCard(me.hand.indexOf(card));
             } else if (!isHidden && this.isMyTurn()) {
                 el.classList.add('invalid-play');
                 el.onclick = () => this.showToast("لا يمكنك لعب هذه البطاقة!");
@@ -1037,14 +1105,13 @@ class OnoGameManager {
             this.elMyHand.appendChild(el);
         });
 
-        if (!this.isSpectator && !me.surrendered && count === 2 && !me.hasSaidOno) {
+        if (!this.isSpectator && !me.surrendered) {
             this.elBtnOno.classList.remove('hidden');
         } else {
             this.elBtnOno.classList.add('hidden');
         }
     }
-
-    renderGameNodes() {
+renderGameNodes() {
         this.elPlayerNodesContainer.innerHTML = '';
 
         let myIndex = this.players.findIndex(p => p.id === this.myId);
@@ -1103,26 +1170,26 @@ class OnoGameManager {
         }
     }
 
+
     updateArrows() {
         const arrowsContainer = document.getElementById('direction-arrows');
         if (!arrowsContainer) return;
         if (this.direction === 1) {
             arrowsContainer.innerHTML = `
-                <div class="arrows"><div class="arrow">««««</div></div>
-                <div class="arrows left"><div class="arrow small">««««</div></div>
-                <div class="arrows right"><div class="arrow small">««««</div></div>
-                <div class="arrows bottom"><div class="arrow">»»»»</div></div>
+              <div class="arrows"><div class="arrow">««««</div></div>
+              <div class="arrows left"><div class="arrow small">««««</div></div>
+              <div class="arrows right"><div class="arrow small">««««</div></div>
+              <div class="arrows bottom"><div class="arrow">»»»»</div></div>
             `;
         } else {
             arrowsContainer.innerHTML = `
-                <div class="arrows"><div class="arrow">»»»»</div></div>
-                <div class="arrows left"><div class="arrow small">»»»»</div></div>
-                <div class="arrows right"><div class="arrow small">»»»»</div></div>
-                <div class="arrows bottom"><div class="arrow">««««</div></div>
+              <div class="arrows"><div class="arrow">»»»»</div></div>
+              <div class="arrows left"><div class="arrow small">»»»»</div></div>
+              <div class="arrows right"><div class="arrow small">»»»»</div></div>
+              <div class="arrows bottom"><div class="arrow">««««</div></div>
             `;
         }
     }
-
     // ==========================================
     // Chat
     // ==========================================
@@ -1139,6 +1206,7 @@ class OnoGameManager {
 
         this.elChatInput.value = '';
     }
+
 
     renderChat(chatObj) {
         const messages = Object.values(chatObj).sort((a,b) => a.timestamp - b.timestamp);
@@ -1162,7 +1230,9 @@ class OnoGameManager {
                 el.className = 'chat-group';
                 el.innerHTML = `
                     <div class="chat-header">
-                      <div class="tiny-avatar" style="background:linear-gradient(180deg,#f1d1d1,#c77);"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=${m.senderName}" /></div>
+                      <div class="tiny-avatar" style="background:linear-gradient(180deg,#f1d1d1,#c77); border: 2px solid #fff;">
+                        <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=${m.senderName}" />
+                      </div>
                       <span>${this.escapeHtml(m.senderName)}</span>
                     </div>
                     <div class="chat-bubble">${this.escapeHtml(m.text)}</div>
@@ -1172,7 +1242,6 @@ class OnoGameManager {
         });
         setTimeout(() => { this.elGameChatHistory.scrollTop = this.elGameChatHistory.scrollHeight; }, 100);
     }
-
     async quitGame() {
         if (this.gameState === 'game' && !this.isSpectator) {
             // Mark as surrendered
@@ -1194,7 +1263,7 @@ class OnoGameManager {
              await remove(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`));
         }
 
-        window.location.href = './index.html';
+        // window.location.href = './index.html';
     }
 
     escapeHtml(text) {
