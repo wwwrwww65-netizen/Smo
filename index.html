@@ -159,6 +159,13 @@
     <!-- طبقات الغرف والألعاب (Modals/Overlays) -->
     <div id="room-layer" class="layer hidden">
         <div class="room-container">
+            <!-- Theatrical Background -->
+            <div class="theatrical-bg">
+                <div class="curtain left"></div>
+                <div class="curtain right"></div>
+                <div class="stage-light"></div>
+            </div>
+
             <header class="room-header glass">
                 <div class="room-info-top">
                     <button id="btn-close-room" class="btn-icon">✖</button>
@@ -174,9 +181,52 @@
             </header>
 
             <div class="room-body">
-                <!-- YouTube Player (Optional) -->
-                <div id="youtube-container" class="hidden">
-                    <div id="player"></div>
+                <!-- Media Section (Ported from live/index.html) -->
+                <div class="video-container" id="main-video-container">
+                    <!-- الجزء العلوي: العنوان -->
+                    <div class="vid-header-top">
+                        <div class="video-ornament">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#FFD700"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+                        </div>
+                        <h2 id="vid-title" class="vid-title-main">بث مباشر</h2>
+                        <p id="vid-owner" class="vid-owner-name">بواسطة: ...</p>
+                    </div>
+
+                    <!-- الجزء الأوسط: المشغل أو حالة الإيقاف -->
+                    <div class="vid-content-middle">
+                        <!-- مشغل يوتيوب -->
+                        <div id="youtube-player-container" class="hidden" style="width:100%; height:100%;">
+                            <div id="player"></div>
+                        </div>
+
+                        <!-- مشغل فيديو عام -->
+                        <div id="generic-video-container" class="hidden" style="width:100%; height:100%;">
+                            <video id="generic-video" controls playsinline webkit-playsinline style="width:100%; height:100%; background:#000;"></video>
+                        </div>
+
+                        <!-- متصفح داخلي -->
+                        <div id="browser-container" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; display: flex; flex-direction: column; z-index: 10;">
+                            <div id="browser-toolbar" class="hidden" style="background: #1a1a1a; padding: 8px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #333; z-index: 30;">
+                                <input type="text" id="browser-url-input" placeholder="أدخل الرابط أو ابحث..." style="flex: 1; padding: 6px 12px; border-radius: 20px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 12px;">
+                                <button id="btn-browser-go" class="btn-primary" style="padding: 4px 10px; font-size: 10px;">انتقال</button>
+                            </div>
+                            <iframe id="browser-iframe" src="" allow="autoplay; encrypted-media; fullscreen" style="flex: 1; width:100%; border:none; background:#fff;"></iframe>
+                        </div>
+
+                        <div id="vid-placeholder" class="vid-placeholder-box">
+                            <div class="vid-icon-big">📺</div>
+                            <p id="vid-stopped-message">المالك قام بإيقاف الفيديو</p>
+                        </div>
+                    </div>
+
+                    <!-- الجزء السفلي: العلامة والأيقونات -->
+                    <div class="vid-footer-row">
+                        <div class="footer-actions-right">
+                            <button class="btn-icon" id="btn-open-media-control">⚙️</button>
+                            <button class="btn-icon" id="btn-playlist">📋</button>
+                        </div>
+                        <div class="yt-brand" id="media-brand" style="color: #fff; font-weight: bold; font-size: 12px;">YouTube</div>
+                    </div>
                 </div>
 
                 <!-- Seats Layout -->
@@ -217,6 +267,37 @@
         <iframe id="game-frame" src="" frameborder="0" style="width:100%; height:calc(100% - 60px);"></iframe>
     </div>
 
+    <!-- Modal للتحكم في الميديا -->
+    <div id="modal-media-control" class="overlay hidden" style="z-index: 4000;">
+        <div class="auth-card glass">
+            <div class="modal-header" style="text-align: center; font-weight: 800; margin-bottom: 15px;">إدارة المحتوى 📺</div>
+            <input type="text" id="media-url-input" placeholder="رابط (YouTube, MP4, أو موقع)...">
+
+            <div class="media-type-selector" style="display: flex; gap: 5px; justify-content: center; margin: 10px 0;">
+                <button id="type-auto" class="auth-tab active" style="font-size: 0.7rem;">تلقائي</button>
+                <button id="type-yt" class="auth-tab" style="font-size: 0.7rem;">YouTube</button>
+                <button id="type-web" class="auth-tab" style="font-size: 0.7rem;">متصفح</button>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button id="btn-load-media" class="btn-primary" style="flex: 1;">تحميل ✅</button>
+                <button id="btn-close-media-modal" class="btn-primary" style="flex: 1; background: #ef4444;">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal قائمة التشغيل -->
+    <div id="modal-playlist" class="overlay hidden" style="z-index: 4000;">
+        <div class="auth-card glass">
+            <div class="modal-header" style="text-align: center; font-weight: 800; margin-bottom: 15px;">قائمة التشغيل 📋</div>
+            <div id="playlist-container" style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;">
+                <!-- Items will be here -->
+                <p style="text-align: center; color: var(--text-dim); font-size: 0.8rem;">القائمة فارغة</p>
+            </div>
+            <button id="btn-close-playlist-modal" class="btn-primary" style="width: 100%; background: #ef4444;">إغلاق</button>
+        </div>
+    </div>
+
     <div id="chat-layer" class="layer hidden">
         <header class="app-header glass">
             <button id="btn-close-chat" class="btn-icon">✖</button>
@@ -239,6 +320,7 @@
     <!-- التنبيهات -->
     <div id="main-toast" class="toast hidden"></div>
 
+    <script src="https://www.youtube.com/iframe_api"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="js/app.js"></script>
 </body>

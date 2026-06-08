@@ -48,7 +48,16 @@ class SmoManager {
         this.gameLayer = document.getElementById('game-layer');
         this.chatLayer = document.getElementById('chat-layer');
         this.gameFrame = document.getElementById('game-frame');
-        this.youtubeContainer = document.getElementById('youtube-container');
+
+        // Media Elements
+        this.ytPlayerContainer = document.getElementById('youtube-player-container');
+        this.genericVideoContainer = document.getElementById('generic-video-container');
+        this.genericVideo = document.getElementById('generic-video');
+        this.browserContainer = document.getElementById('browser-container');
+        this.browserIframe = document.getElementById('browser-iframe');
+        this.vidPlaceholder = document.getElementById('vid-placeholder');
+        this.vidTitle = document.getElementById('vid-title');
+        this.vidOwner = document.getElementById('vid-owner');
 
         this.roomTabs = document.querySelectorAll('.room-tab');
         this.roomsList = document.getElementById('rooms-list');
@@ -92,9 +101,36 @@ class SmoManager {
             this.chatLayer.classList.add('hidden');
         });
 
-        document.getElementById('btn-toggle-youtube').addEventListener('click', () => {
-            this.youtubeContainer.classList.toggle('hidden');
+        document.getElementById('btn-open-media-control').addEventListener('click', () => {
+            document.getElementById('modal-media-control').classList.remove('hidden');
         });
+        document.getElementById('btn-close-media-modal').addEventListener('click', () => {
+            document.getElementById('modal-media-control').classList.add('hidden');
+        });
+        document.getElementById('btn-load-media').addEventListener('click', () => this.ownerLoadMedia());
+
+        document.getElementById('btn-playlist').addEventListener('click', () => {
+            document.getElementById('modal-playlist').classList.remove('hidden');
+        });
+        document.getElementById('btn-close-playlist-modal').addEventListener('click', () => {
+            document.getElementById('modal-playlist').classList.add('hidden');
+        });
+
+        document.getElementById('btn-browser-go').addEventListener('click', () => {
+            const url = document.getElementById('browser-url-input').value.trim();
+            if (url) this.syncBrowser(url);
+        });
+
+        // Media Type Selectors
+        const typeBtns = ['type-auto', 'type-yt', 'type-web'];
+        typeBtns.forEach(id => {
+            document.getElementById(id).onclick = (e) => {
+                typeBtns.forEach(b => document.getElementById(b).classList.remove('active'));
+                e.target.classList.add('active');
+                this.selectedMediaType = id.replace('type-', '');
+            };
+        });
+        this.selectedMediaType = 'auto';
     }
 
     initEvents() {
@@ -160,7 +196,10 @@ class SmoManager {
         const savedUser = localStorage.getItem('smo_user');
         if (savedUser) {
             this.user = JSON.parse(savedUser);
-            this.launchApp();
+            // Ensure Firebase Auth is initialized
+            signInAnonymously(this.auth).then(() => {
+                this.launchApp();
+            });
         }
     }
 
@@ -232,6 +271,7 @@ class SmoManager {
 
         try {
             this.showToast("جاري إنشاء الحساب...");
+            await signInAnonymously(this.auth);
             const userId = await this.generateUniqueId();
             const hashedPassword = CryptoJS.SHA256(password).toString();
 
@@ -272,6 +312,7 @@ class SmoManager {
         if (!identifier || !password) return;
 
         try {
+            await signInAnonymously(this.auth);
             let userId = identifier;
             // Check if identifier is username
             const nameSnap = await get(ref(this.db, `usernames/${identifier}`));
@@ -439,6 +480,49 @@ class SmoManager {
         document.getElementById('room-title').textContent = "غرفة المحادثة";
         this.roomId = roomId;
         this.initPeer();
+        this.listenToMediaSync();
+    }
+
+    listenToMediaSync() {
+        onValue(ref(this.db, `rooms/${this.roomId}/media`), (snap) => {
+            this.syncMedia(snap.val());
+        });
+        // Also listen to seats
+        onValue(ref(this.db, `rooms/${this.roomId}/seats`), (snap) => {
+            this.updateSeatsUI(snap.val());
+        });
+    }
+
+    updateSeatsUI(seats) {
+        const grid = document.querySelector('.seats-grid');
+        grid.innerHTML = '';
+        for (let i = 0; i < 8; i++) {
+            const seat = seats && seats[i];
+            const div = document.createElement('div');
+            div.className = `seat-circle ${seat ? 'occupied' : 'empty'}`;
+            div.dataset.seatIndex = i;
+            if (seat) {
+                div.dataset.uid = seat.uid;
+                div.innerHTML = `<img src="${seat.avatar}">`;
+                if (seat.isSpeaking) div.classList.add('speaking');
+            } else {
+                div.innerHTML = '<div class="seat-plus">+</div>';
+                div.onclick = () => this.joinSeat(i);
+            }
+            grid.appendChild(div);
+        }
+    }
+
+    async joinSeat(index) {
+        if (!this.user) return;
+        const seatRef = ref(this.db, `rooms/${this.roomId}/seats/${index}`);
+        await set(seatRef, {
+            uid: this.user.id,
+            username: this.user.username,
+            avatar: this.user.avatar,
+            isSpeaking: false
+        });
+        onDisconnect(seatRef).remove();
     }
 
     async initPeer() {
@@ -469,8 +553,46 @@ class SmoManager {
         this.activeCalls[call.peer] = call;
         call.on('stream', (remoteStream) => {
             const audio = this.audioPool.find(el => !el.srcObject);
-            if (audio) audio.srcObject = remoteStream;
+            if (audio) {
+                audio.srcObject = remoteStream;
+                audio.play().catch(() => {
+                    this.showToast("اضغط لتفعيل الصوت 🔊");
+                });
+            }
+            this.startVolumeDetection(remoteStream, call.peer);
         });
+    }
+
+    startVolumeDetection(stream, peerId) {
+        if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        const source = this.audioContext.createMediaStreamSource(stream);
+        const analyser = this.audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const check = () => {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const avg = sum / dataArray.length;
+
+            const isSpeaking = avg > 10;
+            this.updatePeerSpeakingState(peerId, isSpeaking);
+
+            if (this.activeCalls[peerId]) requestAnimationFrame(check);
+        };
+        check();
+    }
+
+    updatePeerSpeakingState(peerId, isSpeaking) {
+        // peerId is the UID of the user
+        const frame = document.querySelector(`.seat-circle.occupied[data-uid="${peerId}"]`);
+        if (frame) {
+            if (isSpeaking) frame.classList.add('speaking');
+            else frame.classList.remove('speaking');
+        }
     }
 
     renderSocialFeed() {
@@ -550,6 +672,105 @@ class SmoManager {
             };
             container.appendChild(card);
         }
+    }
+
+    // --- Watching Room Engine ---
+    ownerLoadMedia() {
+        const input = document.getElementById('media-url-input').value.trim();
+        if (!input) return;
+
+        let type = this.selectedMediaType;
+        let url = input;
+        let videoId = "";
+
+        if (type === 'auto') {
+            const ytMatch = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
+            if (ytMatch && ytMatch[2].length === 11) {
+                type = 'yt';
+                videoId = ytMatch[2];
+            } else if (url.match(/\.(mp4|webm|m3u8)/i)) {
+                type = 'video';
+            } else {
+                type = 'web';
+            }
+        }
+
+        const state = {
+            type,
+            url,
+            videoId,
+            state: 1,
+            currentTime: 0,
+            updatedAt: Date.now()
+        };
+
+        set(ref(this.db, `rooms/${this.roomId}/media`), state);
+        document.getElementById('modal-media-control').classList.add('hidden');
+    }
+
+    syncMedia(state) {
+        if (!state) return;
+        this.ytPlayerContainer.classList.add('hidden');
+        this.genericVideoContainer.classList.add('hidden');
+        this.browserContainer.classList.add('hidden');
+        this.vidPlaceholder.classList.add('hidden');
+
+        if (state.type === 'yt') {
+            this.ytPlayerContainer.classList.remove('hidden');
+            this.playYouTube(state);
+        } else if (state.type === 'video') {
+            this.genericVideoContainer.classList.remove('hidden');
+            this.playGenericVideo(state);
+        } else if (state.type === 'web') {
+            this.browserContainer.classList.remove('hidden');
+            this.syncBrowser(state.url);
+        } else {
+            this.vidPlaceholder.classList.remove('hidden');
+        }
+    }
+
+    playYouTube(state) {
+        const id = state.videoId;
+        const targetTime = (Date.now() - state.updatedAt) / 1000 + (state.currentTime || 0);
+
+        if (!this.player) {
+            this.player = new YT.Player('player', {
+                height: '100%',
+                width: '100%',
+                videoId: id,
+                playerVars: { 'autoplay': 1, 'playsinline': 1, 'start': Math.floor(targetTime) }
+            });
+        } else {
+            const currentId = this.player.getVideoData().video_id;
+            if (currentId !== id) {
+                this.player.loadVideoById(id, targetTime);
+            } else {
+                const diff = Math.abs(this.player.getCurrentTime() - targetTime);
+                if (diff > 5) this.player.seekTo(targetTime, true);
+            }
+        }
+    }
+
+    playGenericVideo(state) {
+        const targetTime = (Date.now() - state.updatedAt) / 1000 + (state.currentTime || 0);
+        if (this.genericVideo.src !== state.url) {
+            this.genericVideo.src = state.url;
+            this.genericVideo.currentTime = targetTime;
+            this.genericVideo.play().catch(() => {});
+        } else {
+            const diff = Math.abs(this.genericVideo.currentTime - targetTime);
+            if (diff > 5) this.genericVideo.currentTime = targetTime;
+        }
+    }
+
+    syncBrowser(url) {
+        let processedUrl = url;
+        if (!url.startsWith('http')) processedUrl = 'https://' + url;
+        // Google Search Fallback for browser
+        if (processedUrl.includes('google.com')) {
+             if (!processedUrl.includes('igu=1')) processedUrl += (processedUrl.includes('?') ? '&' : '?') + 'igu=1';
+        }
+        this.browserIframe.src = processedUrl;
     }
 
     renderProfile() {
