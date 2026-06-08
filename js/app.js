@@ -75,10 +75,8 @@ class SmoManager {
             signup: document.getElementById('auth-signup'),
             login: document.getElementById('auth-login')
         };
-        this.avatarCircle = document.getElementById('avatar-circle');
-        this.avatarInput = document.getElementById('avatar-input');
-        this.previewImg = document.getElementById('preview-img');
-        this.plusIcon = document.querySelector('.plus-icon');
+        this.genderBtns = document.querySelectorAll('.gender-btn');
+        this.selectedGender = null;
 
         // Navigation
         this.navItems = document.querySelectorAll('.nav-item');
@@ -152,9 +150,14 @@ class SmoManager {
             });
         });
 
-        // Avatar Picker
-        document.getElementById('avatar-preview').addEventListener('click', () => this.avatarInput.click());
-        this.avatarInput.addEventListener('change', (e) => this.handleAvatarSelect(e));
+        // Gender Selection
+        this.genderBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.genderBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.selectedGender = btn.dataset.gender;
+            });
+        });
 
         // Sign Up
         document.getElementById('btn-do-signup').addEventListener('click', () => this.handleSignUp());
@@ -203,46 +206,6 @@ class SmoManager {
         }
     }
 
-    handleAvatarSelect(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            this.previewImg.src = event.target.result;
-            this.previewImg.classList.remove('hidden');
-            this.plusIcon.classList.add('hidden');
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async compressImage(file) {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const max = 400;
-                    if (width > height) {
-                        if (width > max) { height *= max / width; width = max; }
-                    } else {
-                        if (height > max) { width *= max / height; height = max; }
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
-                };
-            };
-        });
-    }
-
     async generateUniqueId() {
         let unique = false;
         let id = "";
@@ -258,10 +221,9 @@ class SmoManager {
         const username = document.getElementById('signup-username').value.trim();
         const password = document.getElementById('signup-password').value;
         const confirm = document.getElementById('signup-confirm').value;
-        const avatarFile = this.avatarInput.files[0];
 
-        if (!username || !password || !avatarFile) {
-            this.showToast("يرجى إكمال جميع البيانات");
+        if (!username || !password || !this.selectedGender) {
+            this.showToast("يرجى إكمال جميع البيانات واختيار الجنس");
             return;
         }
         if (password !== confirm) {
@@ -271,25 +233,32 @@ class SmoManager {
 
         try {
             this.showToast("جاري إنشاء الحساب...");
-            await signInAnonymously(this.auth);
+
+            // Bypass Storage and use Dicebear for avatars
             const userId = await this.generateUniqueId();
             const hashedPassword = CryptoJS.SHA256(password).toString();
 
-            // Compress and upload avatar
-            const compressedBlob = await this.compressImage(avatarFile);
-            const storageRef = sRef(this.storage, `avatars/${userId}.jpg`);
-            await uploadBytes(storageRef, compressedBlob);
-            const avatarUrl = await getDownloadURL(storageRef);
+            // Generate Dicebear avatar URL based on gender
+            // male -> adventurer, female -> adventurer (different seed or different collection)
+            // Let's use 'adventurer' for both but with gender-specific seeds or different styles
+            const sprite = this.selectedGender === 'male' ? 'adventurer' : 'adventurer';
+            const avatarUrl = `https://api.dicebear.com/7.x/${sprite}/svg?seed=${username}&flip=true${this.selectedGender === 'female' ? '&hair=long' : ''}`;
 
             const userData = {
                 id: userId,
                 username: username,
                 password: hashedPassword,
                 avatar: avatarUrl,
+                gender: this.selectedGender,
                 gold: 1000,
                 lv: 1,
                 vip: 0
             };
+
+            // Ensure Auth is ready
+            if (!this.auth.currentUser) {
+                await signInAnonymously(this.auth);
+            }
 
             await set(ref(this.db, `users/${userId}`), userData);
             // Also index by username for login

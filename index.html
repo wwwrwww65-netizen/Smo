@@ -39,12 +39,15 @@
 
             <!-- إنشاء حساب -->
             <div id="auth-signup" class="auth-form">
-                <div class="avatar-picker-container">
-                    <div id="avatar-preview" class="avatar-circle glass">
-                        <span class="plus-icon">+</span>
-                        <img id="preview-img" src="" class="hidden">
-                    </div>
-                    <input type="file" id="avatar-input" accept="image/*" class="hidden">
+                <div class="gender-selection">
+                    <button type="button" class="gender-btn glass" data-gender="male">
+                        <div class="gender-icon">👨</div>
+                        <span>ذكر</span>
+                    </button>
+                    <button type="button" class="gender-btn glass" data-gender="female">
+                        <div class="gender-icon">👩</div>
+                        <span>أنثى</span>
+                    </button>
                 </div>
                 <input type="text" id="signup-username" placeholder="اسم المستخدم" maxlength="15">
                 <input type="password" id="signup-password" placeholder="كلمة المرور">
