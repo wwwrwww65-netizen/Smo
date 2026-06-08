@@ -1,12 +1,10 @@
-/**
- * لعبة اسم حيوان نبات - النسخة المطورة
- */
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, child, remove, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL }
+    from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDfcHB-d68R2Kf-jisYudWKIjHZ9lgjUdM",
@@ -18,1504 +16,809 @@ const firebaseConfig = {
   measurementId: "G-T103PXE8LF"
 };
 
-const SOUNDS = {
-    click: 'https://www.soundjay.com/buttons/sounds/button-16.mp3',
-    join: 'https://www.soundjay.com/buttons/sounds/button-3.mp3',
-    start: 'https://www.soundjay.com/buttons/sounds/button-09.mp3',
-    buzzer: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3',
-    copy: 'https://www.soundjay.com/buttons/sounds/button-50.mp3',
-    quit: 'https://www.soundjay.com/buttons/sounds/button-10.mp3',
-    timer: 'https://www.soundjay.com/clock/sounds/clock-ticking-2.mp3',
-    success: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.mp3',
-    win: 'https://www.soundjay.com/misc/sounds/success-fanfare-trumpets-1.mp3',
-    loss: 'https://www.soundjay.com/misc/sounds/fail-trombone-01.mp3'
-};
-
-const AVATARS = ["🦊", "🦁", "🐯", "🐼", "🐨", "🐸", "🐵", "🦄", "🐙", "🦋", "🦖", "🐧"];
-
-class GameManager {
+class SmoManager {
     constructor() {
         this.app = initializeApp(firebaseConfig);
         this.db = getDatabase(this.app);
         this.auth = getAuth(this.app);
+        this.storage = getStorage(this.app);
 
-        this.isHost = false;
-        this.playerName = "";
-        this.roomId = "";
-        this.players = [];
-        this.chatMessages = [];
-        this.results = [];
-        this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
-        this.currentLetter = "";
-        this.myId = null;
-        const seed = Math.random().toString(36).substr(2, 9);
-        this.avatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}`;
-
-        this.gameTimer = null;
-        this.timeLeft = 40;
-        this.audioEnabled = false;
-
-        // Voice/PeerJS properties
+        this.user = null; // Local user data
         this.peer = null;
+        this.activeCalls = {};
         this.localStream = null;
-        this.micEnabled = false;
-        this.speakerEnabled = true;
-        this.activeCalls = {}; // remoteId -> call
-        this.analysers = {};
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        this.silentStream = this.createSilentAudioStream();
         this.audioPool = [];
-        this.maxPoolSize = 6;
-
-        this.iceConfig = {
-            'iceServers': [
-                { 'urls': 'stun:stun.l.google.com:19302' },
-                { 'urls': 'stun:stun1.l.google.com:19302' },
-                { 'urls': 'stun:stun2.l.google.com:19302' },
-                {
-                    'urls': 'turn:global.metered.ca:443',
-                    'username': 'cc045d3456c33ca2d5c8b09d',
-                    'credential': 'Ab6Gsl42QGT6sNcK'
-                },
-                {
-                    'urls': 'turn:global.metered.ca:443?transport=tcp',
-                    'username': 'cc045d3456c33ca2d5c8b09d',
-                    'credential': 'Ab6Gsl42QGT6sNcK'
-                }
-            ]
-        };
 
         this.initElements();
-        this.initMicStatus();
         this.initEvents();
-        this.initAuth();
-        this.createParticles();
+        this.checkSession();
+        this.initAudioPool();
     }
 
-    createParticles() {
-        const bg = document.getElementById('bg-animated');
-        if (!bg) return;
-        for (let i = 0; i < 20; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            const size = Math.random() * 20 + 5;
-            p.style.width = `${size}px`;
-            p.style.height = `${size}px`;
-            p.style.left = `${Math.random() * 100}%`;
-            p.style.animationDuration = `${Math.random() * 10 + 10}s`;
-            p.style.animationDelay = `${Math.random() * 10}s`;
-            bg.appendChild(p);
+    initAudioPool() {
+        for (let i = 0; i < 10; i++) {
+            const audio = new Audio();
+            audio.autoplay = true;
+            this.audioPool.push(audio);
         }
     }
 
     initElements() {
-        // Resume audio context and initialize audio pool on first interaction
-        document.addEventListener('click', () => {
-            if (this.audioContext && this.audioContext.state === 'suspended') {
-                this.audioContext.resume();
-            }
-            this.initializeAudioPool();
-        }, { once: true });
+        this.roomLayer = document.getElementById('room-layer');
+        this.gameLayer = document.getElementById('game-layer');
+        this.chatLayer = document.getElementById('chat-layer');
+        this.gameFrame = document.getElementById('game-frame');
 
-        // Chat elements
-        this.chatContainer = document.getElementById('global-chat-container');
-        this.chatMessagesEl = document.getElementById('chat-messages');
-        this.chatInput = document.getElementById('chat-input');
-        this.btnSendChat = document.getElementById('btn-send-chat');
-        this.btnEmoji = document.getElementById('btn-emoji');
-        this.emojiPicker = document.getElementById('emoji-picker');
+        // Media Elements
+        this.ytPlayerContainer = document.getElementById('youtube-player-container');
+        this.genericVideoContainer = document.getElementById('generic-video-container');
+        this.genericVideo = document.getElementById('generic-video');
+        this.browserContainer = document.getElementById('browser-container');
+        this.browserIframe = document.getElementById('browser-iframe');
+        this.vidPlaceholder = document.getElementById('vid-placeholder');
+        this.vidTitle = document.getElementById('vid-title');
+        this.vidOwner = document.getElementById('vid-owner');
 
-        // Voice Controls
-        this.btnMic = document.getElementById('btn-mic');
-        this.btnSpeaker = document.getElementById('btn-speaker');
-        this.micOnIcon = this.btnMic.querySelector('.mic-on');
-        this.micOffIcon = this.btnMic.querySelector('.mic-off');
-        this.speakerOnIcon = this.btnSpeaker.querySelector('.speaker-on');
-        this.speakerOffIcon = this.btnSpeaker.querySelector('.speaker-off');
+        this.roomTabs = document.querySelectorAll('.room-tab');
+        this.roomsList = document.getElementById('rooms-list');
+        this.socialFeed = document.getElementById('social-feed');
+        this.inboxList = document.getElementById('inbox-list');
+        this.profileSection = document.getElementById('tab-profile');
+        // Screens
+        this.screenWelcome = document.getElementById('screen-welcome');
+        this.screenAuth = document.getElementById('screen-auth');
+        this.appMain = document.getElementById('app-main');
 
-        this.sections = {
-            home: document.getElementById('section-home'),
-            lobby: document.getElementById('section-lobby'),
-            game: document.getElementById('section-game'),
-            score: document.getElementById('section-score')
+        // Auth
+        this.authTabs = document.querySelectorAll('.auth-tab');
+        this.authForms = {
+            signup: document.getElementById('auth-signup'),
+            login: document.getElementById('auth-login')
         };
-        this.btnQuit = document.getElementById('btn-quit');
-        this.playerNameInput = document.getElementById('player-name');
-        this.roomIdInput = document.getElementById('room-id-input');
-        this.displayRoomId = document.getElementById('display-room-id');
-        this.lobbyCountdownContainer = document.getElementById('lobby-countdown-container');
-        this.lobbyCountdownTimer = document.getElementById('lobby-countdown-timer');
-        this.playerList = document.getElementById('player-list');
-        this.letterDisplay = document.getElementById('random-letter-display');
-        this.timerDisplay = document.getElementById('timer-display');
-        this.resultsSplitContainer = document.getElementById('results-split-container');
+        this.avatarCircle = document.getElementById('avatar-circle');
+        this.avatarInput = document.getElementById('avatar-input');
+        this.previewImg = document.getElementById('preview-img');
+        this.plusIcon = document.querySelector('.plus-icon');
+
+        // Navigation
+        this.navItems = document.querySelectorAll('.nav-item');
+        this.tabs = document.querySelectorAll('.tab-pane');
+
+        // Profile
+        this.miniAvatar = document.getElementById('mini-avatar');
+
         this.mainToast = document.getElementById('main-toast');
-        this.btnJoinRoom = document.getElementById('btn-join-room');
-        this.btnCreateRoom = document.getElementById('btn-create-room');
-        this.btnCreateViewingRoom = document.getElementById('btn-create-viewing-room');
-        this.btnOnoRoom = document.getElementById('btn-ono-room');
-        this.overlayStart = document.getElementById('overlay-start');
 
-        // Opponent progress
-        this.oppProgress = document.getElementById('opponent-progress');
-        this.oppAvatar = this.oppProgress.querySelector('.opp-avatar');
-        this.oppName = this.oppProgress.querySelector('.opp-name');
-        this.oppStatus = this.oppProgress.querySelector('.opp-status');
-        this.oppCounter = this.oppProgress.querySelector('.opp-counter');
+        // Close buttons
+        document.getElementById('btn-close-room').addEventListener('click', () => {
+            this.roomLayer.classList.add('hidden');
+        });
+        document.getElementById('btn-close-game').addEventListener('click', () => {
+            this.gameLayer.classList.add('hidden');
+            this.gameFrame.src = "";
+        });
+        document.getElementById('btn-close-chat').addEventListener('click', () => {
+            this.chatLayer.classList.add('hidden');
+        });
 
-        // Modal
-        this.modalNextRound = document.getElementById('modal-next-round');
-        this.btnModalAccept = document.getElementById('btn-modal-accept');
-        this.modalTimeoutFill = document.getElementById('modal-timeout-fill');
-        this.lobbyHeader = document.querySelector('.lobby-header');
-    }
+        document.getElementById('btn-open-media-control').addEventListener('click', () => {
+            document.getElementById('modal-media-control').classList.remove('hidden');
+        });
+        document.getElementById('btn-close-media-modal').addEventListener('click', () => {
+            document.getElementById('modal-media-control').classList.add('hidden');
+        });
+        document.getElementById('btn-load-media').addEventListener('click', () => this.ownerLoadMedia());
 
-    initializeAudioPool() {
-        if (this.audioPool.length > 0) return;
-        console.log("Initializing Audio Pool...");
-        for (let i = 0; i < this.maxPoolSize; i++) {
-            const audio = document.createElement('audio');
-            audio.id = `audio-pool-${i}`;
-            audio.autoplay = true;
-            audio.playsInline = true;
-            audio.style.display = 'none';
-            document.body.appendChild(audio);
-            this.audioPool.push(audio);
+        document.getElementById('btn-playlist').addEventListener('click', () => {
+            document.getElementById('modal-playlist').classList.remove('hidden');
+        });
+        document.getElementById('btn-close-playlist-modal').addEventListener('click', () => {
+            document.getElementById('modal-playlist').classList.add('hidden');
+        });
 
-            // "Prime" the element with a user gesture
-            audio.play().catch(() => {
-                // Expected to fail if no src, but it registers the intent
-            });
-        }
+        document.getElementById('btn-browser-go').addEventListener('click', () => {
+            const url = document.getElementById('browser-url-input').value.trim();
+            if (url) this.syncBrowser(url);
+        });
+
+        // Media Type Selectors
+        const typeBtns = ['type-auto', 'type-yt', 'type-web'];
+        typeBtns.forEach(id => {
+            document.getElementById(id).onclick = (e) => {
+                typeBtns.forEach(b => document.getElementById(b).classList.remove('active'));
+                e.target.classList.add('active');
+                this.selectedMediaType = id.replace('type-', '');
+            };
+        });
+        this.selectedMediaType = 'auto';
     }
 
     initEvents() {
-        document.getElementById('btn-start-app').addEventListener('click', () => {
-            this.audioEnabled = true;
-            this.overlayStart.classList.add('hidden');
-            this.playSound('click');
-
-            if (this.audioContext && this.audioContext.state === 'suspended') {
-                this.audioContext.resume();
-            }
-
-            this.initializeAudioPool();
-
-            // Also try to play any remote audios
-            document.querySelectorAll('audio').forEach(a => {
-                if (a.id.startsWith('audio-')) a.play().catch(() => {});
-            });
+        // Welcome
+        document.getElementById('btn-welcome-start').addEventListener('click', () => {
+            this.screenWelcome.classList.add('hidden');
+            this.screenAuth.classList.remove('hidden');
         });
 
-        // Chat Events
-        this.btnSendChat.addEventListener('click', () => this.sendChatMessage());
-        this.chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.sendChatMessage();
-        });
-        this.btnEmoji.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.emojiPicker.classList.toggle('hidden');
-        });
-        document.querySelectorAll('.emoji-list span').forEach(span => {
-            span.addEventListener('click', () => {
-                this.chatInput.value += span.textContent;
-                this.emojiPicker.classList.add('hidden');
-                this.chatInput.focus();
-            });
-        });
-        document.addEventListener('click', () => this.emojiPicker.classList.add('hidden'));
-
-        // Voice Events
-        this.btnMic.addEventListener('click', () => this.toggleMic());
-        this.btnSpeaker.addEventListener('click', () => this.toggleSpeaker());
-
-        this.btnCreateRoom.addEventListener('click', () => this.createRoom('game'));
-        if (this.btnCreateViewingRoom) {
-            this.btnCreateViewingRoom.addEventListener('click', () => this.createRoom('viewing'));
-        }
-
-        if (this.btnOnoRoom) {
-            this.btnOnoRoom.addEventListener('click', () => this.handleOnoRoomClick());
-        }
-
-        this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
-        document.getElementById('btn-ready').addEventListener('click', () => this.setReady());
-        document.getElementById('btn-stop').addEventListener('click', () => this.stopGame());
-        document.getElementById('btn-next-round-request').addEventListener('click', () => this.requestNextRound());
-        document.getElementById('btn-copy-id').addEventListener('click', () => this.copyRoomId());
-        this.btnQuit.addEventListener('click', () => this.quitGame());
-        this.btnModalAccept.addEventListener('click', () => this.acceptNextRound());
-
-        const btnGoToLive = document.getElementById('btn-go-to-live');
-        if (btnGoToLive) {
-            btnGoToLive.addEventListener('click', () => {
-                window.location.href = './live/';
-            });
-        }
-
-        // Tracking inputs
-        document.querySelectorAll('.game-field').forEach((input, index, array) => {
-            input.addEventListener('input', () => this.updateMyProgress(input));
-            input.addEventListener('focus', () => {
-                this.updateMyProgress(input);
-                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const next = array[index + 1];
-                    if (next) {
-                        next.focus();
-                    } else {
-                        document.getElementById('btn-stop').click();
-                    }
-                }
-            });
-        });
-    }
-
-    async initAuth() {
-        onAuthStateChanged(this.auth, (user) => {
-            if (user) {
-                console.log("Firebase Auth: Logged in as", user.uid);
-                this.myId = user.uid;
-                // If we are already in a room (e.g. refresh), re-init peer
-                if (this.roomId) {
-                    this.initPeer();
-                }
-            } else {
-                console.log("Firebase Auth: Attempting anonymous login...");
-                signInAnonymously(this.auth).catch((err) => {
-                    console.error("Firebase Auth Error:", err);
-                    this.showToast("فشل الاتصال بـ Firebase");
+        // Auth Tabs
+        this.authTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.authTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const target = tab.dataset.tab;
+                Object.keys(this.authForms).forEach(f => {
+                    this.authForms[f].classList.toggle('hidden', f !== target);
                 });
-            }
+            });
         });
-    }
 
-    async listenToRoom(roomId) {
-        const roomRef = ref(this.db, `rooms/${roomId}`);
+        // Avatar Picker
+        document.getElementById('avatar-preview').addEventListener('click', () => this.avatarInput.click());
+        this.avatarInput.addEventListener('change', (e) => this.handleAvatarSelect(e));
 
-        onValue(roomRef, (snapshot) => {
-            const data = snapshot.val();
-            if (!data) return;
+        // Sign Up
+        document.getElementById('btn-do-signup').addEventListener('click', () => this.handleSignUp());
+        document.getElementById('btn-do-login').addEventListener('click', () => this.handleLogin());
 
-            // Chat sync
-            if (data.chat) {
-                this.updateChatUI(data.chat);
-            }
-
-            // Handle Disconnects / Win condition if only 1 player left in active game
-            if (data.players) {
-                const prevPlayersCount = this.players.length;
-                this.players = Object.entries(data.players).map(([id, p]) => ({ id, ...p }));
-                this.updatePlayerList();
-
-                if (prevPlayersCount > this.players.length && (data.config?.gameState === 'game')) {
-                    this.showToast("لقد خرج أحد اللاعبين!");
-                }
-
-                if (this.isHost && data.config?.gameState === 'lobby') {
-                    this.handleLobbyCountdown();
-                }
-            }
-
-            // Update Game State
-            if (data.config) {
-                const state = data.config.gameState;
-                const letter = data.config.currentLetter;
-
-                if (state === 'game' && !this.isSectionActive('game')) {
-                    this.startGame(letter);
-                } else if (state === 'score' && !this.isSectionActive('score')) {
-                    this.goToScoreSection();
-                } else if (state === 'lobby' && !this.isSectionActive('lobby')) {
-                    this.showSection('lobby');
-                    this.resetLobbyUI();
-                }
-
-                this.currentLetter = letter;
-                if (this.letterDisplay) this.letterDisplay.textContent = letter || '؟';
-
-                if (data.config.stopTriggered && !this.inputsDisabled) {
-                    this.endRoundManually();
-                }
-
-                // Sync Timer
-                if (state === 'game' && data.config.timer !== undefined) {
-                    this.updateLocalTimer(data.config.timer);
-                }
-
-                if (state === 'lobby' && data.config.lobbyCountdown !== undefined) {
-                    this.updateLobbyTimerUI(data.config.lobbyCountdown);
-                } else {
-                    this.lobbyCountdownContainer.classList.add('hidden');
-                }
-            }
-
-            // Progress Tracking
-            if (data.progress) {
-                this.updateOpponentProgressUI(data.progress);
-            }
-
-            // Sync Speaking Indicators
-            if (data.players) {
-                Object.entries(data.players).forEach(([id, p]) => {
-                    this.updateSpeakingUI(id, p.isSpeaking || false);
+        // Navigation
+        this.navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                this.navItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                const targetTab = item.dataset.tab;
+                this.tabs.forEach(t => {
+                    t.classList.toggle('active', t.id === `tab-${targetTab}`);
                 });
-            }
+                if (targetTab === 'rooms') this.renderRoomsList();
+                if (targetTab === 'social') this.renderSocialFeed();
+                if (targetTab === 'inbox') this.renderInbox();
+                if (targetTab === 'profile') this.renderProfile();
+            });
+        });
 
-            // Handshake for Next Round
-            if (data.nextRoundRequest) {
-                this.handleNextRoundRequest(data.nextRoundRequest);
-            } else {
-                this.modalNextRound.classList.add('hidden');
-            }
-
-
-            // Update results & Host Evaluation
-            if (data.results) {
-                this.results = Object.entries(data.results).map(([id, r]) => ({ playerId: id, ...r }));
-                this.renderScores();
-            } else {
-                this.results = [];
-                this.renderScores();
-            }
+        // Room Tabs
+        this.roomTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.roomTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                this.renderRoomsList(tab.dataset.roomTab);
+            });
         });
     }
 
-    async updateMyProgress(input) {
-        if (!this.roomId || !this.myId) return;
-        const fields = document.querySelectorAll('.game-field');
-        const filledCount = Array.from(fields).filter(f => f.value.trim().length > 0).length;
-        const currentFieldName = input.parentElement.querySelector('label').textContent;
-
-        await update(ref(this.db, `rooms/${this.roomId}/progress/${this.myId}`), {
-            name: this.playerName,
-            avatar: this.avatar,
-            currentField: currentFieldName,
-            count: filledCount,
-            lastUpdate: serverTimestamp()
-        });
-    }
-
-    updateOpponentProgressUI(progressData) {
-        // Find most advanced opponent
-        const otherIds = Object.keys(progressData).filter(id => id !== this.myId);
-        if (otherIds.length === 0 || !this.isSectionActive('game')) {
-            this.oppProgress.classList.add('hidden');
-            this.topOppId = null;
-            return;
-        }
-
-        // Show the one with the highest count, or the first one if all same
-        this.topOppId = otherIds.reduce((prev, curr) =>
-            (progressData[curr].count > progressData[prev].count) ? curr : prev
-        );
-
-        const opp = progressData[this.topOppId];
-        this.oppProgress.classList.remove('hidden');
-        this.oppAvatar.innerHTML = opp.avatar ? `<img src="${opp.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />` : '👤';
-        this.oppName.textContent = opp.name;
-        this.oppStatus.textContent = `يكتب في: ${opp.currentField}`;
-        this.oppCounter.textContent = `${opp.count}/5`;
-    }
-
-    async joinRoomLogic(roomId) {
-        this.roomId = roomId; // Ensure roomId is set early
-        const playerRef = ref(this.db, `rooms/${roomId}/players/${this.myId}`);
-        onDisconnect(playerRef).remove();
-        // Also remove progress on disconnect
-        onDisconnect(ref(this.db, `rooms/${roomId}/progress/${this.myId}`)).remove();
-
-        // Chat and Lobby elements should be visible once in a room
-        this.chatContainer.style.display = 'flex';
-        if (this.lobbyHeader) this.lobbyHeader.style.display = 'flex';
-
-        await update(playerRef, {
-            name: this.playerName,
-            avatar: this.avatar,
-            ready: false,
-            totalScore: 0,
-            isOnline: true
-        });
-
-        this.listenToRoom(roomId);
-        this.initPeer(); // Initialize PeerJS when joining a room
-        this.showSection('lobby');
-        this.displayRoomId.textContent = roomId;
-        this.playSound('join');
-    }
-
-    isSectionActive(name) {
-        return this.sections[name].classList.contains('active');
-    }
-
-    playSound(name) {
-        if (!this.audioEnabled) return;
-        try {
-            const audio = new Audio(SOUNDS[name]);
-            audio.volume = (name === 'timer') ? 0.2 : 0.5;
-            audio.play().catch(() => {});
-        } catch(e) {}
-    }
-
-    showSection(name) {
-        this.playSound('click');
-        Object.values(this.sections).forEach(s => s.classList.remove('active'));
-        this.sections[name].classList.add('active');
-        if (name === 'home') this.btnQuit.classList.add('hidden');
-        else this.btnQuit.classList.remove('hidden');
-    }
-
-    showToast(message) {
-        this.mainToast.textContent = message;
+    showToast(msg) {
+        this.mainToast.textContent = msg;
         this.mainToast.classList.remove('hidden');
-        if (this.toastTimeout) clearTimeout(this.toastTimeout);
-        this.toastTimeout = setTimeout(() => this.mainToast.classList.add('hidden'), 3500);
+        setTimeout(() => this.mainToast.classList.add('hidden'), 3000);
     }
 
-    setLoading(btnId, isLoading) {
-        const btn = document.getElementById(btnId);
-        if (!btn) return;
-        if (isLoading) {
-            btn.classList.add('loading');
-            btn.disabled = true;
-            this._originalBtnContent = btn.innerHTML;
-            btn.innerHTML = `<span class="spinner"></span> جاري...`;
-        } else {
-            btn.classList.remove('loading');
-            btn.disabled = false;
-            if (this._originalBtnContent) btn.innerHTML = this._originalBtnContent;
-        }
-    }
-
-    async handleOnoRoomClick() {
-        if (!this.myId) {
-            this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
-            let attempts = 0;
-            while (!this.myId && attempts < 15) {
-                await new Promise(r => setTimeout(r, 400));
-                attempts++;
-            }
-            if (!this.myId) {
-                this.showToast("❌ فشل الاتصال، يرجى التحقق من الإنترنت");
-                return;
-            }
-        }
-
-        this.playerName = this.playerNameInput.value.trim();
-        if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
-
-        this.setLoading('btn-ono-room', true);
-
-        try {
-            // Always create new ONO room
-            const roomId = Math.floor(100000 + Math.random() * 900000).toString();
-            const roomRef = ref(this.db, `rooms/${roomId}`);
-            await set(roomRef, {
-                roomType: 'ono',
-                config: {
-                    hostId: this.myId,
-                    gameState: 'lobby',
-                    createdAt: serverTimestamp()
-                }
+    async checkSession() {
+        const savedUser = localStorage.getItem('smo_user');
+        if (savedUser) {
+            this.user = JSON.parse(savedUser);
+            // Ensure Firebase Auth is initialized
+            signInAnonymously(this.auth).then(() => {
+                this.launchApp();
             });
-
-            window.location.href = `./ono.html?roomID=${roomId}&username=${encodeURIComponent(this.playerName)}&role=owner`;
-        } catch(e) {
-            console.error(e);
-            this.showToast("❌ حدث خطأ");
-        } finally {
-            this.setLoading('btn-ono-room', false);
         }
     }
 
-    async createRoom(type = 'game') {
-        if (!this.myId) {
-            this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
-            let attempts = 0;
-            while (!this.myId && attempts < 15) {
-                await new Promise(r => setTimeout(r, 400));
-                attempts++;
-            }
-            if (!this.myId) {
-                this.showToast("❌ فشل الاتصال، يرجى التحقق من الإنترنت");
-                return;
-            }
-        }
-        this.playerName = this.playerNameInput.value.trim();
-        if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
+    handleAvatarSelect(e) {
+        const file = e.target.files[0];
+        if (!file) return;
 
-        const btnId = type === 'game' ? 'btn-create-room' : 'btn-create-viewing-room';
-        this.setLoading(btnId, true);
-        try {
-            this.isHost = true;
-            this.roomId = Math.floor(100000 + Math.random() * 900000).toString();
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            this.previewImg.src = event.target.result;
+            this.previewImg.classList.remove('hidden');
+            this.plusIcon.classList.add('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
 
-            if (type === 'viewing') {
-                const roomRef = ref(this.db, `rooms/${this.roomId}`);
-                await set(roomRef, {
-                    roomType: 'viewing',
-                    config: {
-                        hostId: this.myId,
-                        createdAt: serverTimestamp()
+    async compressImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const max = 400;
+                    if (width > height) {
+                        if (width > max) { height *= max / width; width = max; }
+                    } else {
+                        if (height > max) { width *= max / height; height = max; }
                     }
-                });
-                window.location.href = `./live/?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=owner`;
-                return;
-            }
-
-            const roomRef = ref(this.db, `rooms/${this.roomId}`);
-            await set(roomRef, {
-                roomType: 'game',
-                config: {
-                    hostId: this.myId,
-                    gameState: 'lobby',
-                    currentLetter: '',
-                    timer: 40,
-                    createdAt: serverTimestamp()
-                }
-            });
-            await this.joinRoomLogic(this.roomId);
-        } catch (e) {
-            this.showToast("❌ فشل إنشاء الغرفة");
-        } finally {
-            this.setLoading(btnId, false);
-        }
-    }
-
-    async joinRoom() {
-        if (!this.myId) {
-            this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
-            let attempts = 0;
-            while (!this.myId && attempts < 15) {
-                await new Promise(r => setTimeout(r, 400));
-                attempts++;
-            }
-            if (!this.myId) {
-                this.showToast("❌ فشل الاتصال، يرجى التحقق من الإنترنت");
-                return;
-            }
-        }
-        this.playerName = this.playerNameInput.value.trim();
-        this.roomId = this.roomIdInput.value.trim();
-        if (!this.playerName || (this.roomId.length !== 9 && this.roomId.length !== 6)) { this.showToast("⚠️ بيانات غير صحيحة"); return; }
-
-        this.setLoading('btn-join-room', true);
-        try {
-            const snap = await get(ref(this.db, `rooms/${this.roomId}`));
-            if (!snap.exists()) { this.showToast("❌ الغرفة غير موجودة"); return; }
-            const roomData = snap.val();
-
-            if (roomData.roomType === 'viewing') {
-                window.location.href = `./live/?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=guest`;
-                return;
-            }
-
-            if (roomData.roomType === 'ono') {
-                window.location.href = `./ono.html?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=guest`;
-                return;
-            }
-
-            this.isHost = false;
-            await this.joinRoomLogic(this.roomId);
-        } catch (e) {
-            this.showToast("❌ فشل الانضمام");
-        } finally {
-            this.setLoading('btn-join-room', false);
-        }
-    }
-
-    updatePlayerList() {
-        // Reset all seats to empty
-        for (let i = 0; i < 6; i++) {
-            const seat = document.getElementById(`seat-${i}`);
-            if (!seat) continue;
-            seat.removeAttribute('data-player-id');
-            const wrapper = seat.querySelector('.avatar-wrapper');
-            const img = seat.querySelector('.avatar-img');
-            const readyIcon = seat.querySelector('.ready-icon');
-            const label = seat.querySelector('.player-name-label');
-
-            wrapper.classList.add('empty');
-            wrapper.classList.remove('speaking');
-            img.textContent = '👤';
-            readyIcon.classList.add('hidden');
-            label.textContent = 'بانتظار...';
-        }
-
-        // Fill seats with current players
-        this.players.forEach((p, index) => {
-            if (index >= 6) return;
-            const seat = document.getElementById(`seat-${index}`);
-            if (!seat) return;
-            seat.setAttribute('data-player-id', p.id);
-            const wrapper = seat.querySelector('.avatar-wrapper');
-            const img = seat.querySelector('.avatar-img');
-            const readyIcon = seat.querySelector('.ready-icon');
-            const label = seat.querySelector('.player-name-label');
-
-            wrapper.classList.remove('empty');
-            img.innerHTML = p.avatar ? `<img src="${p.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />` : '👤';
-            if (p.ready) readyIcon.classList.remove('hidden');
-            else readyIcon.classList.add('hidden');
-            label.textContent = p.name + (p.id === this.myId ? ' (أنت)' : '');
-        });
-    }
-
-    async setReady() {
-        await update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), { ready: true });
-        const btn = document.getElementById('btn-ready');
-        btn.disabled = true;
-        btn.classList.remove('btn-pulse');
-        btn.innerHTML = `<span class="spinner"></span> بانتظار البقية...`;
-    }
-
-    async handleLobbyCountdown() {
-        const readyPlayers = this.players.filter(p => p.ready);
-        const playerCount = this.players.length;
-
-        // Reset countdown if new player joins ("ظهر ثالث")
-        if (this._lastPlayerCount !== undefined && playerCount > this._lastPlayerCount && readyPlayers.length >= 2) {
-            this.startLobbyCountdown();
-        }
-        this._lastPlayerCount = playerCount;
-
-        if (readyPlayers.length >= 2) {
-            if (!this.lobbyInterval) {
-                this.startLobbyCountdown();
-            }
-        } else {
-            if (this.lobbyInterval) {
-                clearInterval(this.lobbyInterval);
-                this.lobbyInterval = null;
-                await update(ref(this.db, `rooms/${this.roomId}/config`), { lobbyCountdown: null });
-            }
-        }
-    }
-
-    startLobbyCountdown() {
-        if (this.lobbyInterval) clearInterval(this.lobbyInterval);
-        let count = 15;
-
-        const syncCountdown = async () => {
-            await update(ref(this.db, `rooms/${this.roomId}/config`), { lobbyCountdown: count });
-            if (count <= 0) {
-                clearInterval(this.lobbyInterval);
-                this.lobbyInterval = null;
-                this.triggerStartGame();
-            }
-            count--;
-        };
-
-        syncCountdown();
-        this.lobbyInterval = setInterval(syncCountdown, 1000);
-    }
-
-    async triggerStartGame() {
-        const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
-        await update(ref(this.db, `rooms/${this.roomId}/config`), {
-            gameState: 'game',
-            currentLetter: letter,
-            stopTriggered: false,
-            timer: 40,
-            lobbyCountdown: null
-        });
-        await remove(ref(this.db, `rooms/${this.roomId}/results`));
-        await remove(ref(this.db, `rooms/${this.roomId}/progress`));
-        this.startHostTimerSync();
-    }
-
-    updateLobbyTimerUI(val) {
-        if (val === null || val === undefined) {
-            this.lobbyCountdownContainer.classList.add('hidden');
-            return;
-        }
-        this.lobbyCountdownContainer.classList.remove('hidden');
-        this.lobbyCountdownTimer.textContent = val;
-        if (val <= 5) {
-            this.lobbyCountdownTimer.style.color = '#ff4b2b';
-            this.playSound('timer');
-        } else {
-            this.lobbyCountdownTimer.style.color = '#fff';
-        }
-    }
-
-    startHostTimerSync() {
-        if (this.gameInterval) clearInterval(this.gameInterval);
-        let time = 40;
-        this.gameInterval = setInterval(async () => {
-            time--;
-            if (time <= 0) {
-                clearInterval(this.gameInterval);
-                await update(ref(this.db, `rooms/${this.roomId}/config`), { stopTriggered: true, timer: 0 });
-            } else {
-                update(ref(this.db, `rooms/${this.roomId}/config`), { timer: time });
-            }
-        }, 1000);
-    }
-
-    updateLocalTimer(val) {
-        this.timeLeft = val;
-        this.timerDisplay.textContent = val;
-        if (val <= 5) {
-            this.timerDisplay.style.color = '#ff4b2b';
-            this.playSound('timer');
-        } else {
-            this.timerDisplay.style.color = '#fff';
-        }
-    }
-
-    startGame(letter) {
-        this.currentLetter = letter;
-        this.hasSubmitted = false;
-        this.inputsDisabled = false;
-        this._winCelebrated = false;
-        this.clearInputs();
-        this.enableInputs();
-        this.showSection('game');
-        this.playSound('start');
-        this.oppProgress.classList.add('hidden');
-    }
-
-    clearInputs() {
-        document.querySelectorAll('.game-field').forEach(i => i.value = '');
-    }
-
-    enableInputs() {
-        document.querySelectorAll('.game-field').forEach(i => i.disabled = false);
-        document.getElementById('btn-stop').disabled = false;
-    }
-
-    async stopGame() {
-        await update(ref(this.db, `rooms/${this.roomId}/config`), { stopTriggered: true });
-    }
-
-    endRoundManually() {
-        this.disableInputs();
-        this.submitAnswers();
-        this.playSound('buzzer');
-        if (this.isHost && this.gameInterval) clearInterval(this.gameInterval);
-    }
-
-    disableInputs() {
-        document.querySelectorAll('.game-field').forEach(i => i.disabled = true);
-        document.getElementById('btn-stop').disabled = true;
-        this.inputsDisabled = true;
-    }
-
-    async submitAnswers() {
-        if (this.hasSubmitted) return;
-        this.hasSubmitted = true;
-
-        const answers = {
-            name: document.getElementById('input-name').value.trim(),
-            animal: document.getElementById('input-animal').value.trim(),
-            plant: document.getElementById('input-plant').value.trim(),
-            object: document.getElementById('input-object').value.trim(),
-            country: document.getElementById('input-country').value.trim()
-        };
-
-        await set(ref(this.db, `rooms/${this.roomId}/results/${this.myId}`), {
-            playerName: this.playerName,
-            avatar: this.avatar,
-            answers: answers,
-            scores: { name: 0, animal: 0, plant: 0, object: 0, country: 0 },
-            roundTotal: 0
-        });
-
-        // If host, wait for all and transition
-        if (this.isHost) {
-            this.checkAllSubmitted();
-        }
-    }
-
-    async autoEvaluateAnswers() {
-        if (!this.isHost || this.results.length === 0) return;
-
-        const fields = ['name', 'animal', 'plant', 'object', 'country'];
-        const resultUpdates = {};
-        const playerUpdates = {};
-
-        // 1. Initial assignment
-        this.results.forEach(res => {
-            resultUpdates[res.playerId] = {
-                scores: { name: 0, animal: 0, plant: 0, object: 0, country: 0 },
-                roundTotal: 0
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
+                };
             };
         });
+    }
 
-        // 2. Cross-check for duplicate answers and validity
-        fields.forEach(f => {
-            const answerGroups = {};
-            this.results.forEach(res => {
-                const ans = (res.answers[f] || '').trim();
-                const valid = ans.length > 0 && ans.toLowerCase().startsWith(this.currentLetter.toLowerCase());
-
-                if (valid) {
-                    const normalized = ans.toLowerCase();
-                    if (!answerGroups[normalized]) answerGroups[normalized] = [];
-                    answerGroups[normalized].push(res.playerId);
-                    // Default to 10 for valid answers
-                    resultUpdates[res.playerId].scores[f] = 10;
-                } else {
-                    resultUpdates[res.playerId].scores[f] = 0;
-                }
-            });
-
-            // If more than one person has the same answer, they get 5 points
-            Object.values(answerGroups).forEach(pIds => {
-                if (pIds.length > 1) {
-                    pIds.forEach(pId => {
-                        resultUpdates[pId].scores[f] = 5;
-                    });
-                }
-            });
-        });
-
-        // 3. Finalize roundTotal and update cumulative totalScore
-        for (const res of this.results) {
-            const pId = res.playerId;
-            const p = this.players.find(p => p.id === pId);
-            const roundTotal = Object.values(resultUpdates[pId].scores).reduce((a, b) => a + b, 0);
-
-            const prevTotal = p?.totalScore || 0;
-            playerUpdates[`players/${pId}/totalScore`] = prevTotal + roundTotal;
-            playerUpdates[`results/${pId}/scores`] = resultUpdates[pId].scores;
-            playerUpdates[`results/${pId}/roundTotal`] = roundTotal;
+    async generateUniqueId() {
+        let unique = false;
+        let id = "";
+        while (!unique) {
+            id = "100" + Math.floor(100000 + Math.random() * 900000).toString().substring(0,6);
+            const snapshot = await get(child(ref(this.db), `users/${id}`));
+            if (!snapshot.exists()) unique = true;
         }
-
-        await update(ref(this.db, `rooms/${this.roomId}`), playerUpdates);
+        return id;
     }
 
-    async checkAllSubmitted() {
-        const check = setInterval(async () => {
-            const snap = await get(ref(this.db, `rooms/${this.roomId}/results`));
-            if (snap.exists() && Object.keys(snap.val()).length >= this.players.length) {
-                clearInterval(check);
-                // Perform auto-evaluation before showing scores
-                this.results = Object.entries(snap.val()).map(([id, r]) => ({ playerId: id, ...r }));
-                await this.autoEvaluateAnswers();
-                update(ref(this.db, `rooms/${this.roomId}/config`), { gameState: 'score' });
-            }
-        }, 1000);
-    }
+    async handleSignUp() {
+        const username = document.getElementById('signup-username').value.trim();
+        const password = document.getElementById('signup-password').value;
+        const confirm = document.getElementById('signup-confirm').value;
+        const avatarFile = this.avatarInput.files[0];
 
-    goToScoreSection() {
-        this.showSection('score');
-        const hint = document.getElementById('host-eval-hint');
-        if (this.isHost) hint.classList.remove('hidden');
-        else hint.classList.add('hidden');
-
-        // Play result sound
-        setTimeout(() => {
-            const myStatus = this.getRoundWinStatus(this.myId);
-            if (myStatus.class === 'badge-win') this.playSound('win');
-            else if (myStatus.class === 'badge-loss') this.playSound('loss');
-        }, 500);
-    }
-
-    renderScores() {
-        if (!this.resultsSplitContainer) return;
-        this.resultsSplitContainer.innerHTML = '';
-
-        if (this.results.length === 0) {
-            this.resultsSplitContainer.innerHTML = '<div class="card" style="text-align:center">في انتظار النتائج...</div>';
+        if (!username || !password || !avatarFile) {
+            this.showToast("يرجى إكمال جميع البيانات");
+            return;
+        }
+        if (password !== confirm) {
+            this.showToast("كلمات المرور غير متطابقة");
             return;
         }
 
-        // Sort results: Mine first, then others
-        const sortedResults = [...this.results].sort((a, b) => {
-            if (a.playerId === this.myId) return -1;
-            if (b.playerId === this.myId) return 1;
-            return 0;
-        });
-
-        sortedResults.forEach(res => {
-            const section = document.createElement('div');
-            section.className = 'player-result-section';
-            section.setAttribute('data-player-id', res.playerId);
-
-            let rowsHtml = '';
-            const fields = [
-                { id: 'name', label: 'اسم' },
-                { id: 'animal', label: 'حيوان' },
-                { id: 'plant', label: 'نبات' },
-                { id: 'object', label: 'جماد' },
-                { id: 'country', label: 'بلاد' }
-            ];
-
-            fields.forEach(f => {
-                const answer = res.answers[f.id] || '-';
-                const score = res.scores[f.id] || 0;
-                const status = this.getFieldStatus(res.playerId, f.id);
-
-                let scoreActionHtml = '';
-                if (this.isHost) {
-                    scoreActionHtml = `
-                        <div style="color:var(--accent-color); font-weight:bold; margin-bottom:4px">${score}</div>
-                        <div class="score-btns">
-                            <button class="btn-small-score btn-score-10" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',10)">10</button>
-                            <button class="btn-small-score btn-score-5" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',5)">5</button>
-                            <button class="btn-small-score btn-score-0" onclick="window.gameManager.updateScore('${res.playerId}','${f.id}',0)">0</button>
-                        </div>
-                    `;
-                } else {
-                    scoreActionHtml = `<div style="color:var(--accent-color); font-weight:bold">${score}</div>`;
-                }
-
-                rowsHtml += `
-                    <div class="grid-row">
-                        <div class="grid-cell cell-label">${f.label}</div>
-                        <div class="grid-cell cell-answer">${answer}</div>
-                        <div class="grid-cell">${scoreActionHtml}</div>
-                        <div class="grid-cell status-icon">${status.icon}</div>
-                    </div>
-                `;
-            });
-
-            const playerTotal = this.players.find(p => p.id === res.playerId)?.totalScore || 0;
-            const roundWinStatus = this.getRoundWinStatus(res.playerId);
-
-            // Winner celebration for current user
-            if (res.playerId === this.myId && roundWinStatus.class === 'badge-win' && !this._winCelebrated) {
-                this.showLottieCelebration('win');
-                this._winCelebrated = true;
-            } else if (res.playerId === this.myId && roundWinStatus.class === 'badge-loss' && !this._winCelebrated) {
-                this.showLottieCelebration('loss');
-                this._winCelebrated = true;
-            }
-
-            section.innerHTML = `
-                <div class="player-header">
-                    <div class="avatar">${res.avatar || '👤'}</div>
-                    <div class="name">${res.playerName} ${res.playerId === this.myId ? '(أنت)' : ''}</div>
-                </div>
-                <div class="result-grid">
-                    <div class="grid-header">الفئة</div>
-                    <div class="grid-header">الإجابة</div>
-                    <div class="grid-header">النقاط</div>
-                    <div class="grid-header">الحالة</div>
-                    ${rowsHtml}
-                </div>
-                <div class="section-footer">
-                    <div class="total-score-badge">المجموع الكلي: ${playerTotal}</div>
-                    <div class="win-status-badge ${roundWinStatus.class}">${roundWinStatus.text}</div>
-                </div>
-            `;
-            this.resultsSplitContainer.appendChild(section);
-        });
-    }
-
-    showLottieCelebration(type) {
-        const overlay = document.createElement('div');
-        overlay.className = 'lottie-overlay';
-        const url = type === 'win'
-            ? 'https://assets10.lottiefiles.com/packages/lf20_u4yrau.json' // Confetti
-            : 'https://assets1.lottiefiles.com/packages/lf20_0yfs9vly.json'; // Sad face or similar
-
-        overlay.innerHTML = `<lottie-player src="${url}" background="transparent" speed="1" style="width: 300px; height: 300px;" autoplay></lottie-player>`;
-        document.body.appendChild(overlay);
-        setTimeout(() => overlay.remove(), 4000);
-    }
-
-    getFieldStatus(playerId, field) {
-        if (this.results.length < 2) return { text: '', icon: '-' };
-        const scores = this.results.map(r => r.scores[field] || 0);
-        const maxScore = Math.max(...scores);
-        const myScore = this.results.find(r => r.playerId === playerId)?.scores[field] || 0;
-
-        if (myScore === 0 && maxScore === 0) return { text: '-', icon: '-' };
-        if (myScore === maxScore) {
-            const winners = this.results.filter(r => r.scores[field] === maxScore);
-            return winners.length > 1 ? { text: 'تعادل', icon: '🤝' } : { text: 'فاز', icon: '✅' };
-        }
-        return { text: 'خسر', icon: '❌' };
-    }
-
-    getRoundWinStatus(playerId) {
-        if (this.results.length < 2) return { text: '', class: '' };
-        const totals = this.results.map(r => r.roundTotal || 0);
-        const maxTotal = Math.max(...totals);
-        const myTotal = this.results.find(r => r.playerId === playerId)?.roundTotal || 0;
-
-        if (myTotal === maxTotal) {
-            const winners = this.results.filter(r => r.roundTotal === maxTotal);
-            return winners.length > 1 ? { text: 'تعادل 🤝', class: 'badge-draw' } : { text: 'فائز بالجولة 🏆', class: 'badge-win' };
-        }
-        return { text: 'خاسر بالجولة 📉', class: 'badge-loss' };
-    }
-
-    async updateScore(playerId, field, points) {
-        const res = this.results.find(r => r.playerId === playerId);
-        const player = this.players.find(p => p.id === playerId);
-        if (!res || !player) return;
-
-        const diff = points - res.scores[field];
-        const newRoundTotal = res.roundTotal + diff;
-        const newTotalScore = (player.totalScore || 0) + diff;
-
-        await update(ref(this.db, `rooms/${this.roomId}/results/${playerId}/scores`), { [field]: points });
-        await update(ref(this.db, `rooms/${this.roomId}/results/${playerId}`), { roundTotal: newRoundTotal });
-        await update(ref(this.db, `rooms/${this.roomId}/players/${playerId}`), { totalScore: newTotalScore });
-    }
-
-    // Next Round Handshake Logic
-    async requestNextRound() {
-        this.playSound('click');
-        this.setLoading('btn-next-round-request', true);
         try {
-            await set(ref(this.db, `rooms/${this.roomId}/nextRoundRequest`), {
-                fromId: this.myId,
-                fromName: this.playerName,
-                timestamp: serverTimestamp()
-            });
-            this.showToast("تم إرسال طلب جولة جديدة لصديقك...");
+            this.showToast("جاري إنشاء الحساب...");
+            await signInAnonymously(this.auth);
+            const userId = await this.generateUniqueId();
+            const hashedPassword = CryptoJS.SHA256(password).toString();
+
+            // Compress and upload avatar
+            const compressedBlob = await this.compressImage(avatarFile);
+            const storageRef = sRef(this.storage, `avatars/${userId}.jpg`);
+            await uploadBytes(storageRef, compressedBlob);
+            const avatarUrl = await getDownloadURL(storageRef);
+
+            const userData = {
+                id: userId,
+                username: username,
+                password: hashedPassword,
+                avatar: avatarUrl,
+                gold: 1000,
+                lv: 1,
+                vip: 0
+            };
+
+            await set(ref(this.db, `users/${userId}`), userData);
+            // Also index by username for login
+            await set(ref(this.db, `usernames/${username}`), userId);
+
+            this.user = userData;
+            localStorage.setItem('smo_user', JSON.stringify(this.user));
+            this.launchApp();
+
         } catch (e) {
-            this.showToast("❌ فشل إرسال الطلب");
-        } finally {
-            this.setLoading('btn-next-round-request', false);
+            console.error(e);
+            this.showToast("حدث خطأ أثناء إنشاء الحساب");
         }
     }
 
-    handleNextRoundRequest(req) {
-        if (req.fromId === this.myId) {
-            this.modalNextRound.classList.add('hidden');
+    async handleLogin() {
+        const identifier = document.getElementById('login-identifier').value.trim();
+        const password = document.getElementById('login-password').value;
+
+        if (!identifier || !password) return;
+
+        try {
+            await signInAnonymously(this.auth);
+            let userId = identifier;
+            // Check if identifier is username
+            const nameSnap = await get(ref(this.db, `usernames/${identifier}`));
+            if (nameSnap.exists()) userId = nameSnap.val();
+
+            const userSnap = await get(ref(this.db, `users/${userId}`));
+            if (!userSnap.exists()) {
+                this.showToast("المستخدم غير موجود");
+                return;
+            }
+
+            const userData = userSnap.val();
+            const hashedPassword = CryptoJS.SHA256(password).toString();
+
+            if (userData.password === hashedPassword) {
+                this.user = userData;
+                localStorage.setItem('smo_user', JSON.stringify(this.user));
+                this.launchApp();
+            } else {
+                this.showToast("كلمة المرور غير صحيحة");
+            }
+        } catch (e) {
+            this.showToast("فشل تسجيل الدخول");
+        }
+    }
+
+    launchApp() {
+        this.screenWelcome.classList.add('hidden');
+        this.screenAuth.classList.add('hidden');
+        this.appMain.classList.remove('hidden');
+
+        // Update UI
+        document.getElementById('gold-balance').textContent = this.user.gold;
+        this.miniAvatar.src = this.user.avatar;
+
+        this.renderGamesGrid();
+        this.renderFriendsTracker();
+    }
+
+    renderFriendsTracker() {
+        const tracker = document.getElementById('friends-tracker');
+        const content = tracker.querySelector('.tracker-content');
+        tracker.classList.remove('hidden');
+
+        const activeFriends = [
+            { name: 'سارة', room: 'عالم الأونو 🔥', avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Sara' },
+            { name: 'خالد', room: 'مجلس الرياض 🇸🇦', avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Khaled' }
+        ];
+
+        content.innerHTML = '';
+        activeFriends.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'tracker-item glass';
+            item.innerHTML = `
+                <img src="${f.avatar}" class="tracker-avatar">
+                <span>${f.name} في ${f.room}</span>
+                <button class="btn-primary" style="padding: 2px 8px; font-size: 0.6rem; margin-right: 5px;">انضمام</button>
+            `;
+            content.appendChild(item);
+        });
+    }
+
+    renderGamesGrid() {
+        const games = [
+            { id: 'ono', name: 'أونو No Mercy', icon: '🃏', color: '#ff4b2b', status: 'نشط', active: true },
+            { id: 'animal', name: 'حيوان نبات', icon: '🦁', color: '#6366f1', status: 'نشط', active: true },
+            { id: 'carrom', name: 'كيرم', icon: '⚪', color: '#fbbf24', status: 'قريباً', active: false },
+            { id: 'jackaroo', name: 'جاكارو', icon: '🎲', color: '#10b981', status: 'قريباً', active: false },
+            { id: 'candy', name: 'كاندي بوم', icon: '🍬', color: '#ec4899', status: 'قريباً', active: false },
+            { id: 'domino', name: 'دومينو 50', icon: '🀄', color: '#64748b', status: 'قريباً', active: false },
+            { id: '8ball', name: '8 بول', icon: '🎱', color: '#3b82f6', status: 'قريباً', active: false },
+            { id: 'crossword', name: 'كلمات متقاطعة', icon: '📝', color: '#10b981', status: 'قريباً', active: false }
+        ];
+
+        const grid = document.getElementById('games-grid');
+        grid.innerHTML = '';
+        games.forEach(g => {
+            const card = document.createElement('div');
+            card.className = `game-card glass ${g.active ? 'active-game' : ''}`;
+            card.innerHTML = `
+                <div class="status-tag" style="color:${g.active ? 'var(--accent-color)' : 'inherit'}">${g.status}</div>
+                <div class="icon-3d">${g.icon}</div>
+                <div class="game-name">${g.name}</div>
+            `;
+            card.addEventListener('click', () => {
+                if (g.status === 'نشط') {
+                    this.openGame(g.id);
+                } else {
+                    this.showToast("هذه اللعبة ستتوفر قريباً!");
+                }
+            });
+            grid.appendChild(card);
+        });
+    }
+
+    openGame(gameId) {
+        this.gameLayer.classList.remove('hidden');
+        document.getElementById('game-title-text').textContent = gameId === 'ono' ? 'لعبة اونو' : 'حيوان نبات';
+
+        let url = "";
+        if (gameId === 'ono') {
+            const roomId = Math.floor(100000 + Math.random() * 900000).toString();
+            url = `./ono.html?roomID=${roomId}&username=${encodeURIComponent(this.user.username)}&role=owner`;
+        } else {
+            // Animal Plant
+            url = `./legacy_game.html`;
+        }
+
+        this.gameFrame.src = url;
+    }
+
+    async renderRoomsList(type = 'discover') {
+        if (type === 'myrooms') {
+            this.roomsList.innerHTML = `
+                <div style="text-align:center; padding: 40px 20px; color: var(--text-dim);">
+                    <div style="font-size: 3rem; margin-bottom: 10px;">🏘️</div>
+                    <p>لا توجد غرف متابعة حالياً</p>
+                    <button class="btn-primary" style="margin-top:20px" onclick="window.smoManager.roomTabs[0].click()">البحث عن غرف موصى بها</button>
+                </div>
+            `;
             return;
         }
 
-        this.modalNextRound.classList.remove('hidden');
-        document.getElementById('modal-message').textContent = `صديقك ${req.fromName} مستعد للجولة التالية، هل أنت مستعد؟`;
-
-        // 15s timeout
-        this.modalTimeoutFill.style.transition = 'none';
-        this.modalTimeoutFill.style.width = '100%';
-        setTimeout(() => {
-            this.modalTimeoutFill.style.transition = 'width 15s linear';
-            this.modalTimeoutFill.style.width = '0%';
-        }, 10);
-
-        if (this.handshakeTimeout) clearTimeout(this.handshakeTimeout);
-        this.handshakeTimeout = setTimeout(() => {
-            if (!this.modalNextRound.classList.contains('hidden')) {
-                this.modalNextRound.classList.add('hidden');
-                this.showToast("انتهى وقت الموافقة!");
-                if (this.isHost) {
-                    remove(ref(this.db, `rooms/${this.roomId}/nextRoundRequest`));
-                }
-            }
-        }, 15000);
-    }
-
-    async acceptNextRound() {
-        this.modalNextRound.classList.add('hidden');
-        if (this.handshakeTimeout) clearTimeout(this.handshakeTimeout);
-
-        // Reset game and start directly
-        const letter = this.arabicLetters[Math.floor(Math.random() * this.arabicLetters.length)];
-        const updates = {};
-        this.players.forEach(p => {
-            updates[`players/${p.id}/ready`] = true; // Stay ready for immediate start
-        });
-        updates['config/gameState'] = 'game';
-        updates['config/currentLetter'] = letter;
-        updates['config/stopTriggered'] = false;
-        updates['config/timer'] = 40;
-        updates['nextRoundRequest'] = null;
-
-        await update(ref(this.db, `rooms/${this.roomId}`), updates);
-        await remove(ref(this.db, `rooms/${this.roomId}/results`));
-        await remove(ref(this.db, `rooms/${this.roomId}/progress`));
-
-        if (this.isHost) {
-            this.startHostTimerSync();
-        }
-    }
-
-    resetLobbyUI() {
-        const btnReady = document.getElementById('btn-ready');
-        if (btnReady) {
-            btnReady.disabled = false;
-            btnReady.innerHTML = 'أنا مستعد 👍';
-        }
-    }
-
-    async quitGame() {
-        this.playSound('quit');
-        if (this.roomId && this.myId) {
-            await remove(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`));
-            await remove(ref(this.db, `rooms/${this.roomId}/progress/${this.myId}`));
-        }
-        location.reload();
-    }
-
-    copyRoomId() {
-        if (!this.roomId) return;
-        const el = document.createElement('textarea');
-        el.value = this.roomId;
-        document.body.appendChild(el);
-        el.select();
         try {
-            document.execCommand('copy');
-            this.showToast("تم النسخ! ✅");
-        } catch (err) {
-            this.showToast("فشل النسخ");
+            const snap = await get(ref(this.db, 'rooms'));
+            let rooms = [];
+            if (snap.exists()) {
+                rooms = Object.entries(snap.val()).map(([id, data]) => ({ id, ...data }));
+            }
+
+            // Fallback mock if no active rooms
+            if (rooms.length === 0) {
+                rooms = [
+                    { id: '123456', name: 'مجلس الرياض 🇸🇦', hostName: 'خالد', playersCount: 12, tags: ['الرياض', 'سوالف'] },
+                    { id: '654321', name: 'عالم الأونو 🔥', hostName: 'سارة', playersCount: 4, tags: ['أونو', 'تحدي'] }
+                ];
+            }
+
+            this.roomsList.innerHTML = '';
+            rooms.forEach(r => {
+                const card = document.createElement('div');
+                card.className = 'room-card glass';
+                card.innerHTML = `
+                    <div class="room-cover">🎙️</div>
+                    <div class="room-info">
+                        <div class="room-name">${r.name || 'غرفة عامة'}</div>
+                        <div class="room-meta">
+                            <span>المضيف: ${r.hostName || 'غير معروف'}</span>
+                            ${r.tags ? `<div class="room-tag">${r.tags[0]}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="room-counter">${r.playersCount || 0}</div>
+                `;
+                card.addEventListener('click', () => this.joinRoom(r.id));
+                this.roomsList.appendChild(card);
+            });
+        } catch (e) {
+            console.error(e);
         }
-        document.body.removeChild(el);
-        this.playSound('copy');
     }
 
-    // Chat Methods
-    async sendChatMessage() {
-        const msg = this.chatInput.value.trim();
-        if (!msg || !this.roomId) return;
+    joinRoom(roomId) {
+        this.roomLayer.classList.remove('hidden');
+        document.getElementById('room-id-tag').textContent = `ID: ${roomId}`;
+        document.getElementById('room-title').textContent = "غرفة المحادثة";
+        this.roomId = roomId;
+        this.initPeer();
+        this.listenToMediaSync();
+    }
 
-        const chatRef = ref(this.db, `rooms/${this.roomId}/chat`);
-        await push(chatRef, {
-            senderId: this.myId,
-            senderName: this.playerName,
-            text: msg,
-            timestamp: serverTimestamp()
+    listenToMediaSync() {
+        onValue(ref(this.db, `rooms/${this.roomId}/media`), (snap) => {
+            this.syncMedia(snap.val());
         });
-
-        this.chatInput.value = '';
-        this.playSound('click');
+        // Also listen to seats
+        onValue(ref(this.db, `rooms/${this.roomId}/seats`), (snap) => {
+            this.updateSeatsUI(snap.val());
+        });
     }
 
-    updateChatUI(chatData) {
-        const messages = Object.values(chatData).sort((a, b) => a.timestamp - b.timestamp);
-
-        // Only re-render if count changed to avoid flickering
-        if (messages.length === this.chatMessages.length) return;
-        this.chatMessages = messages;
-
-        this.chatMessagesEl.innerHTML = '';
-        messages.forEach(m => {
+    updateSeatsUI(seats) {
+        const grid = document.querySelector('.seats-grid');
+        grid.innerHTML = '';
+        for (let i = 0; i < 8; i++) {
+            const seat = seats && seats[i];
             const div = document.createElement('div');
-            div.className = `message ${m.senderId === this.myId ? 'mine' : ''}`;
-            div.innerHTML = `
-                <span class="sender">${m.senderName}</span>
-                <span class="text">${this.escapeHtml(m.text)}</span>
-            `;
-            this.chatMessagesEl.appendChild(div);
+            div.className = `seat-circle ${seat ? 'occupied' : 'empty'}`;
+            div.dataset.seatIndex = i;
+            if (seat) {
+                div.dataset.uid = seat.uid;
+                div.innerHTML = `<img src="${seat.avatar}">`;
+                if (seat.isSpeaking) div.classList.add('speaking');
+            } else {
+                div.innerHTML = '<div class="seat-plus">+</div>';
+                div.onclick = () => this.joinSeat(i);
+            }
+            grid.appendChild(div);
+        }
+    }
+
+    async joinSeat(index) {
+        if (!this.user) return;
+        const seatRef = ref(this.db, `rooms/${this.roomId}/seats/${index}`);
+        await set(seatRef, {
+            uid: this.user.id,
+            username: this.user.username,
+            avatar: this.user.avatar,
+            isSpeaking: false
         });
-
-        // Auto-scroll
-        this.chatMessagesEl.scrollTop = this.chatMessagesEl.scrollHeight;
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // ==========================================
-    // Voice Chat (PeerJS Multi-Peer Mesh) Methods
-    // ==========================================
-
-    initMicStatus() {
-        this.micEnabled = false;
-        this.micOnIcon.classList.add('hidden');
-        this.micOffIcon.classList.remove('hidden');
+        onDisconnect(seatRef).remove();
     }
 
     async initPeer() {
-        if (this.peer || !this.myId) {
-            console.log("PeerJS: Initialization skipped (already exists or no ID). ID:", this.myId);
-            return;
-        }
+        if (this.peer || !this.user) return;
 
-        console.log("PeerJS: Initializing with ID:", this.myId);
-        this.peer = new Peer(this.myId, {
-            config: this.iceConfig,
+        this.peer = new Peer(this.user.id, {
             debug: 2
         });
 
-        // Global access for debugging as requested
-        window.peer = this.peer;
-
         this.peer.on('open', (id) => {
-            console.log('PeerJS: Connection opened with ID:', id);
+            console.log('PeerJS: Connection opened:', id);
             this.listenToVoicePeers();
         });
 
         this.peer.on('call', (call) => {
-            console.log('PeerJS: Incoming call from:', call.peer);
-            call.answer(this.localStream || this.silentStream);
+            call.answer(this.localStream);
             this.handleCallStream(call);
         });
-
-        this.peer.on('error', (err) => {
-            console.error('PeerJS Error:', err.type, err);
-            if (err.type === 'peer-unavailable') {
-                // Ignore
-            } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'unavailable-id') {
-                console.log("PeerJS: Critical error, attempting reset...");
-                setTimeout(() => {
-                    if (this.peer && !this.peer.destroyed) this.peer.destroy();
-                    this.peer = null;
-                    this.initPeer();
-                }, 5000);
-            }
-        });
-    }
-
-    createSilentAudioStream() {
-        const oscillator = this.audioContext.createOscillator();
-        const dst = oscillator.connect(this.audioContext.createMediaStreamDestination());
-        oscillator.start();
-        const track = dst.stream.getAudioTracks()[0];
-        track.enabled = false;
-        return new MediaStream([track]);
     }
 
     listenToVoicePeers() {
-        if (!this.roomId) return;
-        console.log("PeerJS: Starting listener for room:", this.roomId);
-
-        const callOthers = () => {
-            if (!this.peer || !this.peer.open) return;
-
-            this.players.forEach(p => {
-                // Handshake: lower ID calls higher ID to avoid double calls
-                if (p.id && p.id !== this.myId && !this.activeCalls[p.id] && this.myId < p.id) {
-                    console.log('PeerJS: Initiating call to:', p.id);
-                    const stream = this.localStream || this.silentStream;
-
-                    try {
-                        const call = this.peer.call(p.id, stream);
-                        if (call) {
-                            this.handleCallStream(call);
-                        }
-                    } catch (e) {
-                        console.error("PeerJS: Call initiation failed:", e);
-                    }
-                }
-            });
-        };
-
-        // Listen for player changes to trigger calls
-        const playerRef = ref(this.db, `rooms/${this.roomId}/players`);
-        onValue(playerRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                this.players = Object.entries(data).map(([id, p]) => ({ id, ...p }));
-                if (this.peer && this.peer.open) callOthers();
-            }
-        });
-
-        // Immediate check if list already exists
-        if (this.peer && this.peer.open) callOthers();
+        // Logic to call others in the room
+        // For now, we simulate room occupancy
+        console.log("PeerJS: Listening for peers in room", this.roomId);
     }
 
     handleCallStream(call) {
         this.activeCalls[call.peer] = call;
-
-        const onStreamReceived = (remoteStream) => {
-            console.log('Receiving stream from:', call.peer);
-
-            // 1. Check if this peer already has an assigned element
-            let audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
-
-            if (!audio) {
-                // 2. Find an available element in the pool (srcObject is null)
-                audio = this.audioPool.find(el => !el.srcObject);
-
-                if (!audio) {
-                    console.warn("No available audio elements in the pool for peer:", call.peer);
-                    return;
-                }
-
-                // 3. Mark it as used by this peer
-                audio.setAttribute('data-peer-id', call.peer);
-            }
-
-            // 4. Assign the stream and play
-            if (audio.srcObject !== remoteStream) {
-                audio.srcObject = remoteStream;
-            }
-
-            audio.muted = !this.speakerEnabled;
-
-            // Ensure playback starts
-            audio.play().catch(e => {
-                console.warn("Autoplay blocked for remote stream:", call.peer, e);
-                // Try again after a small delay
-                setTimeout(() => audio.play().catch(() => {}), 1000);
-            });
-
-            this.setupAudioLevelIndicator(remoteStream, false, call.peer);
-        };
-
-        // Standard PeerJS stream event
         call.on('stream', (remoteStream) => {
-            onStreamReceived(remoteStream);
-        });
-
-        // Backup: Use ontrack via peerConnection for more reliability
-        if (call.peerConnection) {
-            call.peerConnection.ontrack = (event) => {
-                if (event.streams && event.streams[0]) {
-                    onStreamReceived(event.streams[0]);
-                }
-            };
-        }
-
-        call.on('close', () => {
-            delete this.activeCalls[call.peer];
-            const audio = this.audioPool.find(el => el.getAttribute('data-peer-id') === call.peer);
+            const audio = this.audioPool.find(el => !el.srcObject);
             if (audio) {
-                audio.srcObject = null;
-                audio.removeAttribute('data-peer-id');
-                console.log("Released audio element for peer:", call.peer);
+                audio.srcObject = remoteStream;
+                audio.play().catch(() => {
+                    this.showToast("اضغط لتفعيل الصوت 🔊");
+                });
             }
+            this.startVolumeDetection(remoteStream, call.peer);
         });
     }
 
-    async toggleMic() {
-        try {
-            if (!this.micEnabled) {
-                if (!this.localStream) {
-                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    this.setupAudioLevelIndicator(this.localStream, true);
+    startVolumeDetection(stream, peerId) {
+        if (!this.audioContext) this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-                    // Replace tracks in all active calls
-                    const newTrack = this.localStream.getAudioTracks()[0];
-                    Object.values(this.activeCalls).forEach(call => {
-                        if (call.peerConnection) {
-                            const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
-                            if (sender) {
-                                sender.replaceTrack(newTrack);
-                            } else {
-                                // If no sender, we might need to re-call or the connection is in a weird state
-                                console.warn("No audio sender found for call:", call.peer);
-                            }
-                        }
-                    });
-                } else {
-                    this.localStream.getAudioTracks().forEach(t => t.enabled = true);
-                }
-                this.micEnabled = true;
-                this.micOnIcon.classList.remove('hidden');
-                this.micOffIcon.classList.add('hidden');
-                this.showToast("الميكروفون مفعل");
-            } else {
-                if (this.localStream) {
-                    this.localStream.getAudioTracks().forEach(t => t.enabled = false);
-                }
-                this.micEnabled = false;
-                this.micOnIcon.classList.add('hidden');
-                this.micOffIcon.classList.remove('hidden');
-                this.showToast("تم كتم الميكروفون");
-                this.updateSpeakingUI(this.myId, false);
-            }
-        } catch (err) {
-            console.error("Mic Error:", err);
-            this.showToast("⚠️ فشل تفعيل الميكروفون");
-        }
-    }
-
-    toggleSpeaker() {
-        this.speakerEnabled = !this.speakerEnabled;
-        document.querySelectorAll('audio').forEach(audio => {
-            if (audio.id.startsWith('audio-')) {
-                audio.muted = !this.speakerEnabled;
-            }
-        });
-        if (this.speakerEnabled) {
-            this.speakerOnIcon.classList.remove('hidden');
-            this.speakerOffIcon.classList.add('hidden');
-            this.showToast("الصوت مفعّل");
-        } else {
-            this.speakerOnIcon.classList.add('hidden');
-            this.speakerOffIcon.classList.remove('hidden');
-            this.showToast("الصوت مكتوم");
-        }
-    }
-
-    setupAudioLevelIndicator(stream, isLocal, remoteId = null) {
-        const uid = isLocal ? this.myId : remoteId;
-
-        if (this.audioContext.state === 'suspended' && (this.audioEnabled || isLocal)) {
-            this.audioContext.resume();
-        }
-
-        // Clean up old analyser if exists
-        if (this.analysers[uid]) {
-            try { this.analysers[uid].source.disconnect(); } catch(e) {}
-            delete this.analysers[uid];
-        }
-
-        const analyser = this.audioContext.createAnalyser();
         const source = this.audioContext.createMediaStreamSource(stream);
-        source.connect(analyser);
+        const analyser = this.audioContext.createAnalyser();
         analyser.fftSize = 256;
+        source.connect(analyser);
 
-        this.analysers[uid] = { analyser, source };
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const check = () => {
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const avg = sum / dataArray.length;
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+            const isSpeaking = avg > 10;
+            this.updatePeerSpeakingState(peerId, isSpeaking);
 
-        const checkVolume = () => {
-            if (!this.analysers[uid]) return;
-
-            if (!stream.active || (isLocal && !this.micEnabled)) {
-                this.updateSpeakingUI(uid, false);
-                if (!stream.active) {
-                    delete this.analysers[uid];
-                    return;
-                }
-            } else {
-                analyser.getByteFrequencyData(dataArray);
-                let values = 0;
-                for (let i = 0; i < bufferLength; i++) {
-                    values += dataArray[i];
-                }
-                const average = values / bufferLength;
-                const isSpeaking = average > 15;
-                if (isLocal) {
-                    this.updateSpeakingInFirebase(isSpeaking);
-                } else {
-                    this.updateSpeakingUI(uid, isSpeaking);
-                }
-            }
-            requestAnimationFrame(checkVolume);
+            if (this.activeCalls[peerId]) requestAnimationFrame(check);
         };
-        checkVolume();
+        check();
     }
 
-    updateSpeakingInFirebase(isSpeaking) {
-        if (!this.roomId || !this.myId || this._lastSpeakingState === isSpeaking) return;
-        this._lastSpeakingState = isSpeaking;
+    updatePeerSpeakingState(peerId, isSpeaking) {
+        // peerId is the UID of the user
+        const frame = document.querySelector(`.seat-circle.occupied[data-uid="${peerId}"]`);
+        if (frame) {
+            if (isSpeaking) frame.classList.add('speaking');
+            else frame.classList.remove('speaking');
+        }
+    }
 
-        update(ref(this.db, `rooms/${this.roomId}/players/${this.myId}`), {
-            isSpeaking: isSpeaking
+    renderSocialFeed() {
+        const posts = [
+            { user: 'أحمد', avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Ahmed', content: 'اليوم فزت في اونو 5 مرات متتالية! من يتحداني؟ 😎', likes: 12, comments: 4, vip: 2, lv: 15 },
+            { user: 'لينا', avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Lina', content: 'أبحث عن فريق قوي للعب جاكارو الليلة 🎲', likes: 25, comments: 8, vip: 3, lv: 22 }
+        ];
+
+        this.socialFeed.innerHTML = '';
+        posts.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'post-card glass';
+            card.innerHTML = `
+                <div class="post-header">
+                    <img src="${p.avatar}" class="post-avatar">
+                    <div class="post-user-info">
+                        <div class="post-username">${p.user} <span class="vip-badge">VIP ${p.vip}</span></div>
+                        <div class="post-lvl">Level ${p.lv}</div>
+                    </div>
+                </div>
+                <div class="post-content">${p.content}</div>
+                <div class="post-actions">
+                    <div class="post-action">❤️ ${p.likes}</div>
+                    <div class="post-action">💬 ${p.comments}</div>
+                    <div class="post-action">🔗 مشاركة</div>
+                </div>
+            `;
+            this.socialFeed.appendChild(card);
         });
     }
 
-    updateSpeakingUI(playerId, isSpeaking) {
-        if (!playerId) return;
+    renderInbox() {
+        const chats = [
+            { name: 'النظام', msg: 'مرحباً بك في سمو الأميرة! استمتع باللعب.', time: '10:30 ص', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=system' },
+            { name: 'محمد', msg: 'يدعوك للعب أونو 🃏', time: 'أمس', avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Moh' }
+        ];
 
-        // 1. Lobby avatars
-        const seat = document.querySelector(`.seat[data-player-id="${playerId}"] .avatar-wrapper`);
-        if (seat) seat.classList.toggle('speaking', isSpeaking);
+        this.inboxList.innerHTML = '';
+        chats.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'chat-item glass';
+            item.innerHTML = `
+                <img src="${c.avatar}" class="tracker-avatar" style="width:50px; height:50px">
+                <div class="chat-info">
+                    <div class="chat-name">${c.name}</div>
+                    <div class="chat-last-msg">${c.msg}</div>
+                </div>
+                <div class="chat-time">${c.time}</div>
+            `;
+            item.addEventListener('click', () => this.openChat(c.name));
+            this.inboxList.appendChild(item);
+        });
+    }
 
-        // 2. Result avatars
-        const resSection = document.querySelector(`.player-result-section[data-player-id="${playerId}"]`);
-        if (resSection) {
-            const av = resSection.querySelector('.avatar');
-            if (av) av.classList.toggle('speaking', isSpeaking);
+    openChat(name) {
+        this.chatLayer.classList.remove('hidden');
+        document.getElementById('chat-user-name').textContent = name;
+        const container = document.getElementById('chat-messages');
+        container.innerHTML = `
+            <div class="chat-bubble received">مرحباً بك! كيف يمكنني مساعدتك اليوم؟</div>
+            <div class="chat-bubble sent">أهلاً، أنا بخير شكراً لك</div>
+        `;
+
+        if (name === 'محمد') {
+            const card = document.createElement('div');
+            card.className = 'interactive-card';
+            card.innerHTML = `
+                <div class="card-image"></div>
+                <div class="card-body">
+                    <div class="card-title">يدعوك محمد لمباراة أونو!</div>
+                    <button class="btn-card-action">اذهب للعب 🎮</button>
+                </div>
+            `;
+            card.querySelector('button').onclick = () => {
+                this.chatLayer.classList.add('hidden');
+                this.openGame('ono');
+            };
+            container.appendChild(card);
+        }
+    }
+
+    // --- Watching Room Engine ---
+    ownerLoadMedia() {
+        const input = document.getElementById('media-url-input').value.trim();
+        if (!input) return;
+
+        let type = this.selectedMediaType;
+        let url = input;
+        let videoId = "";
+
+        if (type === 'auto') {
+            const ytMatch = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
+            if (ytMatch && ytMatch[2].length === 11) {
+                type = 'yt';
+                videoId = ytMatch[2];
+            } else if (url.match(/\.(mp4|webm|m3u8)/i)) {
+                type = 'video';
+            } else {
+                type = 'web';
+            }
         }
 
-        // 3. Opponent progress (if this player is currently featured in the progress banner)
-        if (playerId === this.topOppId && this.oppAvatar) {
-            this.oppAvatar.classList.toggle('speaking', isSpeaking);
+        const state = {
+            type,
+            url,
+            videoId,
+            state: 1,
+            currentTime: 0,
+            updatedAt: Date.now()
+        };
+
+        set(ref(this.db, `rooms/${this.roomId}/media`), state);
+        document.getElementById('modal-media-control').classList.add('hidden');
+    }
+
+    syncMedia(state) {
+        if (!state) return;
+        this.ytPlayerContainer.classList.add('hidden');
+        this.genericVideoContainer.classList.add('hidden');
+        this.browserContainer.classList.add('hidden');
+        this.vidPlaceholder.classList.add('hidden');
+
+        if (state.type === 'yt') {
+            this.ytPlayerContainer.classList.remove('hidden');
+            this.playYouTube(state);
+        } else if (state.type === 'video') {
+            this.genericVideoContainer.classList.remove('hidden');
+            this.playGenericVideo(state);
+        } else if (state.type === 'web') {
+            this.browserContainer.classList.remove('hidden');
+            this.syncBrowser(state.url);
+        } else {
+            this.vidPlaceholder.classList.remove('hidden');
         }
+    }
+
+    playYouTube(state) {
+        const id = state.videoId;
+        const targetTime = (Date.now() - state.updatedAt) / 1000 + (state.currentTime || 0);
+
+        if (!this.player) {
+            this.player = new YT.Player('player', {
+                height: '100%',
+                width: '100%',
+                videoId: id,
+                playerVars: { 'autoplay': 1, 'playsinline': 1, 'start': Math.floor(targetTime) }
+            });
+        } else {
+            const currentId = this.player.getVideoData().video_id;
+            if (currentId !== id) {
+                this.player.loadVideoById(id, targetTime);
+            } else {
+                const diff = Math.abs(this.player.getCurrentTime() - targetTime);
+                if (diff > 5) this.player.seekTo(targetTime, true);
+            }
+        }
+    }
+
+    playGenericVideo(state) {
+        const targetTime = (Date.now() - state.updatedAt) / 1000 + (state.currentTime || 0);
+        if (this.genericVideo.src !== state.url) {
+            this.genericVideo.src = state.url;
+            this.genericVideo.currentTime = targetTime;
+            this.genericVideo.play().catch(() => {});
+        } else {
+            const diff = Math.abs(this.genericVideo.currentTime - targetTime);
+            if (diff > 5) this.genericVideo.currentTime = targetTime;
+        }
+    }
+
+    syncBrowser(url) {
+        let processedUrl = url;
+        if (!url.startsWith('http')) processedUrl = 'https://' + url;
+        // Google Search Fallback for browser
+        if (processedUrl.includes('google.com')) {
+             if (!processedUrl.includes('igu=1')) processedUrl += (processedUrl.includes('?') ? '&' : '?') + 'igu=1';
+        }
+        this.browserIframe.src = processedUrl;
+    }
+
+    renderProfile() {
+        if (!this.user) return;
+        this.profileSection.innerHTML = `
+            <div class="profile-header">
+                <div class="profile-avatar-big">
+                    <img src="${this.user.avatar}">
+                    <div class="vip-frame"></div>
+                </div>
+                <div class="profile-name">${this.user.username}</div>
+                <div class="profile-id">ID: ${this.user.id}</div>
+            </div>
+
+            <div class="profile-stats glass" style="padding: 20px; border-radius: 24px;">
+                <div class="stat-item">
+                    <div class="stat-val">${this.user.lv}</div>
+                    <div class="stat-label">المستوى</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-val">${this.user.gold}</div>
+                    <div class="stat-label">الذهب</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-val">VIP ${this.user.vip}</div>
+                    <div class="stat-label">الرتبة</div>
+                </div>
+            </div>
+
+            <div class="shelf-section">
+                <div class="shelf-title">معرض الهدايا 🎁</div>
+                <div class="shelf-grid">
+                    <div class="gift-item glass">🦁 <span class="gift-count">x2</span></div>
+                    <div class="gift-item glass">🏰 <span class="gift-count">x1</span></div>
+                    <div class="gift-item glass">💎 <span class="gift-count">x5</span></div>
+                    <div class="gift-item glass">🌹 <span class="gift-count">x12</span></div>
+                </div>
+            </div>
+
+            <div class="settings-list">
+                <div class="setting-item glass"><span class="setting-icon">💰</span> محفظتي</div>
+                <div class="setting-item glass"><span class="setting-icon">💎</span> متجر الـ VIP</div>
+                <div class="setting-item glass" onclick="localStorage.clear(); location.reload();" style="color: #ef4444;"><span class="setting-icon">🚪</span> تسجيل الخروج</div>
+            </div>
+        `;
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    window.gameManager = new GameManager();
+    window.smoManager = new SmoManager();
 });
