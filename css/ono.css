@@ -1,0 +1,528 @@
+/*
+  ONO Game Styles - Professional 3D Edition
+  تم التعديل لضبط المسافات العمودية مطابقة للصورة 100%
+*/
+
+:root {
+  --ono-red: #e74c3c;
+  --ono-blue: #3498db;
+  --ono-green: #2ecc71;
+  --ono-yellow: #ff9800; 
+  --ono-black: #2c3e50;
+  --bg-gradient: radial-gradient(circle at center, #2980b9 0%, #1a5276 50%, #0d2847 100%);
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Almarai', sans-serif;
+  background-color: #0d2847;
+}
+
+/* Background */
+.ono-bg {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--bg-gradient);
+  z-index: 1; overflow: hidden;
+}
+.ono-bg-pattern {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  opacity: 0.1;
+  background-image: radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+.center-glow-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+.ring-1 { width: 40vh; height: 40vh; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); }
+.ring-2 { width: 70vh; height: 70vh; border-style: dashed; }
+
+.ono-container {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Top Header */
+.top-header {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 60px;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 15px; box-sizing: border-box; z-index: 20;
+}
+.header-left, .header-right { display: flex; gap: 10px; align-items: center; }
+.btn-hexagon {
+  width: 36px; height: 36px; background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255,255,255,0.3); border-radius: 8px;
+  backdrop-filter: blur(10px); color: white; cursor: pointer;
+  display: flex; justify-content: center; align-items: center; font-size: 1.1rem;
+}
+.capsule {
+  background: rgba(0, 0, 0, 0.3); backdrop-filter: blur(8px);
+  border-radius: 20px; padding: 5px 12px; color: #fff;
+  font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.ping-indicator { color: #f1c40f; }
+.ping-dot { width: 10px; height: 10px; background-color: #28a745; border-radius: 50%; box-shadow: 0 0 5px #28a745; }
+.timer-capsule { background: #1e3c72; border: 1px solid #4a90e2; animation: pulse 2s infinite; }
+
+/* 1. Footer Input (أقصى الأسفل) */
+.footer-input {
+  position: absolute;
+  bottom: 0; left: 0; width: 100%; height: 60px;
+  background: rgba(10, 20, 40, 0.9); backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 10px; box-sizing: border-box; z-index: 30; 
+}
+.left-icons, .right-icons { display: flex; gap: 5px; align-items: center; }
+.icon-btn {
+  background: transparent; border: none; color: rgba(255,255,255,0.7);
+  font-size: 1.3rem; cursor: pointer; display: flex;
+  justify-content: center; align-items: center; width: 35px; height: 35px;
+}
+.icon-btn:hover { color: #fff; }
+.chat-input-wrapper { flex-grow: 1; margin: 0 10px; position: relative; }
+.capsule-input {
+  width: 100%; height: 38px; border-radius: 20px;
+  background: rgba(255,255,255,0.1); border: none; color: white;
+  padding: 0 15px; box-sizing: border-box; font-family: 'Almarai', sans-serif; text-align: right;
+}
+.capsule-input::placeholder { color: rgba(255,255,255,0.5); }
+.capsule-input:focus { outline: none; background: rgba(255,255,255,0.15); }
+
+/* 2. منطقة الدردشة (فوق الفوتر مباشرة وتأخذ ربع الشاشة تقريباً) */
+.game-chat-wrapper {
+  position: absolute;
+  bottom: 70px; 
+  right: 10px;
+  left: 10px;
+  height: 16vh; 
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  z-index: 15;
+}
+
+.btn-collapse-chat {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
+  color: white; font-weight: bold; cursor: pointer; backdrop-filter: blur(5px);
+  margin-bottom: 5px;
+}
+
+.game-chat-history {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: hidden;
+  margin-bottom: 5px;
+}
+
+.game-chat-history .message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 25, 45, 0.85);
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: white;
+  font-size: 0.9rem;
+  align-self: flex-start;
+  max-width: 90%;
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+.chat-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.msg-content { display: flex; align-items: center; flex-wrap: wrap; }
+.msg-content .sender { color: #ccc; font-weight: bold; margin-left: 5px; }
+
+/* 3. منطقة الأوراق (تطفو فوق الدردشة تماماً) */
+.bottom-hand-area {
+  position: absolute;
+  bottom: calc(70px + 16vh); 
+  left: 0;
+  width: 100%;
+  height: 120px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 20;
+  pointer-events: none; /* للسماح بالضغط على ما خلفها إن لزم */
+}
+
+.hand-cards {
+  position: relative;
+  width: 70%;
+  height: 100px;
+  display: flex; justify-content: center; align-items: flex-end;
+  pointer-events: auto;
+}
+
+.hand-cards .card {
+  position: absolute; bottom: 0;
+  transform-origin: bottom center; cursor: pointer;
+  box-shadow: -3px -2px 8px rgba(0,0,0,0.3);
+}
+
+.hand-cards .card:hover {
+  transform: translateY(-25px) scale(1.05) !important;
+  z-index: 100 !important; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+}
+
+/* زر السحب على يسار الأوراق */
+.draw-badge-container {
+  position: absolute; left: 20px; bottom: 20px; pointer-events: auto;
+}
+.btn-draw-card.badge-style {
+  width: 45px; height: 45px; border-radius: 50%;
+  background: rgba(10, 30, 60, 0.8); border: 2px solid #3498db;
+  color: white; font-weight: bold; font-size: 1.2rem;
+  display: flex; justify-content: center; align-items: center; 
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5); cursor: pointer;
+}
+
+/* زر ONO على يمين الأوراق */
+.btn-ono-action {
+  position: absolute; right: 20px; bottom: 10px; pointer-events: auto;
+  width: 70px; height: 70px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ff758c, #ff0844);
+  border: 3px solid #64b5f6;
+  color: #fff; font-weight: 900; font-size: 1.3rem;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5), inset 0 -4px 8px rgba(0,0,0,0.3);
+  cursor: pointer; font-family: 'Almarai', sans-serif;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+.btn-ono-action:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3);
+}
+
+/* 4. الطاولة واللاعبين (النصف العلوي المتبقي) */
+.arena-center {
+  position: absolute;
+  top: 60px; /* تحت الهيدر */
+  bottom: calc(70px + 16vh + 120px); /* تنتهي فوق الأوراق */
+  left: 0;
+  width: 100%;
+  display: flex; justify-content: center; align-items: center;
+}
+
+/* 3D Realistic Cards */
+.card {
+  width: 55px; height: 85px; border-radius: 6px;
+  background-color: #f4f6f9; 
+  box-shadow: 2px 3px 8px rgba(0,0,0,0.4), inset 0 0 2px rgba(255,255,255,0.8);
+  position: absolute; display: flex; justify-content: center; align-items: center;
+  font-weight: 800; border: 1px solid #ddd; box-sizing: border-box;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.card-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.card-number { font-size: 1.8rem; }
+.card-icon { font-size: 1.2rem; }
+.card.back {
+  background-color: #111; border: 3px solid #ff4b2b;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.1) 5px, rgba(255,255,255,0.1) 10px);
+}
+
+/* أسهم الطاولة الصفراء */
+.table-direction-indicator {
+  position: absolute; color: #ffeb3b; font-weight: 800; font-size: 1.5rem; letter-spacing: 2px;
+  text-shadow: 0 0 5px rgba(255, 235, 59, 0.8); opacity: 0.8; animation: flashArrow 1.5s infinite alternate;
+}
+.top-indicator { top: 15%; transform: rotate(90deg); }
+.bottom-indicator { bottom: 15%; transform: rotate(-90deg); }
+.left-indicator { left: 15%; }
+.right-indicator { right: 15%; transform: rotate(180deg); }
+
+@keyframes flashArrow {
+  from { opacity: 0.4; text-shadow: 0 0 2px rgba(255, 235, 59, 0.5); }
+  to { opacity: 1; text-shadow: 0 0 10px rgba(255, 235, 59, 1); }
+}
+
+.center-stack { position: relative; width: 150px; height: 150px; display: flex; justify-content: center; align-items: center; z-index: 10; }
+.pile, .draw-pile { position: absolute; width: 60px; height: 90px; }
+.pile { left: 20px; z-index: 2; }
+.draw-pile { right: 20px; cursor: pointer; z-index: 1; }
+
+#player-nodes-container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; }
+.player-node {
+  position: absolute; width: 60px; height: 60px; transform: translate(-50%, -50%); pointer-events: auto;
+  display: flex; flex-direction: column; align-items: center;
+}
+.player-node img {
+  width: 100%; height: 100%; border-radius: 50%; border: 3px solid #8bd8e3;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 0 10px rgba(255,255,255,0.5); object-fit: cover;
+}
+.player-node .name { margin-top: 5px; color: white; font-size: 0.8rem; text-shadow: 1px 1px 2px black; white-space: nowrap; }
+.avatar-container {
+  width: 60px; height: 60px; border-radius: 50%; border: 3px solid #8bd8e3;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 0 10px rgba(255,255,255,0.5);
+  display: flex; justify-content: center; align-items: center;
+  background: rgba(0,0,0,0.3); overflow: hidden;
+  font-size: 2rem;
+}
+.player-node .cards-count {
+  position: absolute; top: -5px; right: -10px; background: #111; color: #ff9800;
+  font-size: 0.85rem; font-weight: 800; width: 20px; height: 28px; border-radius: 3px;
+  display: flex; justify-content: center; align-items: center; border: 1px solid #ccc; box-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+/* النوافذ المنبثقة للوبّي واللعبة */
+#section-lobby, #section-game { display: flex; flex-direction: column; width: 100%; height: 100%; }
+#section-lobby.hidden, #section-game.hidden { display: none !important; }
+
+/* Modals / النوافذ الإضافية */
+.modal {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center;
+  z-index: 1000; backdrop-filter: blur(5px);
+}
+.modal.hidden { display: none !important; }
+.modal-content {
+  background: #1e293b; border-radius: 20px; padding: 20px; width: 80%; max-width: 300px;
+  text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.modal-header { font-size: 1.2rem; font-weight: bold; color: white; margin-bottom: 15px; }
+.color-options { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.color-option {
+  width: 60px; height: 60px; border-radius: 50%; cursor: pointer;
+  border: 3px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: transform 0.2s;
+}
+.color-option:active { transform: scale(0.9); }
+.red { background: var(--ono-red); color: white; }
+.blue { background: var(--ono-blue); color: white; }
+.green { background: var(--ono-green); color: white; }
+.yellow { background: var(--ono-yellow); color: white; }
+.black { background: var(--ono-black); color: white; }
+
+/* Rainbow effect for Wild cards */
+.card.black.wild, .card.black.wild4 {
+  background: linear-gradient(45deg, #ff4b2b, #ff9800, #2ecc71, #3498db);
+  background-size: 200% 200%;
+  animation: rainbow 3s ease infinite;
+}
+
+@keyframes rainbow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Active Turn Highlighting */
+.player-node.active-turn .avatar-container {
+  border-color: #38ef7d;
+  box-shadow: 0 0 20px #38ef7d, inset 0 0 10px #38ef7d;
+  transform: scale(1.1);
+}
+
+.player-node.active-turn .turn-arrow {
+  display: block;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -10px); }
+}
+
+.turn-arrow {
+  display: none;
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #38ef7d;
+  font-size: 1.5rem;
+}
+
+/* Direction Arrows */
+#direction-arrows {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border: 4px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: rotateClockwise 10s linear infinite;
+}
+
+@keyframes rotateClockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Color Picker & Modals fix */
+.color-option.color-red { background: var(--ono-red); }
+.color-option.color-blue { background: var(--ono-blue); }
+.color-option.color-green { background: var(--ono-green); }
+.color-option.color-yellow { background: var(--ono-yellow); }
+.modal-actions { margin-top: 20px; }
+#modal-penalty-message { color: #ccc; font-size: 0.9rem; margin-bottom: 15px; }
+
+/* Lobby Styles */
+.hero-section {
+  position: relative;
+  height: 35vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.logo-3d {
+  font-size: 5rem;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 0 #ccc, 0 2px 0 #c9c9c9, 0 3px 0 #bbb, 0 4px 0 #b9b9b9, 0 5px 0 #aaa, 0 6px 1px rgba(0,0,0,.1), 0 0 5px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.3), 0 3px 5px rgba(0,0,0,.2), 0 5px 10px rgba(0,0,0,.25), 0 10px 10px rgba(0,0,0,.2), 0 20px 20px rgba(0,0,0,.15);
+  animation: float 3s ease-in-out infinite;
+  z-index: 5;
+}
+
+.cards-fan {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-demo {
+  transform: rotate(var(--rotation));
+  transition: transform 0.3s;
+}
+
+.system-banner {
+  background: rgba(0,0,0,0.4);
+  padding: 10px;
+  text-align: center;
+  color: #fff;
+  font-weight: bold;
+  margin: 10px 0;
+  backdrop-filter: blur(5px);
+}
+
+.room-id-display {
+  text-align: center;
+  color: rgba(255,255,255,0.7);
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+}
+.room-id-display strong { color: #38ef7d; font-size: 1.4rem; margin-right: 5px; }
+
+.player-slots-container {
+  flex-grow: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0 20px;
+}
+
+.player-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.player-slot {
+  aspect-ratio: 1/1;
+  border-radius: 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.player-slot img { width: 60%; height: 60%; border-radius: 50%; margin-bottom: 5px; }
+.player-slot .name { color: #fff; font-size: 0.8rem; font-weight: bold; }
+.player-slot .host-icon { position: absolute; top: 5px; right: 5px; font-size: 0.8rem; }
+
+#results-body {
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 5px;
+}
+
+.loading-bar-container {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    margin-top: 15px;
+}
+
+.lobby-actions {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-start {
+  background: linear-gradient(135deg, #38ef7d, #11998e);
+  color: white;
+  padding: 15px;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  border: none;
+  box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);
+  cursor: pointer;
+}
+.btn-start.disabled { opacity: 0.5; filter: grayscale(1); cursor: not-allowed; }
+
+.secondary-actions { display: flex; gap: 10px; }
+.btn-match, .btn-invite {
+  flex: 1;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  padding: 12px;
+  border-radius: 25px;
+  border: 1px solid rgba(255,255,255,0.2);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn-primary {
+    background: #38ef7d;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-secondary {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 10px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
