@@ -171,7 +171,7 @@ class LiveManager {
         this.playlistItemsContainer = document.getElementById('playlist-items-container');
         this.btnOpenYtSearch = document.getElementById('btn-open-yt-search');
 
-        // YouTube Browser Elements (TopTop Style)
+        // YouTube Browser Elements (Pro Style)
         this.modalYtBrowser = document.getElementById('modal-yt-browser');
         this.btnCloseYtBrowser = document.getElementById('btn-close-yt-browser');
         this.btnBackToPlaylistFromBrowser = document.getElementById('btn-back-to-playlist-from-browser');
@@ -349,16 +349,18 @@ class LiveManager {
                 if (e.key === 'Enter') this.searchYouTube(this.ytSearchInput.value);
             };
 
-            this.catChips.forEach(chip => {
-                chip.onclick = () => {
-                    this.catChips.forEach(c => c.classList.remove('active'));
-                    chip.classList.add('active');
-                    const cat = chip.dataset.cat;
-                    if (cat === 'trending') this.fetchTrendingVideos();
-                    else if (cat === 'live') this.searchYouTube("بث مباشر");
-                    else this.fetchCategoryVideos(cat, chip.textContent);
-                };
-            });
+            if (this.catChips) {
+                this.catChips.forEach(chip => {
+                    chip.onclick = () => {
+                        this.catChips.forEach(c => c.classList.remove('active'));
+                        chip.classList.add('active');
+                        const cat = chip.dataset.cat;
+                        if (cat === 'trending') this.fetchTrendingVideos();
+                        else if (cat === 'live') this.searchYouTube("بث مباشر");
+                        else this.fetchCategoryVideos(cat, chip.textContent);
+                    };
+                });
+            }
 
             const searchIcon = this.ytSearchInput.parentElement.querySelector('svg');
             if (searchIcon) {
@@ -663,7 +665,7 @@ class LiveManager {
                     <span style="color: white; font-weight: bold; font-size: 14px;">فيديو مباشر</span>
                 </div>`;
             this.syncGenericVideo(state);
-        } else if (type === 'web') {
+        } /* else if (type === 'web') {
             this.browserContainer.classList.remove('hidden');
             if (this.role === 'owner') this.browserToolbar.classList.remove('hidden');
 
@@ -673,7 +675,7 @@ class LiveManager {
                     <span style="color: white; font-weight: bold; font-size: 14px;">متصفح</span>
                 </div>`;
             this.syncBrowser(state);
-        }
+        } */
     }
 
     syncYouTube(state) {
@@ -1075,11 +1077,16 @@ class LiveManager {
                 type = 'video';
                 url = this.processUrl(input);
             } else {
-                type = 'web';
-                url = this.processUrl(input);
+                // type = 'web';
+                // url = this.processUrl(input);
+                this.showToast("عذراً، ميزة المتصفح معطلة حالياً لأسباب أمنية.");
+                return;
             }
-        } else if (type === 'video' || type === 'web') {
+        } else if (type === 'video') {
             url = this.processUrl(input);
+        } else if (type === 'web') {
+            this.showToast("عذراً، ميزة المتصفح معطلة حالياً لأسباب أمنية.");
+            return;
         }
 
         this.mediaState = {
