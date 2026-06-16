@@ -7,16 +7,7 @@ import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, child,
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDfcHB-d68R2Kf-jisYudWKIjHZ9lgjUdM",
-  authDomain: "smo1-5f999.firebaseapp.com",
-  projectId: "smo1-5f999",
-  storageBucket: "smo1-5f999.firebasestorage.app",
-  messagingSenderId: "376255463194",
-  appId: "1:376255463194:web:26bd4efe2d8f4c279f76a3",
-  measurementId: "G-T103PXE8LF"
-};
+import { firebaseConfig } from "./config.js";
 
 const SOUNDS = {
     click: 'https://www.soundjay.com/buttons/sounds/button-16.mp3',
@@ -154,6 +145,7 @@ class GameManager {
         this.btnCreateRoom = document.getElementById('btn-create-room');
         this.btnCreateViewingRoom = document.getElementById('btn-create-viewing-room');
         this.btnOnoRoom = document.getElementById('btn-ono-room');
+        this.btnChessRoom = document.getElementById('btn-chess-room');
         this.overlayStart = document.getElementById('overlay-start');
 
         // Opponent progress
@@ -236,6 +228,9 @@ class GameManager {
 
         if (this.btnOnoRoom) {
             this.btnOnoRoom.addEventListener('click', () => this.handleOnoRoomClick());
+        }
+        if (this.btnChessRoom) {
+            this.btnChessRoom.addEventListener('click', () => this.handleChessRoomClick());
         }
 
         this.btnJoinRoom.addEventListener('click', () => this.joinRoom());
@@ -531,6 +526,46 @@ class GameManager {
         }
     }
 
+    async handleChessRoomClick() {
+        if (!this.myId) {
+            this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
+            let attempts = 0;
+            while (!this.myId && attempts < 15) {
+                await new Promise(r => setTimeout(r, 400));
+                attempts++;
+            }
+            if (!this.myId) {
+                this.showToast("❌ فشل الاتصال، يرجى التحقق من الإنترنت");
+                return;
+            }
+        }
+
+        this.playerName = this.playerNameInput.value.trim();
+        if (!this.playerName) { this.showToast("⚠️ الرجاء إدخال اسمك"); return; }
+
+        this.setLoading('btn-chess-room', true);
+
+        try {
+            const roomId = Math.floor(100000 + Math.random() * 900000).toString();
+            const roomRef = ref(this.db, `rooms/${roomId}`);
+            await set(roomRef, {
+                roomType: 'chess',
+                config: {
+                    hostId: this.myId,
+                    gameState: 'lobby',
+                    createdAt: serverTimestamp()
+                }
+            });
+
+            window.location.href = `./chess.html?roomID=${roomId}&username=${encodeURIComponent(this.playerName)}&role=owner`;
+        } catch(e) {
+            console.error(e);
+            this.showToast("❌ حدث خطأ");
+        } finally {
+            this.setLoading('btn-chess-room', false);
+        }
+    }
+
     async createRoom(type = 'game') {
         if (!this.myId) {
             this.showToast("⏳ جاري الاتصال بالخادم... يرجى الانتظار");
@@ -615,6 +650,11 @@ class GameManager {
 
             if (roomData.roomType === 'ono') {
                 window.location.href = `./ono.html?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=guest`;
+                return;
+            }
+
+            if (roomData.roomType === 'chess') {
+                window.location.href = `./chess.html?roomID=${this.roomId}&username=${encodeURIComponent(this.playerName)}&role=guest`;
                 return;
             }
 
