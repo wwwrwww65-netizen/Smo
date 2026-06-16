@@ -9,16 +9,7 @@ import { getDatabase, ref, set, onValue, push, update, onDisconnect, get, remove
 import { getAuth, signInAnonymously, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { CHESS_PIECES } from "./chess-pieces.js";
-
-const firebaseConfig = {
-    apiKey: "AIzaSyDfcHB-d68R2Kf-jisYudWKIjHZ9lgjUdM",
-    authDomain: "smo1-5f999.firebaseapp.com",
-    projectId: "smo1-5f999",
-    storageBucket: "smo1-5f999.firebasestorage.app",
-    messagingSenderId: "376255463194",
-    appId: "1:376255463194:web:26bd4efe2d8f4c279f76a3",
-    measurementId: "G-T103PXE8LF"
-};
+import { firebaseConfig } from "./config.js";
 
 class ChessGameManager {
     constructor() {
@@ -201,9 +192,15 @@ class ChessGameManager {
                 else this.isSpectator = true;
 
                 if (data.config.fen && data.config.fen !== this.game.fen()) {
+                    const oldFen = this.game.fen();
                     this.game.load(data.config.fen);
                     if (this.gameState === 'game' || this.gameState === 'over') {
-                        this.renderBoardWithAnimation(data.config.lastMove);
+                        // Animation: only if it's not the very first position or we have a lastMove
+                        if (data.config.lastMove) {
+                            this.renderBoardWithAnimation(data.config.lastMove);
+                        } else {
+                            this.renderBoard();
+                        }
                     }
                 }
 
@@ -233,6 +230,8 @@ class ChessGameManager {
         // Clear slots
         document.getElementById('slot-0').querySelector('.player-name').textContent = "بانتظار...";
         document.getElementById('slot-1').querySelector('.player-name').textContent = "بانتظار...";
+        document.getElementById('slot-0').querySelector('.avatar-wrapper').classList.remove('active-turn-glow');
+        document.getElementById('slot-1').querySelector('.avatar-wrapper').classList.remove('active-turn-glow');
 
         this.players.filter(p => !p.isSpectator).forEach((p, i) => {
             if (i < 2) {
@@ -269,7 +268,7 @@ class ChessGameManager {
 
         await update(ref(this.db, `rooms/${this.roomId}/config`), {
             gameState: 'game',
-            fen: 'start',
+            fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
             turn: 'w',
             whitePlayerId: this.players[0].id,
             blackPlayerId: this.players[1].id
@@ -400,14 +399,7 @@ class ChessGameManager {
             const sqEl = this.elBoard.querySelector(`[data-square="${m.to}"]`);
             if (sqEl) {
                 const dot = document.createElement('div');
-                dot.style.position = 'absolute';
-                dot.style.top = '50%';
-                dot.style.left = '50%';
-                dot.style.transform = 'translate(-50%, -50%)';
-                dot.style.width = '12px';
-                dot.style.height = '12px';
-                dot.style.backgroundColor = 'rgba(0,0,0,0.2)';
-                dot.style.borderRadius = '50%';
+                dot.className = 'move-dot';
                 sqEl.appendChild(dot);
             }
         });
@@ -419,6 +411,10 @@ class ChessGameManager {
     async syncMove(fen) {
         const history = this.game.history({ verbose: true });
         const lastMove = history.pop();
+
+        // Optimistically render my own move with animation locally first
+        this.renderBoardWithAnimation(lastMove);
+
         await update(ref(this.db, `rooms/${this.roomId}/config`), {
             fen: fen,
             lastMove: lastMove,
@@ -567,6 +563,13 @@ class ChessGameManager {
         const turn = this.game.turn();
         document.getElementById('current-info').classList.toggle('active', this.playerColor === turn);
         document.getElementById('opponent-info').classList.toggle('active', this.playerColor !== turn);
+
+        // Highlight lobby avatars if in lobby
+        if (this.gameState === 'lobby') {
+            const whiteActive = turn === 'w';
+            document.getElementById('slot-0').querySelector('.avatar-wrapper').classList.toggle('active-turn-glow', whiteActive);
+            document.getElementById('slot-1').querySelector('.avatar-wrapper').classList.toggle('active-turn-glow', !whiteActive);
+        }
     }
 }
 
