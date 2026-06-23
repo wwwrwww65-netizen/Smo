@@ -187,6 +187,7 @@ class ChessGameManager {
                 this.whitePlayerId = data.config.whitePlayerId;
                 this.blackPlayerId = data.config.blackPlayerId;
 
+                this.isSpectator = false;
                 if (this.myId === this.whitePlayerId) this.playerColor = 'w';
                 else if (this.myId === this.blackPlayerId) this.playerColor = 'b';
                 else this.isSpectator = true;
@@ -217,7 +218,7 @@ class ChessGameManager {
                 if (this.gameState === 'game' && this.isHost && this.game.turn() !== this.playerColor) {
                     const currentPlayer = this.players.find(p => (this.game.turn() === 'w' ? this.whitePlayerId : this.blackPlayerId) === p.id);
                     if (currentPlayer && currentPlayer.isBot) {
-                        this.handleBotTurn();
+                        this.makeBotMove();
                     }
                 }
             }
@@ -629,7 +630,7 @@ class ChessGameManager {
         const turn = this.game.turn();
         const blackPlayer = this.players.find(p => p.id === this.blackPlayerId);
 
-        if (blackPlayer && blackPlayer.id === 'bot' && turn === 'b') {
+        if (blackPlayer && blackPlayer.isBot && turn === 'b') {
             if (this.botTimeout) clearTimeout(this.botTimeout);
             this.botTimeout = setTimeout(() => {
                 if (this.game.game_over() || this.gameState !== 'game') return; // Guard
