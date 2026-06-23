@@ -330,9 +330,104 @@ class ChessGameManager {
         this.initMoveListeners();
     }
 
+    // Support drag and drop natively or via existing click
+    // the previous click listeners are in initMoveListeners()
+    // let's add CSS for sliding animations and visual highlights in chess.css
+
+
+
+
     initMoveListeners() {
         this.selectedSquare = null;
+        let draggedSquare = null;
+        let ghostEl = null;
+
+        const btnExit = document.getElementById('btn-exit');
+        if (btnExit) {
+            btnExit.addEventListener('click', () => {
+                 if (this.gameState === 'game') {
+                     if (confirm("هل أنت متأكد من الانسحاب؟")) {
+                         this.handleGameOver(true);
+                     }
+                 } else {
+                     window.location.href = './index.html';
+                 }
+            });
+        }
+
+        this.elBoard.addEventListener('mousedown', (e) => {
+            if (this.isSpectator || this.gameState !== 'game') return;
+            if (this.game.turn() !== this.playerColor) return;
+
+            const squareEl = e.target.closest('.square-55d63');
+            if (!squareEl) return;
+
+            const pieceEl = squareEl.querySelector('.piece-417db');
+            if (!pieceEl) return;
+
+            const square = squareEl.dataset.square;
+            const piece = this.game.get(square);
+
+            if (piece && piece.color === this.playerColor) {
+                draggedSquare = square;
+                this.selectedSquare = square;
+                this.highlightPossibleMoves(square);
+
+                // Create ghost
+                ghostEl = pieceEl.cloneNode(true);
+                ghostEl.classList.add('dragging');
+                ghostEl.style.position = 'absolute';
+                ghostEl.style.pointerEvents = 'none';
+                ghostEl.style.zIndex = '1000';
+
+                const rect = squareEl.getBoundingClientRect();
+                ghostEl.style.width = rect.width + 'px';
+                ghostEl.style.height = rect.height + 'px';
+
+                document.body.appendChild(ghostEl);
+                pieceEl.style.opacity = '0.3';
+
+                const moveGhost = (moveEvent) => {
+                    if (!ghostEl) return;
+                    ghostEl.style.left = (moveEvent.clientX - rect.width / 2) + 'px';
+                    ghostEl.style.top = (moveEvent.clientY - rect.height / 2) + 'px';
+                };
+
+                moveGhost(e);
+
+                const upHandler = (upEvent) => {
+                    document.removeEventListener('mousemove', moveGhost);
+                    document.removeEventListener('mouseup', upHandler);
+
+                    if (ghostEl) {
+                        ghostEl.remove();
+                        ghostEl = null;
+                    }
+                    if (pieceEl) {
+                        pieceEl.style.opacity = '1';
+                    }
+
+                    const dropTarget = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+                    const targetSquareEl = dropTarget ? dropTarget.closest('.square-55d63') : null;
+
+                    if (targetSquareEl) {
+                        const targetSquare = targetSquareEl.dataset.square;
+                        if (targetSquare !== draggedSquare) {
+                            this.attemptMove(draggedSquare, targetSquare);
+                            draggedSquare = null;
+                            return;
+                        }
+                    }
+                    draggedSquare = null;
+                };
+
+                document.addEventListener('mousemove', moveGhost);
+                document.addEventListener('mouseup', upHandler);
+            }
+        });
+
         this.elBoard.addEventListener('click', (e) => {
+            if (draggedSquare) return; // handled by mouseup
             if (this.isSpectator || this.gameState !== 'game') return;
             if (this.game.turn() !== this.playerColor) return;
 
@@ -347,38 +442,7 @@ class ChessGameManager {
                     this.renderBoard();
                     return;
                 }
-
-                // Check if move is promotion
-                const moves = this.game.moves({ square: this.selectedSquare, verbose: true });
-                const isPromotion = moves.some(m => m.to === square && m.promotion);
-
-                if (isPromotion) {
-                    this.pendingPromotionMove = { from: this.selectedSquare, to: square };
-                    document.getElementById('modal-promotion').classList.remove('hidden');
-                    return;
-                }
-
-                const move = this.game.move({
-                    from: this.selectedSquare,
-                    to: square,
-                    promotion: 'q'
-                });
-
-                if (move) {
-                    this.syncMove(this.game.fen());
-                    this.selectedSquare = null;
-                } else {
-                    // Check if clicked on another of my own pieces
-                    const piece = this.game.get(square);
-                    if (piece && piece.color === this.playerColor) {
-                        this.selectedSquare = square;
-                        this.renderBoard();
-                        this.highlightPossibleMoves(square);
-                    } else {
-                        this.selectedSquare = null;
-                        this.renderBoard();
-                    }
-                }
+                this.attemptMove(this.selectedSquare, square);
             } else {
                 const piece = this.game.get(square);
                 if (piece && piece.color === this.playerColor) {
@@ -387,6 +451,47 @@ class ChessGameManager {
                 }
             }
         });
+    }
+
+    attemptMove(fromSquare, toSquare) {
+        // Check if move is promotion
+        const moves = this.game.moves({ square: fromSquare, verbose: true });
+        let isPromotion = moves.some(m => m.to === toSquare && m.promotion);
+
+        let promote = 'q';
+        const piece = this.game.get(fromSquare);
+        if (piece && piece.type === 'p' && (toSquare[1] === '8' || toSquare[1] === '1')) {
+            promote = 'q';
+            isPromotion = false;
+        }
+
+        if (isPromotion) {
+            this.pendingPromotionMove = { from: fromSquare, to: toSquare };
+            document.getElementById('modal-promotion').classList.remove('hidden');
+            return;
+        }
+
+        const move = this.game.move({
+            from: fromSquare,
+            to: toSquare,
+            promotion: promote
+        });
+
+        if (move) {
+            this.syncMove(this.game.fen());
+            this.selectedSquare = null;
+        } else {
+            // Check if clicked on another of my own pieces
+            const piece = this.game.get(toSquare);
+            if (piece && piece.color === this.playerColor) {
+                this.selectedSquare = toSquare;
+                this.renderBoard();
+                this.highlightPossibleMoves(toSquare);
+            } else {
+                this.selectedSquare = null;
+                this.renderBoard();
+            }
+        }
     }
 
     highlightPossibleMoves(square) {
@@ -421,12 +526,192 @@ class ChessGameManager {
             lastMoveTime: serverTimestamp()
         });
 
+        this.makeBotMove();
         if (this.game.game_over()) {
             this.handleGameOver();
         }
     }
 
-    async handleGameOver() {
+
+    // --- TIMER LOGIC ---
+    startTimer() {
+        this.stopTimer();
+        const pill = document.getElementById('turn-timer-pill');
+        if (!pill) return;
+
+        if (this.gameState !== 'game') {
+             pill.classList.add('hidden');
+             return;
+        }
+
+        pill.classList.remove('hidden');
+        this.turnStartTime = Date.now();
+        this.turnDuration = 30000; // 30 seconds
+
+        this.timerInterval = setInterval(() => {
+            const elapsed = Date.now() - this.turnStartTime;
+            let remaining = Math.max(0, this.turnDuration - elapsed);
+            const seconds = Math.ceil(remaining / 1000);
+
+            const display = document.getElementById('turn-timer-display');
+            if (display) display.textContent = seconds;
+
+            if (remaining <= 0) {
+                this.stopTimer();
+                this.handleTimeout();
+            }
+        }, 100);
+    }
+
+    stopTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+    }
+
+    async handleTimeout() {
+        if (this.isSpectator || this.game.game_over() || this.gameState !== 'game') return;
+
+        const turn = this.game.turn();
+
+        if (this.playerColor === turn) {
+             let title = "انتهى الوقت!";
+             let message = `لقد خسر ${this.playerName} بسبب نفاد الوقت`;
+             await update(ref(this.db, `rooms/${this.roomId}/config`), {
+                 gameState: 'over',
+                 resultTitle: title,
+                 resultMessage: message
+             });
+        } else if (this.isHost && !this.players.find(p => p.id === (turn === 'w' ? this.whitePlayerId : this.blackPlayerId))) {
+             let title = "انتهى الوقت!";
+             let message = `اللاعب خسر بسبب نفاد الوقت`;
+             await update(ref(this.db, `rooms/${this.roomId}/config`), {
+                 gameState: 'over',
+                 resultTitle: title,
+                 resultMessage: message
+             });
+        }
+    }
+
+    // --- BOT LOGIC (MINIMAX) ---
+    makeBotMove() {
+        if (this.game.game_over() || this.gameState !== 'game') return;
+
+        const turn = this.game.turn();
+        const blackPlayer = this.players.find(p => p.id === this.blackPlayerId);
+
+        if (blackPlayer && blackPlayer.id === 'bot' && turn === 'b') {
+            if (this.botTimeout) clearTimeout(this.botTimeout);
+            this.botTimeout = setTimeout(() => {
+                if (this.game.game_over() || this.gameState !== 'game') return; // Guard
+                const bestMove = this.getBestMove(3); // depth 3
+                if (bestMove) {
+                    this.game.move(bestMove);
+                    this.syncMove(this.game.fen());
+                }
+            }, 500);
+        }
+    }
+
+
+    getBestMove(depth) {
+        const moves = this.game.moves({ verbose: true });
+        if (moves.length === 0) return null;
+
+        let bestMove = null;
+        let bestValue = -Infinity;
+
+        // Since the bot plays black, we want to maximize Black's score.
+        // Or if we evaluate relative to the current player, we just maximize for whoever is calling this.
+        for (let i = 0; i < moves.length; i++) {
+            const move = moves[i];
+            this.game.move(move);
+            // After moving, it's the opponent's turn. We want the opponent to MINIMIZE our score.
+            // So we call minimax with isMaximizingPlayer = false
+            const boardValue = this.minimax(depth - 1, -Infinity, Infinity, false, this.game.turn() === 'w' ? 'b' : 'w');
+            this.game.undo();
+
+            if (boardValue > bestValue) {
+                bestValue = boardValue;
+                bestMove = move;
+            }
+        }
+
+        if (!bestMove) {
+            return moves[Math.floor(Math.random() * moves.length)];
+        }
+
+        return bestMove;
+    }
+
+    minimax(depth, alpha, beta, isMaximizingPlayer, botColor) {
+        if (depth === 0) return this.evaluateBoard(botColor);
+
+        const moves = this.game.moves();
+        if (moves.length === 0) {
+            if (this.game.in_checkmate()) {
+                return isMaximizingPlayer ? -Infinity : Infinity;
+            }
+            return 0; // Draw
+        }
+
+        if (isMaximizingPlayer) {
+            let bestVal = -Infinity;
+            for (let i = 0; i < moves.length; i++) {
+                this.game.move(moves[i]);
+                bestVal = Math.max(bestVal, this.minimax(depth - 1, alpha, beta, false, botColor));
+                this.game.undo();
+                alpha = Math.max(alpha, bestVal);
+                if (beta <= alpha) break;
+            }
+            return bestVal;
+        } else {
+            let bestVal = Infinity;
+            for (let i = 0; i < moves.length; i++) {
+                this.game.move(moves[i]);
+                bestVal = Math.min(bestVal, this.minimax(depth - 1, alpha, beta, true, botColor));
+                this.game.undo();
+                beta = Math.min(beta, bestVal);
+                if (beta <= alpha) break;
+            }
+            return bestVal;
+        }
+    }
+
+    evaluateBoard(botColor) {
+        let totalEvaluation = 0;
+        const board = this.game.board();
+
+        const pieceValues = {
+            'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 900
+        };
+
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const piece = board[r][c];
+                if (piece) {
+                    const val = pieceValues[piece.type];
+                    // If the piece belongs to the bot, it's a positive score, otherwise negative
+                    totalEvaluation += piece.color === botColor ? val : -val;
+                }
+            }
+        }
+        return totalEvaluation;
+    }
+
+
+    async handleGameOver(isSurrender = false) {
+        this.stopTimer();
+        if (isSurrender) {
+             await update(ref(this.db, `rooms/${this.roomId}/config`), {
+                 gameState: 'over',
+                 resultTitle: "انسحاب!",
+                 resultMessage: `لقد انسحب ${this.playerName}`
+             });
+             return;
+        }
+
         let title = "انتهت اللعبة";
         let message = "";
 
@@ -460,32 +745,37 @@ class ChessGameManager {
         }, 1500);
     }
 
+
     renderBoardWithAnimation(lastMove) {
         if (lastMove) {
             const pieceEl = this.elBoard.querySelector(`[data-square="${lastMove.from}"] .piece-417db`);
             if (pieceEl) {
                 const fromRect = this.elBoard.querySelector(`[data-square="${lastMove.from}"]`).getBoundingClientRect();
-                const toRect = this.elBoard.querySelector(`[data-square="${lastMove.to}"]`).getBoundingClientRect();
-                const dx = toRect.left - fromRect.left;
-                const dy = toRect.top - fromRect.top;
+                const toSq = this.elBoard.querySelector(`[data-square="${lastMove.to}"]`);
+                if (toSq) {
+                    const toRect = toSq.getBoundingClientRect();
+                    const dx = toRect.left - fromRect.left;
+                    const dy = toRect.top - fromRect.top;
 
-                pieceEl.classList.add('moving');
-                pieceEl.style.transform = `translate(${dx}px, ${dy}px)`;
+                    pieceEl.classList.add('moving');
+                    pieceEl.style.transform = `translate(${dx}px, ${dy}px)`;
 
-                setTimeout(() => {
-                    this.renderBoard();
-                    const toSq = this.elBoard.querySelector(`[data-square="${lastMove.to}"]`);
-                    const fromSq = this.elBoard.querySelector(`[data-square="${lastMove.from}"]`);
-                    if (toSq) toSq.classList.add('last-move');
-                    if (fromSq) fromSq.classList.add('last-move');
-                    this.checkCheckStatus();
-                }, 300);
-                return;
+                    setTimeout(() => {
+                        this.renderBoard();
+                        const newToSq = this.elBoard.querySelector(`[data-square="${lastMove.to}"]`);
+                        const newFromSq = this.elBoard.querySelector(`[data-square="${lastMove.from}"]`);
+                        if (newToSq) newToSq.classList.add('last-move');
+                        if (newFromSq) newFromSq.classList.add('last-move');
+                        this.checkCheckStatus();
+                    }, 300);
+                    return;
+                }
             }
         }
         this.renderBoard();
         this.checkCheckStatus();
     }
+
 
     checkCheckStatus() {
         if (this.game.in_check()) {
@@ -534,6 +824,7 @@ class ChessGameManager {
         }
 
         this.updatePlayerInfo();
+        this.startTimer();
     }
 
     showResults(title, message) {
@@ -559,10 +850,23 @@ class ChessGameManager {
             document.getElementById('opponent-avatar').innerHTML = `<img src="${opponent.avatar}">`;
         }
 
+
         // Highlight turn
         const turn = this.game.turn();
-        document.getElementById('current-info').classList.toggle('active', this.playerColor === turn);
-        document.getElementById('opponent-info').classList.toggle('active', this.playerColor !== turn);
+        const currInfo = document.getElementById('current-info');
+        if (currInfo) {
+            currInfo.classList.toggle('active', this.playerColor === turn);
+            const wrapper = currInfo.querySelector('.avatar-wrapper');
+            if (wrapper) wrapper.classList.toggle('active-turn-pulse', this.playerColor === turn);
+        }
+
+        const oppInfo = document.getElementById('opponent-info');
+        if (oppInfo) {
+            oppInfo.classList.toggle('active', this.playerColor !== turn);
+            const oppWrapper = oppInfo.querySelector('.avatar-wrapper');
+            if (oppWrapper) oppWrapper.classList.toggle('active-turn-pulse', this.playerColor !== turn);
+        }
+
 
         // Highlight lobby avatars if in lobby
         if (this.gameState === 'lobby') {
