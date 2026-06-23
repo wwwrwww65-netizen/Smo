@@ -355,7 +355,7 @@ class ChessGameManager {
             });
         }
 
-        this.elBoard.addEventListener('mousedown', (e) => {
+        const handleStart = (e) => {
             if (this.isSpectator || this.gameState !== 'game') return;
             if (this.game.turn() !== this.playerColor) return;
 
@@ -365,10 +365,16 @@ class ChessGameManager {
             const pieceEl = squareEl.querySelector('.piece-417db');
             if (!pieceEl) return;
 
+            // إذا كان المستخدم ضغط للتو على اللمس، نعطيه أولوية (يمنع click مزدوج)
+            if (e.type === 'touchstart') {
+                this.isTouchDrag = true;
+            }
+
             const square = squareEl.dataset.square;
             const piece = this.game.get(square);
 
             if (piece && piece.color === this.playerColor) {
+                e.preventDefault(); // منع السلوك الافتراضي المزعج للموبايل
                 draggedSquare = square;
                 this.selectedSquare = square;
                 this.highlightPossibleMoves(square);
@@ -376,9 +382,9 @@ class ChessGameManager {
                 // Create ghost
                 ghostEl = pieceEl.cloneNode(true);
                 ghostEl.classList.add('dragging');
-                ghostEl.style.position = 'absolute';
+                ghostEl.style.position = 'fixed'; // fixed افضل للموبايل
                 ghostEl.style.pointerEvents = 'none';
-                ghostEl.style.zIndex = '1000';
+                ghostEl.style.zIndex = '9999';
 
                 const rect = squareEl.getBoundingClientRect();
                 ghostEl.style.width = rect.width + 'px';
@@ -387,10 +393,19 @@ class ChessGameManager {
                 document.body.appendChild(ghostEl);
                 pieceEl.style.opacity = '0.3';
 
+                const getClientPos = (evt) => {
+                    if (evt.touches && evt.touches.length > 0) {
+                        return { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+                    }
+                    return { x: evt.clientX, y: evt.clientY };
+                };
+
                 const moveGhost = (moveEvent) => {
                     if (!ghostEl) return;
-                    ghostEl.style.left = (moveEvent.clientX - rect.width / 2) + 'px';
-                    ghostEl.style.top = (moveEvent.clientY - rect.height / 2) + 'px';
+                    moveEvent.preventDefault(); // منع الـ scrolling عند السحب
+                    const pos = getClientPos(moveEvent);
+                    ghostEl.style.left = (pos.x - rect.width / 2) + 'px';
+                    ghostEl.style.top = (pos.y - rect.height / 2) + 'px';
                 };
 
                 moveGhost(e);
@@ -398,6 +413,8 @@ class ChessGameManager {
                 const upHandler = (upEvent) => {
                     document.removeEventListener('mousemove', moveGhost);
                     document.removeEventListener('mouseup', upHandler);
+                    document.removeEventListener('touchmove', moveGhost);
+                    document.removeEventListener('touchend', upHandler);
 
                     if (ghostEl) {
                         ghostEl.remove();
@@ -407,7 +424,11 @@ class ChessGameManager {
                         pieceEl.style.opacity = '1';
                     }
 
-                    const dropTarget = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+                    const pos = upEvent.changedTouches && upEvent.changedTouches.length > 0
+                                ? { x: upEvent.changedTouches[0].clientX, y: upEvent.changedTouches[0].clientY }
+                                : { x: upEvent.clientX, y: upEvent.clientY };
+
+                    const dropTarget = document.elementFromPoint(pos.x, pos.y);
                     const targetSquareEl = dropTarget ? dropTarget.closest('.square-55d63') : null;
 
                     if (targetSquareEl) {
@@ -415,19 +436,26 @@ class ChessGameManager {
                         if (targetSquare !== draggedSquare) {
                             this.attemptMove(draggedSquare, targetSquare);
                             draggedSquare = null;
+                            setTimeout(() => this.isTouchDrag = false, 100);
                             return;
                         }
                     }
                     draggedSquare = null;
+                    setTimeout(() => this.isTouchDrag = false, 100);
                 };
 
-                document.addEventListener('mousemove', moveGhost);
+                document.addEventListener('mousemove', moveGhost, {passive: false});
                 document.addEventListener('mouseup', upHandler);
+                document.addEventListener('touchmove', moveGhost, {passive: false});
+                document.addEventListener('touchend', upHandler);
             }
-        });
+        };
+
+        this.elBoard.addEventListener('mousedown', handleStart);
+        this.elBoard.addEventListener('touchstart', handleStart, {passive: false});
 
         this.elBoard.addEventListener('click', (e) => {
-            if (draggedSquare) return; // handled by mouseup
+            if (draggedSquare || this.isTouchDrag) return; // handled by up/touchend
             if (this.isSpectator || this.gameState !== 'game') return;
             if (this.game.turn() !== this.playerColor) return;
 
