@@ -288,10 +288,10 @@ body.chat-open .game-container {
 
 /* Subtle Gradient Squares */
 .white-1e1d7 {
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    background: var(--board-light);
 }
 .black-3b854 {
-    background: linear-gradient(135deg, #475569 0%, #334155 100%);
+    background: var(--board-dark);
 }
 
 /* Piece Animations */
@@ -314,21 +314,20 @@ body.chat-open .game-container {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 14px;
-    height: 14px;
-    background: var(--primary-glow);
+    width: 25%;
+    height: 25%;
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 50%;
-    box-shadow: 0 0 15px var(--primary-glow);
     pointer-events: none;
-    opacity: 0.7;
+    z-index: 10;
 }
 
 .highlight-square {
-    box-shadow: inset 0 0 0 3px var(--primary-glow) !important;
+    background: rgba(255, 255, 51, 0.5) !important;
 }
 
 .last-move {
-    background: rgba(251, 191, 36, 0.2) !important;
+    background: rgba(255, 255, 51, 0.5) !important;
 }
 
 /* Pulsing Red King Check */
@@ -511,11 +510,11 @@ body.chat-open .game-container {
 }
 
 
-/* Force dark theme logic & Beige Pieces */
+/* Force dark theme logic */
 :root {
     --bg-dark: #0a0e17;
-    --board-light: #f0d9b5;
-    --board-dark: #b58863;
+    --board-light: #ebecd0;
+    --board-dark: #739552;
     --text-primary: #ffffff;
     --text-secondary: #a0aec0;
 }
@@ -531,11 +530,6 @@ body, html {
 }
 .square-55d63.black-3b854 {
     background-color: var(--board-dark) !important;
-}
-
-/* Specific piece recolor (only white pieces to beige) */
-.piece-417db[data-piece^="w"] svg path {
-    fill: #f0d9b5 !important;
 }
 
 /* Timer & Pulses */
@@ -578,16 +572,3 @@ body, html {
     z-index: 1000 !important;
 }
 
-/* Move dots highlights */
-.move-dot {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 25%;
-    height: 25%;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 10;
-}
