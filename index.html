@@ -9,23 +9,97 @@
     <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#0f172a">
     <link rel="stylesheet" href="css/style.css">
-    <!-- spa.css removed, using style.css -->
+    <style>
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        .auth-tabs button {
+            padding: 10px 20px;
+            border: none;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .auth-tabs button.active {
+            background: #38ef7d;
+            color: #000;
+        }
+        .auth-section {
+            display: none;
+        }
+        .auth-section.active {
+            display: block;
+        }
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff6b6b;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .error-message.show {
+            display: block;
+        }
+        .success-message {
+            background: rgba(56, 239, 125, 0.2);
+            color: #38ef7d;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .success-message.show {
+            display: block;
+        }
+    </style>
 </head>
 <body class="spa-shell">
-
+    
     <!-- Auth / Splash Screen -->
     <div id="auth-screen" class="active-screen">
         <div class="auth-container">
             <h1 class="glow-text">سمو الأميرة</h1>
             <p>أهلاً بك في عالم الترفيه</p>
+            
             <div class="card auth-card">
-                <input type="text" id="auth-name" placeholder="أدخل اسمك" maxlength="15">
-                <input type="password" id="auth-password" placeholder="كلمة المرور">
-                <div class="gender-selection">
-                    <button type="button" class="btn-gender" data-gender="male">👨 ذكر</button>
-                    <button type="button" class="btn-gender" data-gender="female">👩 أنثى</button>
+                <!-- Tabs -->
+                <div class="auth-tabs">
+                    <button class="auth-tab-btn active" data-tab="login">دخول 🔓</button>
+                    <button class="auth-tab-btn" data-tab="signup">إنشاء حساب 🔐</button>
                 </div>
-                <button id="btn-login" class="btn-primary">دخول</button>
+
+                <!-- رسائل الخطأ والنجاح -->
+                <div class="error-message" id="error-message"></div>
+                <div class="success-message" id="success-message"></div>
+
+                <!-- تسجيل الدخول -->
+                <div class="auth-section active" id="login-section">
+                    <h3 style="color: white; text-align: center; margin-bottom: 15px;">تسجيل الدخول</h3>
+                    <input type="text" id="login-email" placeholder="أدخ�� البريد الإلكتروني أو اسم المستخدم">
+                    <input type="password" id="login-password" placeholder="أدخل كلمة المرور">
+                    <button id="btn-login" class="btn-primary" style="width: 100%; margin-top: 15px;">دخول</button>
+                </div>
+
+                <!-- إنشاء حساب جديد -->
+                <div class="auth-section" id="signup-section">
+                    <h3 style="color: white; text-align: center; margin-bottom: 15px;">إنشاء حساب جديد</h3>
+                    <input type="text" id="signup-name" placeholder="أدخل اسمك" maxlength="15">
+                    <input type="email" id="signup-email" placeholder="أدخل البريد الإلكتروني">
+                    <input type="password" id="signup-password" placeholder="أدخل كلمة المرور (6+ أحرف)">
+                    <input type="password" id="signup-password-confirm" placeholder="تأكيد كلمة المرور">
+                    <div class="gender-selection" style="margin: 15px 0;">
+                        <button type="button" class="btn-gender" data-gender="male">👨 ذكر</button>
+                        <button type="button" class="btn-gender" data-gender="female">👩 أنثى</button>
+                    </div>
+                    <button id="btn-signup" class="btn-primary" style="width: 100%; margin-top: 15px;">إنشاء حساب</button>
+                </div>
             </div>
         </div>
     </div>
@@ -186,10 +260,6 @@
 
     <script type="module" src="js/spa.js"></script>
 
-
-<!-- Add a small compose section for posts -->
-
-
 <!-- Legacy Room Modal (Floating) -->
 <div id="legacy-room-modal" class="iframe-modal hidden" style="width: 350px; height: 500px; bottom: 80px; top: auto; right: 20px; left: auto; border-radius: 16px; box-shadow: var(--glass-shadow);">
     <div style="background: var(--bg-dark); padding: 10px; display: flex; justify-content: space-between; border-top-left-radius: 16px; border-top-right-radius: 16px;">
@@ -203,7 +273,7 @@
 </div>
 
 <!-- Minimized Room Bubble -->
-<div id="minimized-room-bubble" class="hidden" style="position: fixed; bottom: 80px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background: var(--primary-gradient); z-index: 9999; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: var(--glass-shadow); color: white; font-size: 24px;">
+<div id="minimized-room-bubble" class="hidden" style="position: fixed; bottom: 80px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background: var(--primary-gradient); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 28px; box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);">
     🎙️
 </div>
 
