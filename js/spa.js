@@ -48,6 +48,7 @@ const gameCards = document.querySelectorAll('.game-card');
 const iframeModal = document.getElementById('iframe-modal');
 const gameIframe = document.getElementById('game-iframe');
 const btnCloseIframe = document.getElementById('btn-close-iframe');
+const btnCreateMyRoom = document.getElementById('btn-create-my-room');
 
 // Message Elements
 const postsFeed = document.getElementById('posts-feed');
@@ -114,7 +115,7 @@ btnLogin.addEventListener('click', async () => {
 
     try {
         // البحث عن المستخدم في Firebase
-        if (!db) throw new Error('ق��عدة البيانات غير متصلة');
+        if (!db) throw new Error('قاعدة البيانات غير متصلة');
 
         const usersRef = ref(db, 'users');
         const snapshot = await get(usersRef);
@@ -312,6 +313,122 @@ subTabs.forEach(tab => {
     });
 });
 
+// Create My Room
+btnCreateMyRoom.addEventListener('click', async () => {
+    if (!currentUser) {
+        showError('يرجى تسجيل الدخول أولاً');
+        return;
+    }
+
+    try {
+        if (!db) throw new Error('قاعدة البيانات غير متصلة');
+
+        const roomId = `room_${currentUser.id}_${Date.now()}`;
+        const newRoom = {
+            id: roomId,
+            name: `غرفة ${currentUser.name}`,
+            owner: currentUser.name,
+            ownerId: currentUser.id,
+            ownerAvatar: currentUser.avatar,
+            capacity: 8,
+            currentUsers: 1,
+            level: currentUser.level,
+            createdAt: Date.now(),
+            isActive: true
+        };
+
+        await set(ref(db, `user_rooms/${currentUser.id}/${roomId}`), newRoom);
+        showSuccess(`✅ تم إنشاء غرفتك!\nاسم الغرفة: ${newRoom.name}`);
+        console.log('✅ Room created:', newRoom);
+        
+        // إعادة تحميل قائمة الغرف
+        loadUserRooms();
+    } catch (error) {
+        showError('خطأ في إنشاء الغرفة: ' + error.message);
+        console.error('❌ Room creation error:', error);
+    }
+});
+
+// Load User Rooms
+function loadUserRooms() {
+    if (!currentUser || !db) return;
+
+    try {
+        const userRoomsRef = ref(db, `user_rooms/${currentUser.id}`);
+        onValue(userRoomsRef, (snapshot) => {
+            const myRoomContent = document.getElementById('rooms-my-room');
+            if (!myRoomContent) return;
+
+            const rooms = snapshot.val();
+            let roomsHTML = '<button id="btn-create-my-room" class="btn-primary">إنشاء غرفة جديدة 🎤</button>';
+            
+            if (rooms) {
+                roomsHTML += '<div style="margin-top: 20px;">';
+                for (const roomId in rooms) {
+                    const room = rooms[roomId];
+                    roomsHTML += `
+                    <div class="room-card" data-room="${roomId}" style="margin-bottom: 15px; cursor: pointer;">
+                        <img src="${room.ownerAvatar}" class="room-avatar">
+                        <div class="room-info">
+                            <div class="room-name">${room.name}</div>
+                            <div class="room-stats">المضيف: ${room.owner} | 👥 ${room.currentUsers}/${room.capacity} | Lvl ${room.level}</div>
+                        </div>
+                    </div>`;
+                }
+                roomsHTML += '</div>';
+            }
+
+            myRoomContent.innerHTML = roomsHTML;
+            
+            // إعادة تعيين مستمع الزر الجديد
+            const newBtnCreateMyRoom = myRoomContent.querySelector('#btn-create-my-room');
+            if (newBtnCreateMyRoom) {
+                newBtnCreateMyRoom.addEventListener('click', async () => {
+                    if (!currentUser) {
+                        showError('يرجى تسجيل الدخول أولاً');
+                        return;
+                    }
+
+                    try {
+                        const roomId = `room_${currentUser.id}_${Date.now()}`;
+                        const newRoom = {
+                            id: roomId,
+                            name: `غرفة ${currentUser.name}`,
+                            owner: currentUser.name,
+                            ownerId: currentUser.id,
+                            ownerAvatar: currentUser.avatar,
+                            capacity: 8,
+                            currentUsers: 1,
+                            level: currentUser.level,
+                            createdAt: Date.now(),
+                            isActive: true
+                        };
+
+                        await set(ref(db, `user_rooms/${currentUser.id}/${roomId}`), newRoom);
+                        showSuccess(`✅ تم إنشاء غرفتك!\nاسم الغرفة: ${newRoom.name}`);
+                        console.log('✅ Room created:', newRoom);
+                    } catch (error) {
+                        showError('خطأ في إنشاء الغرفة: ' + error.message);
+                    }
+                });
+            }
+
+            // إضافة مستمع الروم كاردات
+            const roomCards = myRoomContent.querySelectorAll('.room-card');
+            roomCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    const roomId = card.dataset.room;
+                    if (roomId) {
+                        window.location.href = `live/index.html?room=${roomId}`;
+                    }
+                });
+            });
+        });
+    } catch (error) {
+        console.error('❌ Error loading user rooms:', error);
+    }
+}
+
 // Logout
 btnLogout.addEventListener('click', () => {
     localStorage.removeItem('sumu_user');
@@ -379,6 +496,9 @@ function initFirebaseData() {
                 }
             }
         });
+
+        // Load user rooms
+        loadUserRooms();
     } catch (error) {
         console.error('❌ Firebase data initialization failed:', error);
     }
