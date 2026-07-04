@@ -1,6 +1,6 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, update, push, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { firebaseConfig } from './config.js';
 
 let app, db;
@@ -12,37 +12,82 @@ try {
     console.error('❌ Firebase initialization failed:', error);
 }
 
+// DOM Elements
 const authScreen = document.getElementById('auth-screen');
 const mainSpa = document.getElementById('main-spa');
 const navItems = document.querySelectorAll('.nav-item');
 const spaTabs = document.querySelectorAll('.spa-tab');
-const btnGender = document.querySelectorAll('.btn-gender');
+
+// Auth Tabs
+const authTabBtns = document.querySelectorAll('.auth-tab-btn');
+const authSections = document.querySelectorAll('.auth-section');
+
+// Login Elements
+const loginEmail = document.getElementById('login-email');
+const loginPassword = document.getElementById('login-password');
 const btnLogin = document.getElementById('btn-login');
-const authName = document.getElementById('auth-name');
-const authPassword = document.getElementById('auth-password');
+
+// Signup Elements
+const signupName = document.getElementById('signup-name');
+const signupEmail = document.getElementById('signup-email');
+const signupPassword = document.getElementById('signup-password');
+const signupPasswordConfirm = document.getElementById('signup-password-confirm');
+const btnGender = document.querySelectorAll('.btn-gender');
+const btnSignup = document.getElementById('btn-signup');
+
+// Profile Elements
 const headerAvatar = document.getElementById('header-avatar');
 const headerGold = document.getElementById('header-gold');
 const profileAvatarLarge = document.getElementById('profile-avatar-large');
 const profileNameLarge = document.getElementById('profile-name-large');
 const profileIdLarge = document.getElementById('profile-id-large');
 const btnLogout = document.getElementById('btn-logout');
+
+// Game & Room Elements
 const gameCards = document.querySelectorAll('.game-card');
 const iframeModal = document.getElementById('iframe-modal');
 const gameIframe = document.getElementById('game-iframe');
 const btnCloseIframe = document.getElementById('btn-close-iframe');
 
+// Message Elements
+const postsFeed = document.getElementById('posts-feed');
+const messagesList = document.getElementById('messages-list');
+
+// Error/Success Messages
+const errorMessage = document.getElementById('error-message');
+const successMessage = document.getElementById('success-message');
+
 let currentUser = null;
 let selectedGender = null;
 
-function checkAuth() {
-    const savedUser = localStorage.getItem('sumu_user');
-    if (savedUser) {
-        currentUser = JSON.parse(savedUser);
-        showSpa();
-        initFirebaseData();
-    }
+// Utility Functions
+function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.classList.add('show');
+    setTimeout(() => errorMessage.classList.remove('show'), 4000);
+    console.error('❌', message);
 }
 
+function showSuccess(message) {
+    successMessage.textContent = message;
+    successMessage.classList.add('show');
+    setTimeout(() => successMessage.classList.remove('show'), 3000);
+    console.log('✅', message);
+}
+
+// Auth Tab Switching
+authTabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        authTabBtns.forEach(b => b.classList.remove('active'));
+        authSections.forEach(section => section.classList.remove('active'));
+        
+        btn.classList.add('active');
+        const tabName = btn.dataset.tab;
+        document.getElementById(`${tabName}-section`).classList.add('active');
+    });
+});
+
+// Gender Selection for Signup
 btnGender.forEach(btn => {
     btn.addEventListener('click', () => {
         btnGender.forEach(b => b.classList.remove('selected'));
@@ -51,39 +96,157 @@ btnGender.forEach(btn => {
     });
 });
 
+// Login Function
 btnLogin.addEventListener('click', async () => {
-    const name = authName.value.trim();
-    const pass = authPassword.value;
-    if (!name || !pass || !selectedGender) {
-        alert('يرجى إدخال الاسم وكلمة المرور واختيار الجنس.');
+    const email = loginEmail.value.trim();
+    const password = loginPassword.value;
+
+    if (!email || !password) {
+        showError('يرجى إدخال البريد الإلكتروني وكلمة المرور');
         return;
     }
-    
+
     try {
-        const id = '100' + Math.floor(100000 + Math.random() * 900000);
-        const avatar = selectedGender === 'male' ? `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}&b=%234f46e5` : `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}1&b=%23ec4899`;
-        const user = { id, name, gender: selectedGender, avatar, gold: 1000, level: 1 };
+        // البحث عن المستخدم في Firebase
+        if (!db) throw new Error('قاعدة البيانات غير متصلة');
+
+        const usersRef = ref(db, 'users');
+        const snapshot = await get(usersRef);
         
-        if (db) {
-            await set(ref(db, `users/${id}`), user);
-            console.log('✅ User saved to Firebase:', user);
+        if (!snapshot.exists()) {
+            showError('لا توجد حسابات مسجلة. يرجى إنشاء حساب جديد.');
+            return;
         }
-        
-        localStorage.setItem('sumu_user', JSON.stringify(user));
-        currentUser = user;
-        console.log('✅ User logged in:', currentUser);
-        showSpa();
-        initFirebaseData();
-    } catch (e) {
-        console.error('❌ Login error:', e);
-        alert('حدث خطأ أثناء التسجيل: ' + e.message);
+
+        const users = snapshot.val();
+        let foundUser = null;
+
+        // البحث عن المستخدم بناءً على البريد أو الاسم
+        for (const uid in users) {
+            const user = users[uid];
+            if ((user.email === email || user.name === email) && user.password === password) {
+                foundUser = { ...user, uid };
+                break;
+            }
+        }
+
+        if (foundUser) {
+            currentUser = foundUser;
+            localStorage.setItem('sumu_user', JSON.stringify(currentUser));
+            localStorage.setItem('sumu_user_id', foundUser.uid);
+            showSuccess('تم تسجيل الدخول بنجاح!');
+            console.log('✅ User logged in:', currentUser);
+            showSpa();
+            initFirebaseData();
+        } else {
+            showError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+        }
+    } catch (error) {
+        showError('خطأ في تسجيل الدخول: ' + error.message);
+        console.error('❌ Login error:', error);
     }
 });
 
-btnLogout.addEventListener('click', () => {
-    localStorage.removeItem('sumu_user');
-    location.reload();
+// Signup Function
+btnSignup.addEventListener('click', async () => {
+    const name = signupName.value.trim();
+    const email = signupEmail.value.trim();
+    const password = signupPassword.value;
+    const passwordConfirm = signupPasswordConfirm.value;
+
+    if (!name || !email || !password || !selectedGender) {
+        showError('يرجى ملء جميع الحقول واختيار الجنس');
+        return;
+    }
+
+    if (password.length < 6) {
+        showError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+        return;
+    }
+
+    if (password !== passwordConfirm) {
+        showError('كلمات ال��رور غير متطابقة');
+        return;
+    }
+
+    if (!email.includes('@')) {
+        showError('البريد الإلكتروني غير صحيح');
+        return;
+    }
+
+    try {
+        if (!db) throw new Error('قاعدة البيانات غير متصلة');
+
+        // التحقق من عدم وجود بريد مسجل بالفعل
+        const usersRef = ref(db, 'users');
+        const snapshot = await get(usersRef);
+        
+        if (snapshot.exists()) {
+            const users = snapshot.val();
+            for (const uid in users) {
+                if (users[uid].email === email) {
+                    showError('هذا البريد الإلكتروني مسجل بالفعل');
+                    return;
+                }
+            }
+        }
+
+        const userId = 'user_' + Date.now();
+        const avatar = selectedGender === 'male' 
+            ? `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}&b=%234f46e5` 
+            : `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}1&b=%23ec4899`;
+
+        const newUser = {
+            id: userId,
+            name,
+            email,
+            password, // ⚠️ ملاحظة: في التطبيقات الحقيقية، استخدم التشفير
+            gender: selectedGender,
+            avatar,
+            gold: 1000,
+            level: 1,
+            createdAt: Date.now()
+        };
+
+        await set(ref(db, `users/${userId}`), newUser);
+        
+        currentUser = { ...newUser, uid: userId };
+        localStorage.setItem('sumu_user', JSON.stringify(currentUser));
+        localStorage.setItem('sumu_user_id', userId);
+        
+        showSuccess('تم إنشاء الحساب بنجاح! جاري تسجيل الدخول...');
+        console.log('✅ New user created:', currentUser);
+        
+        // إعادة تعيين النموذج
+        signupName.value = '';
+        signupEmail.value = '';
+        signupPassword.value = '';
+        signupPasswordConfirm.value = '';
+        selectedGender = null;
+        btnGender.forEach(b => b.classList.remove('selected'));
+        
+        setTimeout(() => {
+            showSpa();
+            initFirebaseData();
+        }, 1000);
+    } catch (error) {
+        showError('خطأ في إنشاء الحساب: ' + error.message);
+        console.error('❌ Signup error:', error);
+    }
 });
+
+// Check existing auth
+function checkAuth() {
+    const savedUser = localStorage.getItem('sumu_user');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        console.log('✅ User restored from localStorage:', currentUser);
+        showSpa();
+        initFirebaseData();
+    } else {
+        console.log('📍 No saved user, showing auth screen');
+    }
+}
 
 function showSpa() {
     console.log('📍 Showing SPA...');
@@ -102,6 +265,7 @@ function showSpa() {
     }
 }
 
+// Navigation
 navItems.forEach(item => {
     item.addEventListener('click', () => {
         navItems.forEach(nav => nav.classList.remove('active'));
@@ -115,6 +279,7 @@ navItems.forEach(item => {
     });
 });
 
+// Game Cards
 gameCards.forEach(card => {
     card.addEventListener('click', () => {
         const gameUrl = card.dataset.game;
@@ -130,6 +295,7 @@ btnCloseIframe.addEventListener('click', () => {
     gameIframe.src = '';
 });
 
+// Sub-tabs for Rooms
 const subTabs = document.querySelectorAll('.sub-tab');
 const subContents = document.querySelectorAll('.sub-tab-content');
 subTabs.forEach(tab => {
@@ -147,16 +313,23 @@ subTabs.forEach(tab => {
     });
 });
 
-const postsFeed = document.getElementById('posts-feed');
-const messagesList = document.getElementById('messages-list');
+// Logout
+btnLogout.addEventListener('click', () => {
+    localStorage.removeItem('sumu_user');
+    localStorage.removeItem('sumu_user_id');
+    currentUser = null;
+    location.reload();
+});
 
+// Firebase Data Sync
 function initFirebaseData() {
     if (!db) {
-        console.warn('⚠️ Firebase not initialized, using local data');
+        console.warn('⚠️ Firebase not initialized');
         return;
     }
-    
+
     try {
+        // Posts
         const postsRef = ref(db, 'posts');
         onValue(postsRef, (snapshot) => {
             if(postsFeed) {
@@ -185,6 +358,7 @@ function initFirebaseData() {
             }
         });
 
+        // Messages
         const chatRef = ref(db, 'global_chat');
         onValue(chatRef, (snapshot) => {
             if(messagesList) {
@@ -210,7 +384,7 @@ function initFirebaseData() {
         console.error('❌ Firebase data initialization failed:', error);
     }
 
-    // Render static rooms
+    // Static Rooms
     const roomsList = document.getElementById('active-rooms-list');
     if (roomsList) {
         let roomsHTML = '';
@@ -228,8 +402,9 @@ function initFirebaseData() {
     }
 }
 
-// Global click delegation
+// Global Event Delegation
 document.addEventListener('click', async (e) => {
+    // Posts
     if (e.target.id === 'btn-submit-post') {
         const newPostInput = document.getElementById('new-post-input');
         if (newPostInput && newPostInput.value.trim() && currentUser) {
@@ -245,12 +420,14 @@ document.addEventListener('click', async (e) => {
                     });
                 }
                 newPostInput.value = '';
+                showSuccess('تم نشر المنشور!');
             } catch (error) {
-                console.error('❌ Error posting:', error);
+                showError('خطأ في النشر: ' + error.message);
             }
         }
     }
 
+    // Messages
     if (e.target.id === 'btn-submit-msg') {
         const newMsgInput = document.getElementById('new-msg-input');
         if (newMsgInput && newMsgInput.value.trim() && currentUser) {
@@ -266,13 +443,14 @@ document.addEventListener('click', async (e) => {
                     });
                 }
                 newMsgInput.value = '';
+                showSuccess('تم إرسال الرسالة!');
             } catch (error) {
-                console.error('❌ Error sending message:', error);
+                showError('خطأ في الإرسال: ' + error.message);
             }
         }
     }
 
-
+    // Accept Invite
     if (e.target.classList.contains('btn-accept-invite')) {
         const gameUrl = e.target.dataset.game;
         if (gameUrl) {
@@ -280,6 +458,7 @@ document.addEventListener('click', async (e) => {
         }
     }
 
+    // Game Invite
     if (e.target.closest('.btn-game-invite')) {
         try {
             if (db) {
@@ -287,26 +466,27 @@ document.addEventListener('click', async (e) => {
                 await push(chatRef, {
                     sender: currentUser.name,
                     avatar: currentUser.avatar,
-                    text: "لقد أرسلت دعوة للعب أونو! 🎮",
+                    text: "لق�� أرسلت دعوة للعب أونو! 🎮",
                     timestamp: Date.now(),
                     isInvite: true,
                     gameUrl: 'ono.html'
                 });
             }
-            alert('تم إرسال دعوة للعب في المحادثة العامة!');
+            showSuccess('تم إرسال الدعوة!');
         } catch (error) {
-            console.error('❌ Error sending invite:', error);
+            showError('خطأ في الدعوة: ' + error.message);
         }
     }
 
+    // Room Card
     if (e.target.closest('.room-card')) {
         const roomId = e.target.closest('.room-card').dataset.room;
         if(roomId) {
-            // فتح الغرفة مباشرة بدلاً من النافذة المنبثقة
             window.location.href = 'live/index.html?room=' + roomId;
         }
     }
 
+    // Room Modal Controls
     if (e.target.id === 'btn-minimize-room') {
         document.getElementById('legacy-room-modal').classList.add('hidden');
         document.getElementById('minimized-room-bubble').classList.remove('hidden');
@@ -324,7 +504,7 @@ document.addEventListener('click', async (e) => {
         document.getElementById('legacy-room-modal').classList.remove('hidden');
     }
 
-    // Public profile open logic
+    // Public Profile
     if (e.target.tagName === 'IMG' && (e.target.classList.contains('chat-avatar') || e.target.classList.contains('post-avatar') || e.target.classList.contains('room-avatar'))) {
         const pubAvatar = document.getElementById('pub-avatar');
         const pubName = document.getElementById('pub-name');
@@ -358,4 +538,5 @@ window.launchGame = function(gameUrl) {
     }
 }
 
+// Initialize on Load
 checkAuth();
