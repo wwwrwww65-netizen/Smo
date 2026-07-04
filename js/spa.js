@@ -75,6 +75,12 @@ function showSuccess(message) {
     console.log('✅', message);
 }
 
+// Generate 9-digit ID
+function generateUserId() {
+    // Generate random 9-digit number (100000000 to 999999999)
+    return Math.floor(100000000 + Math.random() * 900000000).toString();
+}
+
 // Auth Tab Switching
 authTabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -102,13 +108,13 @@ btnLogin.addEventListener('click', async () => {
     const password = loginPassword.value;
 
     if (!email || !password) {
-        showError('يرجى إدخال البريد الإلكتروني وكلمة المرور');
+        showError('يرجى إدخال اسم المستخدم وكلمة المرور');
         return;
     }
 
     try {
         // البحث عن المستخدم في Firebase
-        if (!db) throw new Error('قاعدة البيانات غير متصلة');
+        if (!db) throw new Error('ق��عدة البيانات غير متصلة');
 
         const usersRef = ref(db, 'users');
         const snapshot = await get(usersRef);
@@ -121,10 +127,10 @@ btnLogin.addEventListener('click', async () => {
         const users = snapshot.val();
         let foundUser = null;
 
-        // البحث عن المستخدم بناءً على البريد أو الاسم
+        // البحث عن المستخدم بناءً على الاسم أو الـ ID
         for (const uid in users) {
             const user = users[uid];
-            if ((user.email === email || user.name === email) && user.password === password) {
+            if ((user.name === email || user.id === email) && user.password === password) {
                 foundUser = { ...user, uid };
                 break;
             }
@@ -139,7 +145,7 @@ btnLogin.addEventListener('click', async () => {
             showSpa();
             initFirebaseData();
         } else {
-            showError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+            showError('اسم المستخدم أو كلمة المرور غير صحيحة');
         }
     } catch (error) {
         showError('خطأ في تسجيل الدخول: ' + error.message);
@@ -150,11 +156,10 @@ btnLogin.addEventListener('click', async () => {
 // Signup Function
 btnSignup.addEventListener('click', async () => {
     const name = signupName.value.trim();
-    const email = signupEmail.value.trim();
     const password = signupPassword.value;
     const passwordConfirm = signupPasswordConfirm.value;
 
-    if (!name || !email || !password || !selectedGender) {
+    if (!name || !password || !selectedGender) {
         showError('يرجى ملء جميع الحقول واختيار الجنس');
         return;
     }
@@ -165,33 +170,29 @@ btnSignup.addEventListener('click', async () => {
     }
 
     if (password !== passwordConfirm) {
-        showError('كلمات ال��رور غير متطابقة');
-        return;
-    }
-
-    if (!email.includes('@')) {
-        showError('البريد الإلكتروني غير صحيح');
+        showError('كلمات المرور غير متطابقة');
         return;
     }
 
     try {
         if (!db) throw new Error('قاعدة البيانات غير متصلة');
 
-        // التحقق من عدم وجود بريد مسجل بالفعل
+        // التحقق من عدم وجود اسم مكرر
         const usersRef = ref(db, 'users');
         const snapshot = await get(usersRef);
         
         if (snapshot.exists()) {
             const users = snapshot.val();
             for (const uid in users) {
-                if (users[uid].email === email) {
-                    showError('هذا البريد الإلكتروني مسجل بالفعل');
+                if (users[uid].name === name) {
+                    showError('هذا الاسم مستخدم بالفعل. يرجى اختيار اسم آخر');
                     return;
                 }
             }
         }
 
-        const userId = 'user_' + Date.now();
+        // إنشاء ID جديد (9 أرقام)
+        const userId = generateUserId();
         const avatar = selectedGender === 'male' 
             ? `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}&b=%234f46e5` 
             : `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}1&b=%23ec4899`;
@@ -199,7 +200,6 @@ btnSignup.addEventListener('click', async () => {
         const newUser = {
             id: userId,
             name,
-            email,
             password, // ⚠️ ملاحظة: في التطبيقات الحقيقية، استخدم التشفير
             gender: selectedGender,
             avatar,
@@ -214,12 +214,11 @@ btnSignup.addEventListener('click', async () => {
         localStorage.setItem('sumu_user', JSON.stringify(currentUser));
         localStorage.setItem('sumu_user_id', userId);
         
-        showSuccess('تم إنشاء الحساب بنجاح! جاري تسجيل الدخول...');
+        showSuccess(`تم إنشاء الحساب بنجاح! 🎉\nالـ ID الخاص بك: ${userId}`);
         console.log('✅ New user created:', currentUser);
         
         // إعادة تعيين النموذج
         signupName.value = '';
-        signupEmail.value = '';
         signupPassword.value = '';
         signupPasswordConfirm.value = '';
         selectedGender = null;
@@ -228,7 +227,7 @@ btnSignup.addEventListener('click', async () => {
         setTimeout(() => {
             showSpa();
             initFirebaseData();
-        }, 1000);
+        }, 1500);
     } catch (error) {
         showError('خطأ في إنشاء الحساب: ' + error.message);
         console.error('❌ Signup error:', error);
@@ -466,7 +465,7 @@ document.addEventListener('click', async (e) => {
                 await push(chatRef, {
                     sender: currentUser.name,
                     avatar: currentUser.avatar,
-                    text: "لق�� أرسلت دعوة للعب أونو! 🎮",
+                    text: "لقد أرسلت دعوة للعب أونو! 🎮",
                     timestamp: Date.now(),
                     isInvite: true,
                     gameUrl: 'ono.html'
@@ -521,7 +520,7 @@ document.addEventListener('click', async (e) => {
         }
 
         pubName.innerText = nameText;
-        pubId.innerText = '100' + Math.floor(100000 + Math.random() * 900000);
+        pubId.innerText = generateUserId();
 
         document.getElementById('public-profile-modal').classList.remove('hidden');
     }
