@@ -174,9 +174,10 @@ function initFirebaseData() {
                         <img src="${msg.avatar}" class="chat-avatar">
                         <div class="chat-info">
                             <div class="chat-name">${msg.sender}</div>
-                            <div class="chat-preview">${msg.isInvite ? '<button class="btn-primary btn-accept-invite" style="font-size:12px; padding:5px 10px; margin-top:5px;" data-game="'+msg.gameUrl+'">قبول والانضمام 🎮</button>' : msg.text}</div>
+                            <div class="chat-preview">${msg.isInvite ? '<button class="btn-primary btn-accept-invite" style="font-size:12px; padding:5px 10px; margin-top:5px;" data-game="'+msg.ga[...]
+                            </div>
+                            <button class="btn-game-invite" title="دعوة للعب">🎮</button>
                         </div>
-                        <button class="btn-game-invite" title="دعوة للعب">🎮</button>
                     </div>` + messagesList.innerHTML;
                 });
             }
@@ -257,10 +258,8 @@ document.addEventListener('click', async (e) => {
     if (e.target.closest('.room-card')) {
         const roomId = e.target.closest('.room-card').dataset.room;
         if(roomId) {
-            const legacyModal = document.getElementById('legacy-room-modal');
-            const roomIframe = document.getElementById('room-iframe');
-            roomIframe.src = 'legacy_game.html?room=' + roomId;
-            legacyModal.classList.remove('hidden');
+            // فتح الغرفة مباشرة بدلاً من النافذة المنبثقة
+            window.location.href = 'live/index.html?room=' + roomId;
         }
     }
 
