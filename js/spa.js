@@ -3,8 +3,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getDatabase, ref, set, get, onValue, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { firebaseConfig } from './config.js';
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+let app, db;
+try {
+    app = initializeApp(firebaseConfig);
+    db = getDatabase(app);
+    console.log('✅ Firebase initialized successfully');
+} catch (error) {
+    console.error('❌ Firebase initialization failed:', error);
+}
 
 const authScreen = document.getElementById('auth-screen');
 const mainSpa = document.getElementById('main-spa');
@@ -52,16 +58,24 @@ btnLogin.addEventListener('click', async () => {
         alert('يرجى إدخال الاسم وكلمة المرور واختيار الجنس.');
         return;
     }
-    const id = '100' + Math.floor(100000 + Math.random() * 900000);
-    const avatar = selectedGender === 'male' ? `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}&b=%234f46e5` : `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}1&b=%23ec4899`;
-    const user = { id, name, gender: selectedGender, avatar, gold: 1000, level: 1 };
+    
     try {
-        await set(ref(db, `users/${id}`), user);
+        const id = '100' + Math.floor(100000 + Math.random() * 900000);
+        const avatar = selectedGender === 'male' ? `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}&b=%234f46e5` : `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}1&b=%23ec4899`;
+        const user = { id, name, gender: selectedGender, avatar, gold: 1000, level: 1 };
+        
+        if (db) {
+            await set(ref(db, `users/${id}`), user);
+            console.log('✅ User saved to Firebase:', user);
+        }
+        
         localStorage.setItem('sumu_user', JSON.stringify(user));
         currentUser = user;
+        console.log('✅ User logged in:', currentUser);
         showSpa();
         initFirebaseData();
     } catch (e) {
+        console.error('❌ Login error:', e);
         alert('حدث خطأ أثناء التسجيل: ' + e.message);
     }
 });
@@ -72,15 +86,19 @@ btnLogout.addEventListener('click', () => {
 });
 
 function showSpa() {
+    console.log('📍 Showing SPA...');
     authScreen.classList.remove('active-screen');
     authScreen.style.display = 'none';
     mainSpa.classList.remove('hidden');
+    mainSpa.style.display = 'block';
+    
     if (currentUser) {
         headerAvatar.src = currentUser.avatar;
         headerGold.innerText = currentUser.gold || 0;
         profileAvatarLarge.src = currentUser.avatar;
         profileNameLarge.innerText = currentUser.name;
         profileIdLarge.innerText = currentUser.id;
+        console.log('✅ SPA displayed successfully');
     }
 }
 
@@ -133,56 +151,64 @@ const postsFeed = document.getElementById('posts-feed');
 const messagesList = document.getElementById('messages-list');
 
 function initFirebaseData() {
-    const postsRef = ref(db, 'posts');
-    onValue(postsRef, (snapshot) => {
-        if(postsFeed) {
-            postsFeed.innerHTML = '';
-            const posts = snapshot.val();
-            if(posts) {
-                Object.keys(posts).forEach(key => {
-                    const post = posts[key];
-                    postsFeed.innerHTML = `
-                    <div class="post-card">
-                        <div class="post-header">
-                            <img src="${post.authorAvatar}" class="post-avatar">
-                            <div>
-                                <div class="post-author">${post.authorName}</div>
-                                <div class="post-time">${new Date(post.timestamp).toLocaleTimeString('ar-SA')}</div>
+    if (!db) {
+        console.warn('⚠️ Firebase not initialized, using local data');
+        return;
+    }
+    
+    try {
+        const postsRef = ref(db, 'posts');
+        onValue(postsRef, (snapshot) => {
+            if(postsFeed) {
+                postsFeed.innerHTML = '';
+                const posts = snapshot.val();
+                if(posts) {
+                    Object.keys(posts).forEach(key => {
+                        const post = posts[key];
+                        postsFeed.innerHTML = `
+                        <div class="post-card">
+                            <div class="post-header">
+                                <img src="${post.authorAvatar}" class="post-avatar">
+                                <div>
+                                    <div class="post-author">${post.authorName}</div>
+                                    <div class="post-time">${new Date(post.timestamp).toLocaleTimeString('ar-SA')}</div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="post-content">${post.content}</div>
-                        <div class="post-actions">
-                            <button class="btn-post-action">❤️ إعجاب (${post.likes || 0})</button>
-                            <button class="btn-post-action">💬 تعليق</button>
-                        </div>
-                    </div>` + postsFeed.innerHTML;
-                });
+                            <div class="post-content">${post.content}</div>
+                            <div class="post-actions">
+                                <button class="btn-post-action">❤️ إعجاب (${post.likes || 0})</button>
+                                <button class="btn-post-action">💬 تعليق</button>
+                            </div>
+                        </div>` + postsFeed.innerHTML;
+                    });
+                }
             }
-        }
-    });
+        });
 
-    const chatRef = ref(db, 'global_chat');
-    onValue(chatRef, (snapshot) => {
-        if(messagesList) {
-            messagesList.innerHTML = '';
-            const messages = snapshot.val();
-            if(messages) {
-                Object.keys(messages).forEach(key => {
-                    const msg = messages[key];
-                    messagesList.innerHTML = `
-                    <div class="chat-item">
-                        <img src="${msg.avatar}" class="chat-avatar">
-                        <div class="chat-info">
-                            <div class="chat-name">${msg.sender}</div>
-                            <div class="chat-preview">${msg.isInvite ? '<button class="btn-primary btn-accept-invite" style="font-size:12px; padding:5px 10px; margin-top:5px;" data-game="'+msg.ga[...]
+        const chatRef = ref(db, 'global_chat');
+        onValue(chatRef, (snapshot) => {
+            if(messagesList) {
+                messagesList.innerHTML = '';
+                const messages = snapshot.val();
+                if(messages) {
+                    Object.keys(messages).forEach(key => {
+                        const msg = messages[key];
+                        messagesList.innerHTML = `
+                        <div class="chat-item">
+                            <img src="${msg.avatar}" class="chat-avatar">
+                            <div class="chat-info">
+                                <div class="chat-name">${msg.sender}</div>
+                                <div class="chat-preview">${msg.isInvite ? '<button class="btn-primary btn-accept-invite" style="font-size:12px; padding:5px 10px; margin-top:5px;" data-game="'+msg.gameUrl+'">دعوة للعب 🎮</button>' : msg.text}</div>
                             </div>
                             <button class="btn-game-invite" title="دعوة للعب">🎮</button>
-                        </div>
-                    </div>` + messagesList.innerHTML;
-                });
+                        </div>` + messagesList.innerHTML;
+                    });
+                }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('❌ Firebase data initialization failed:', error);
+    }
 
     // Render static rooms
     const roomsList = document.getElementById('active-rooms-list');
@@ -207,30 +233,42 @@ document.addEventListener('click', async (e) => {
     if (e.target.id === 'btn-submit-post') {
         const newPostInput = document.getElementById('new-post-input');
         if (newPostInput && newPostInput.value.trim() && currentUser) {
-            const postsRef = ref(db, 'posts');
-            await push(postsRef, {
-                authorName: currentUser.name,
-                authorAvatar: currentUser.avatar,
-                content: newPostInput.value.trim(),
-                timestamp: Date.now(),
-                likes: 0
-            });
-            newPostInput.value = '';
+            try {
+                if (db) {
+                    const postsRef = ref(db, 'posts');
+                    await push(postsRef, {
+                        authorName: currentUser.name,
+                        authorAvatar: currentUser.avatar,
+                        content: newPostInput.value.trim(),
+                        timestamp: Date.now(),
+                        likes: 0
+                    });
+                }
+                newPostInput.value = '';
+            } catch (error) {
+                console.error('❌ Error posting:', error);
+            }
         }
     }
 
     if (e.target.id === 'btn-submit-msg') {
         const newMsgInput = document.getElementById('new-msg-input');
         if (newMsgInput && newMsgInput.value.trim() && currentUser) {
-            const chatRef = ref(db, 'global_chat');
-            await push(chatRef, {
-                sender: currentUser.name,
-                avatar: currentUser.avatar,
-                text: newMsgInput.value.trim(),
-                timestamp: Date.now(),
-                isInvite: false
-            });
-            newMsgInput.value = '';
+            try {
+                if (db) {
+                    const chatRef = ref(db, 'global_chat');
+                    await push(chatRef, {
+                        sender: currentUser.name,
+                        avatar: currentUser.avatar,
+                        text: newMsgInput.value.trim(),
+                        timestamp: Date.now(),
+                        isInvite: false
+                    });
+                }
+                newMsgInput.value = '';
+            } catch (error) {
+                console.error('❌ Error sending message:', error);
+            }
         }
     }
 
@@ -243,16 +281,22 @@ document.addEventListener('click', async (e) => {
     }
 
     if (e.target.closest('.btn-game-invite')) {
-        const chatRef = ref(db, 'global_chat');
-        await push(chatRef, {
-            sender: currentUser.name,
-            avatar: currentUser.avatar,
-            text: "لقد أرسلت دعوة للعب أونو! 🎮",
-            timestamp: Date.now(),
-            isInvite: true,
-            gameUrl: 'ono.html'
-        });
-        alert('تم إرسال دعوة للعب في المحادثة العامة!');
+        try {
+            if (db) {
+                const chatRef = ref(db, 'global_chat');
+                await push(chatRef, {
+                    sender: currentUser.name,
+                    avatar: currentUser.avatar,
+                    text: "لقد أرسلت دعوة للعب أونو! 🎮",
+                    timestamp: Date.now(),
+                    isInvite: true,
+                    gameUrl: 'ono.html'
+                });
+            }
+            alert('تم إرسال دعوة للعب في المحادثة العامة!');
+        } catch (error) {
+            console.error('❌ Error sending invite:', error);
+        }
     }
 
     if (e.target.closest('.room-card')) {
