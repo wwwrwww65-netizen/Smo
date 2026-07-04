@@ -43,6 +43,8 @@
             border-radius: 8px;
             margin-bottom: 10px;
             display: none;
+            text-align: center;
+            font-size: 13px;
         }
         .error-message.show {
             display: block;
@@ -54,6 +56,9 @@
             border-radius: 8px;
             margin-bottom: 10px;
             display: none;
+            text-align: center;
+            font-size: 13px;
+            white-space: pre-line;
         }
         .success-message.show {
             display: block;
@@ -82,17 +87,16 @@
                 <!-- تسجيل الدخول -->
                 <div class="auth-section active" id="login-section">
                     <h3 style="color: white; text-align: center; margin-bottom: 15px;">تسجيل الدخول</h3>
-                    <input type="text" id="login-email" placeholder="أدخ�� البريد الإلكتروني أو اسم المستخدم">
-                    <input type="password" id="login-password" placeholder="أدخل كلمة المرور">
+                    <input type="text" id="login-email" placeholder="اسم المستخدم أو الـ ID">
+                    <input type="password" id="login-password" placeholder="كلمة المرور">
                     <button id="btn-login" class="btn-primary" style="width: 100%; margin-top: 15px;">دخول</button>
                 </div>
 
                 <!-- إنشاء حساب جديد -->
                 <div class="auth-section" id="signup-section">
                     <h3 style="color: white; text-align: center; margin-bottom: 15px;">إنشاء حساب جديد</h3>
-                    <input type="text" id="signup-name" placeholder="أدخل اسمك" maxlength="15">
-                    <input type="email" id="signup-email" placeholder="أدخل البريد الإلكتروني">
-                    <input type="password" id="signup-password" placeholder="أدخل كلمة المرور (6+ أحرف)">
+                    <input type="text" id="signup-name" placeholder="اسم المستخدم" maxlength="15">
+                    <input type="password" id="signup-password" placeholder="كلمة المرور (6+ أحرف)">
                     <input type="password" id="signup-password-confirm" placeholder="تأكيد كلمة المرور">
                     <div class="gender-selection" style="margin: 15px 0;">
                         <button type="button" class="btn-gender" data-gender="male">👨 ذكر</button>
