@@ -419,11 +419,18 @@ class LiveManager {
                 };
                 window.addEventListener('click', resumeContext);
 
-                update(ref(this.db, `rooms/${this.roomId}/users/${this.myId}`), {
+                const userInRoomRef = ref(this.db, `rooms/${this.roomId}/users/${this.myId}`);
+                onDisconnect(userInRoomRef).remove().then(() => {
+                    this.updatePublicRoomCount();
+                });
+
+                await update(userInRoomRef, {
                     name: this.username,
                     avatar: this.userAvatar,
                     lastSeen: serverTimestamp()
                 });
+
+                this.updatePublicRoomCount();
                 this.listenToRoom();
             }
         });
@@ -1609,6 +1616,20 @@ class LiveManager {
             timestamp: serverTimestamp()
         });
         this.chatInput.value = '';
+    }
+
+    async updatePublicRoomCount() {
+        if (!this.roomId) return;
+        const usersRef = ref(this.db, `rooms/${this.roomId}/users`);
+        const snapshot = await get(usersRef);
+        const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+
+        // Update both the specific room and the public index
+        const updates = {};
+        updates[`rooms/${this.roomId}/currentUsers`] = count;
+        updates[`public_rooms/${this.roomId}/currentUsers`] = count;
+
+        await update(ref(this.db), updates);
     }
 
     updateChatUI(messages) {
