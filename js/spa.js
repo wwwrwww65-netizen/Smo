@@ -93,9 +93,9 @@ function updatePresence() {
     });
 }
 
-// Generate 6-digit Room ID
+// Generate 9-digit Room ID starting with 100
 function generateRoomId() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return '100' + Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 // Auth Tab Switching
@@ -335,7 +335,9 @@ btnCloseLauncher.addEventListener('click', () => {
 
 btnLauncherCreate.addEventListener('click', () => {
     if (selectedGameUrl) {
+        // Game rooms use random 9-digit IDs starting with 100
         const roomId = generateRoomId();
+        // Game rooms are NOT added to public_rooms/ index to keep Explore for voice rooms only
         const url = `${selectedGameUrl}?roomID=${roomId}&role=owner&username=${encodeURIComponent(currentUser.name)}`;
         window.launchGame(url);
         gameLauncherModal.classList.add('hidden');
@@ -361,7 +363,7 @@ btnLauncherSearch.addEventListener('click', () => {
     searchTimeout = setTimeout(() => {
         launcherLoading.classList.add('hidden');
         // في التطبيق الحقيقي سنبحث في قاعدة البيانات عن غرف متاحة
-        // هنا سنقوم بإنشاء غرفة جديدة لغرض العرض إذا لم يجد
+        // هنا سنقوم بإنشاء غرفة جديدة لغرض العرض إذا لم يجد (9 أرقام)
         const roomId = generateRoomId();
         const url = `${selectedGameUrl}?roomID=${roomId}&role=owner&username=${encodeURIComponent(currentUser.name)}`;
         window.launchGame(url);
@@ -407,7 +409,8 @@ async function handleCreateRoom() {
     try {
         if (!db) throw new Error('قاعدة البيانات غير متصلة');
 
-        const roomId = generateRoomId();
+        // Room ID is linked to Owner ID (9 digits starting with 100)
+        const roomId = currentUser.id;
         const newRoom = {
             id: roomId,
             name: `غرفة ${currentUser.name}`,
@@ -586,6 +589,12 @@ function initFirebaseData() {
             const roomArray = Object.values(rooms).sort((a, b) => b.createdAt - a.createdAt);
 
             roomArray.forEach(room => {
+                // Filter out malformed rooms or game rooms (if any game-specific marker exists)
+                // Personal voice rooms have all these fields defined
+                if (!room.id || !room.owner || !room.ownerAvatar || room.owner === 'undefined') {
+                    return;
+                }
+
                 roomsHTML += `
                 <div class="room-card" data-room="${room.id}">
                     <img src="${room.ownerAvatar}" class="room-avatar">
@@ -660,7 +669,7 @@ document.addEventListener('click', async (e) => {
     if (e.target.closest('.btn-game-invite')) {
         try {
             if (db) {
-                const roomId = generateRoomId();
+                const roomId = generateRoomId(); // 9 digits
                 const chatRef = ref(db, 'global_chat');
                 await push(chatRef, {
                     sender: currentUser.name,
@@ -1128,7 +1137,7 @@ document.querySelectorAll('.game-invite-option').forEach(opt => {
         const gameUrl = opt.dataset.game;
         const gameName = opt.querySelector('span').innerText;
         const gameIcon = opt.querySelector('.icon').innerText;
-        const roomId = generateRoomId();
+        const roomId = generateRoomId(); // 9 digits
         sendPrivateMessage(`أرسلت دعوة للعب ${gameName}`, 'game_invite', {
             gameUrl, gameName, gameIcon, gameRoom: roomId
         });

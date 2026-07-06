@@ -20,8 +20,19 @@ class LiveManager {
         this.roomId = this.urlParams.get('roomID');
         this.username = this.urlParams.get('username') || 'ضيف';
         this.role = this.urlParams.get('role') || 'guest';
-        this.myId = null;
-        this.userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.username}_${Math.random()}`;
+
+        // Use the unified 9-digit User ID from localStorage
+        const savedUser = localStorage.getItem('sumu_user');
+        if (savedUser) {
+            const userData = JSON.parse(savedUser);
+            this.myId = userData.id;
+            this.username = userData.name;
+            this.userAvatar = userData.avatar;
+        } else {
+            this.myId = localStorage.getItem('sumu_user_id') || null;
+            this.userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.username}_${Math.random()}`;
+        }
+
 
         this.playlistData = {};
 
@@ -400,8 +411,12 @@ class LiveManager {
     async initAuth() {
         onAuthStateChanged(this.auth, async (user) => {
             if (user) {
-                this.myId = user.uid;
-                console.log("Firebase Auth: Logged in as", this.myId);
+                // Ensure we use the 9-digit ID for logic even after anonymous auth
+                const savedUser = localStorage.getItem('sumu_user');
+                if (savedUser) {
+                    this.myId = JSON.parse(savedUser).id;
+                }
+                console.log("Firebase Auth: Logged in as", user.uid, "Logical ID:", this.myId);
                 
                 // Initialize Audio Engine silently (without mic prompt)
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -509,14 +524,20 @@ class LiveManager {
         if (!roomSnap.exists()) {
             // If room doesn't exist and user claims to be owner, create it
             if (this.role === 'owner') {
-                await set(roomRef, {
+                const roomData = {
                     id: this.roomId,
                     name: `غرفة ${this.username}`,
                     owner: this.username,
                     ownerId: this.myId,
+                    ownerAvatar: this.userAvatar,
+                    capacity: 8,
+                    currentUsers: 1,
                     createdAt: serverTimestamp(),
                     isActive: true
-                });
+                };
+                await set(roomRef, roomData);
+                // Also update public_rooms index
+                await set(ref(this.db, `public_rooms/${this.roomId}`), roomData);
             } else {
                 console.warn("Room does not exist and user is not owner.");
                 // Optionally redirect or show error
