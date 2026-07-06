@@ -181,22 +181,34 @@
             </section>
 
             <!-- 4. Messages -->
-            <section id="tab-messages" class="spa-tab hidden">
-                <header class="spa-header">
+            <section id="tab-messages" class="spa-tab hidden" style="padding: 0;">
+                <header class="spa-header" style="padding: 15px;">
                     <h2>الرسائل</h2>
-                    <button class="btn-icon">➕</button>
+                    <button class="btn-icon" id="btn-open-search-users">🔍</button>
                 </header>
-                <div class="search-bar">
-                    <input type="text" placeholder="ابحث عن أصدقاء (ID أو اسم)">
+
+                <!-- الأصدقاء المتصلون حالياً -->
+                <div class="online-friends-horizontal" id="online-friends-list">
+                    <!-- ستظهر هنا صور الأصدقاء المتصلين -->
                 </div>
-                <div class="post-card" style="margin-bottom:10px;">
-                    <div class="search-bar" style="margin-bottom:0; display:flex; gap:10px;">
-                        <input type="text" id="new-msg-input" placeholder="اكتب رسالة..." style="flex:1;">
-                        <button id="btn-submit-msg" class="btn-primary" style="padding: 12px 20px;">إرسال</button>
+
+                <div class="inbox-container">
+                    <!-- قسم طلبات الصداقة -->
+                    <div class="inbox-item" id="inbox-friend-requests">
+                        <div class="inbox-icon-circle" style="background: var(--primary-gradient);">
+                            🔔
+                        </div>
+                        <div class="inbox-info">
+                            <div class="inbox-name">طلبات الصداقة</div>
+                            <div class="inbox-preview">شاهد من يريد مصادقتك</div>
+                        </div>
+                        <div class="unread-badge hidden" id="friend-requests-badge">0</div>
                     </div>
-                </div>
-                <div class="messages-list" id="messages-list">
-                    <!-- Chats go here -->
+
+                    <!-- قائمة الدردشات -->
+                    <div id="chats-list">
+                        <!-- ستظهر الدردشات هنا -->
+                    </div>
                 </div>
             </section>
 
@@ -232,9 +244,10 @@
                 <span class="nav-icon">🌟</span>
                 <span class="nav-label">المنشورات</span>
             </button>
-            <button class="nav-item" data-target="tab-messages">
+            <button class="nav-item" data-target="tab-messages" style="position: relative;">
                 <span class="nav-icon">💬</span>
                 <span class="nav-label">الرسائل</span>
+                <div class="unread-badge-nav hidden" id="global-unread-badge">0</div>
             </button>
             <button class="nav-item" data-target="tab-profile">
                 <span class="nav-icon">👤</span>
@@ -250,6 +263,41 @@
         <iframe id="game-iframe" src="" frameborder="0" allow="autoplay; camera; microphone"></iframe>
     </div>
 
+    <!-- Game Launcher Modal -->
+    <div id="game-launcher-modal" class="modal hidden">
+        <div class="modal-content launcher-content">
+            <button class="btn-close" id="btn-close-launcher">✖</button>
+            <div class="launcher-header">
+                <div id="launcher-game-icon" class="game-icon-large">🎮</div>
+                <h2 id="launcher-game-title">اسم اللعبة</h2>
+            </div>
+
+            <div class="launcher-actions">
+                <button id="btn-launcher-create" class="btn-launcher-primary">
+                    <span class="icon">➕</span>
+                    <span class="label">إنشاء غرفة</span>
+                </button>
+
+                <button id="btn-launcher-search" class="btn-launcher-secondary">
+                    <span class="icon">🔍</span>
+                    <span class="label">بحث سريع</span>
+                </button>
+            </div>
+
+            <div class="launcher-join-box">
+                <input type="number" id="launcher-room-code" placeholder="أدخل رمز الغرفة">
+                <button id="btn-launcher-join">انضمام</button>
+            </div>
+
+            <!-- Loading Overlay for Search -->
+            <div id="launcher-loading" class="launcher-loading hidden">
+                <div class="spinner"></div>
+                <p>جاري البحث عن لاعبين...</p>
+                <button id="btn-cancel-search" class="btn-text">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Public Profile Modal -->
     <div id="public-profile-modal" class="modal hidden">
         <div class="modal-content profile-modal-content">
@@ -258,7 +306,75 @@
             <h2 id="pub-name"></h2>
             <p>ID: <span id="pub-id"></span></p>
             <p id="pub-bio" class="bio">لا توجد نبذة</p>
-            <div class="level-badge">LVL <span id="pub-level">1</span></div>
+            <div class="level-badge" style="margin-bottom: 20px;">LVL <span id="pub-level">1</span></div>
+            <div id="profile-actions-area">
+                <button id="btn-add-friend" class="btn-primary" style="width: 100%;">إضافة صديق ➕</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Search Modal -->
+    <div id="search-users-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 400px; height: 80vh; display: flex; flex-direction: column;">
+            <button class="btn-close" id="btn-close-search-users">✖</button>
+            <h2 style="margin-bottom: 20px;">بحث عن مستخدمين</h2>
+            <div class="search-bar">
+                <input type="text" id="user-search-input" placeholder="ادخل الاسم أو الـ ID المكون من 9 أرقام">
+            </div>
+            <div id="search-results" style="flex: 1; overflow-y: auto; margin-top: 10px;">
+                <!-- ستظهر النتائج هنا -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Friend Requests Modal -->
+    <div id="friend-requests-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 400px; height: 70vh; display: flex; flex-direction: column;">
+            <button class="btn-close" id="btn-close-friend-requests">✖</button>
+            <h2 style="margin-bottom: 20px;">طلبات الصداقة</h2>
+            <div id="friend-requests-list" style="flex: 1; overflow-y: auto;">
+                <!-- قائمة الطلبات -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Private Chat Modal Layer -->
+    <div id="private-chat-modal" class="modal hidden" style="background: var(--bg-dark); z-index: 5000;">
+        <div class="chat-full-screen">
+            <header class="chat-header">
+                <button id="btn-back-from-chat" class="btn-icon">🔙</button>
+                <div class="chat-user-header">
+                    <img id="chat-target-avatar" src="" class="avatar-small">
+                    <div>
+                        <div id="chat-target-name" class="chat-name">الاسم</div>
+                        <div id="chat-target-status" style="font-size: 11px; color: var(--accent-color);">متصل</div>
+                    </div>
+                </div>
+                <button class="btn-icon">⋮</button>
+            </header>
+
+            <div id="private-messages-log" class="chat-messages-log">
+                <!-- الرسائل هنا -->
+            </div>
+
+            <footer class="chat-footer-bar">
+                <button id="btn-chat-games" class="btn-icon-circle">🎮</button>
+                <input type="text" id="private-chat-input" placeholder="اكتب رسالة...">
+                <button id="btn-send-private-msg" class="btn-send-icon">➡️</button>
+                <button id="btn-chat-mic" class="btn-icon-circle">🎤</button>
+            </footer>
+
+            <!-- Game Invite Popup -->
+            <div id="chat-game-popup" class="hidden chat-game-popup">
+                <div class="game-invite-option" data-game="ono.html">
+                    <div class="icon" style="background: linear-gradient(135deg, #ff4b2b, #ff416c);">O</div>
+                    <span>أونو</span>
+                </div>
+                <div class="game-invite-option" data-game="chess.html">
+                    <div class="icon" style="background: linear-gradient(135deg, #4b6cb7, #182848);">♟️</div>
+                    <span>شطرنج</span>
+                </div>
+            </div>
         </div>
     </div>
 
