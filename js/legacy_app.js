@@ -39,6 +39,15 @@ class GameManager {
         this.arabicLetters = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي";
         this.currentLetter = "";
         this.myId = null;
+
+        this.urlParams = new URLSearchParams(window.location.search);
+        const urlRoomId = this.urlParams.get('roomID');
+        const urlUsername = this.urlParams.get('username');
+        const urlRole = this.urlParams.get('role');
+
+        if (urlUsername) this.playerName = urlUsername;
+        if (urlRole === 'owner') this.isHost = true;
+
         const seed = Math.random().toString(36).substr(2, 9);
         this.avatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}`;
 
@@ -286,6 +295,17 @@ class GameManager {
                 });
             }
         });
+
+        const urlRoomId = this.urlParams.get('roomID');
+        if (urlRoomId && this.playerName) {
+            // Wait for auth then join
+            const checkAuth = setInterval(() => {
+                if (this.myId) {
+                    clearInterval(checkAuth);
+                    this.joinRoomLogic(urlRoomId);
+                }
+            }, 500);
+        }
     }
 
     async listenToRoom(roomId) {
@@ -418,6 +438,23 @@ class GameManager {
 
     async joinRoomLogic(roomId) {
         this.roomId = roomId; // Ensure roomId is set early
+
+        // Initialize room if it doesn't exist (e.g. created from main SPA)
+        const roomRef = ref(this.db, `rooms/${roomId}`);
+        const roomSnap = await get(roomRef);
+        if (!roomSnap.exists()) {
+            await set(roomRef, {
+                roomType: 'game',
+                config: {
+                    hostId: this.myId,
+                    gameState: 'lobby',
+                    currentLetter: '',
+                    timer: 40,
+                    createdAt: serverTimestamp()
+                }
+            });
+        }
+
         const playerRef = ref(this.db, `rooms/${roomId}/players/${this.myId}`);
         onDisconnect(playerRef).remove();
         // Also remove progress on disconnect

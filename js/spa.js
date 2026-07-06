@@ -336,7 +336,7 @@ btnCloseLauncher.addEventListener('click', () => {
 btnLauncherCreate.addEventListener('click', () => {
     if (selectedGameUrl) {
         const roomId = generateRoomId();
-        const url = `${selectedGameUrl}?room=${roomId}&role=host`;
+        const url = `${selectedGameUrl}?roomID=${roomId}&role=owner&username=${encodeURIComponent(currentUser.name)}`;
         window.launchGame(url);
         gameLauncherModal.classList.add('hidden');
     }
@@ -345,7 +345,7 @@ btnLauncherCreate.addEventListener('click', () => {
 btnLauncherJoin.addEventListener('click', () => {
     const code = launcherRoomCode.value.trim();
     if (code && selectedGameUrl) {
-        const url = `${selectedGameUrl}?room=${code}&role=guest`;
+        const url = `${selectedGameUrl}?roomID=${code}&role=guest&username=${encodeURIComponent(currentUser.name)}`;
         window.launchGame(url);
         gameLauncherModal.classList.add('hidden');
         launcherRoomCode.value = '';
@@ -363,7 +363,7 @@ btnLauncherSearch.addEventListener('click', () => {
         // في التطبيق الحقيقي سنبحث في قاعدة البيانات عن غرف متاحة
         // هنا سنقوم بإنشاء غرفة جديدة لغرض العرض إذا لم يجد
         const roomId = generateRoomId();
-        const url = `${selectedGameUrl}?room=${roomId}&role=host`;
+        const url = `${selectedGameUrl}?roomID=${roomId}&role=owner&username=${encodeURIComponent(currentUser.name)}`;
         window.launchGame(url);
         gameLauncherModal.classList.add('hidden');
     }, 3000);
@@ -660,6 +660,7 @@ document.addEventListener('click', async (e) => {
     if (e.target.closest('.btn-game-invite')) {
         try {
             if (db) {
+                const roomId = generateRoomId();
                 const chatRef = ref(db, 'global_chat');
                 await push(chatRef, {
                     sender: currentUser.name,
@@ -667,7 +668,7 @@ document.addEventListener('click', async (e) => {
                     text: "لقد أرسلت دعوة للعب أونو! 🎮",
                     timestamp: Date.now(),
                     isInvite: true,
-                    gameUrl: 'ono.html'
+                    gameUrl: `ono.html?roomID=${roomId}&role=guest&username=${encodeURIComponent(currentUser.name)}`
                 });
             }
             showSuccess('تم إرسال الدعوة!');
@@ -864,6 +865,56 @@ userSearchInput.addEventListener('input', async () => {
 if (btnOpenSearchUsers) btnOpenSearchUsers.onclick = () => searchUsersModal.classList.remove('hidden');
 if (btnCloseSearchUsers) btnCloseSearchUsers.onclick = () => searchUsersModal.classList.add('hidden');
 
+const btnMainSearch = document.getElementById('btn-main-search');
+if (btnMainSearch) {
+    btnMainSearch.onclick = () => {
+        searchUsersModal.classList.remove('hidden');
+    };
+}
+
+const btnExecuteUserSearch = document.getElementById('btn-execute-user-search');
+if (btnExecuteUserSearch) {
+    btnExecuteUserSearch.onclick = async () => {
+        const queryStr = userSearchInput.value.trim().toLowerCase();
+        if (!queryStr) {
+            showError('يرجى إدخال كلمة البحث');
+            return;
+        }
+        await performUserSearch(queryStr);
+    };
+}
+
+async function performUserSearch(queryStr) {
+    searchResults.innerHTML = '<div style="text-align:center; padding:20px;"><div class="spinner"></div> جاري البحث...</div>';
+
+    const usersRef = ref(db, 'users');
+    const snapshot = await get(usersRef);
+    if (snapshot.exists()) {
+        const users = snapshot.val();
+        let html = '';
+        let count = 0;
+        for (const uid in users) {
+            const user = users[uid];
+            if (currentUser && uid === currentUser.uid) continue;
+            if (user.name.toLowerCase().includes(queryStr) || user.id.includes(queryStr)) {
+                count++;
+                html += `
+                <div class="chat-item" onclick="showPublicProfile('${uid}', '${user.name}', '${user.avatar}')">
+                    <img src="${user.avatar}" class="chat-avatar">
+                    <div class="chat-info">
+                        <div class="chat-name">${user.name}</div>
+                        <div class="chat-preview">ID: ${user.id}</div>
+                    </div>
+                    <button class="btn-primary" style="padding: 5px 15px; font-size: 12px;">إضافة</button>
+                </div>`;
+            }
+        }
+        searchResults.innerHTML = html || '<div style="text-align:center; padding:20px; color:#888;">لم يتم العثور على نتائج</div>';
+    } else {
+        searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">لم يتم العثور على نتائج</div>';
+    }
+}
+
 // Friend Requests Listener
 function initFriendRequestsListener() {
     if (!currentUser) return;
@@ -1018,7 +1069,7 @@ function openPrivateChat(chatId, partnerId, partnerName, partnerAvatar) {
                     <div class="game-invite-card ${isMine ? 'bubble-right' : 'bubble-left'}" style="align-self: ${isMine ? 'flex-end' : 'flex-start'}">
                         <div class="invite-game-icon">${msg.gameIcon || '🎮'}</div>
                         <div style="font-weight:bold;">دعوة للعب ${msg.gameName}</div>
-                        <button class="btn-join-invite" onclick="window.launchGame('${msg.gameUrl}?room=${msg.gameRoom}&role=guest')">انضم الآن</button>
+                        <button class="btn-join-invite" onclick="window.launchGame('${msg.gameUrl}?roomID=${msg.gameRoom}&role=guest&username=${encodeURIComponent(currentUser.name)}')">انضم الآن</button>
                     </div>`;
                 } else {
                     privateMessagesLog.innerHTML += `
@@ -1078,7 +1129,7 @@ document.querySelectorAll('.game-invite-option').forEach(opt => {
             gameUrl, gameName, gameIcon, gameRoom: roomId
         });
         chatGamePopup.classList.add('hidden');
-        window.launchGame(`${gameUrl}?room=${roomId}&role=host`);
+        window.launchGame(`${gameUrl}?roomID=${roomId}&role=owner&username=${encodeURIComponent(currentUser.name)}`);
     };
 });
 

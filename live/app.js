@@ -171,7 +171,7 @@ class LiveManager {
         this.playlistItemsContainer = document.getElementById('playlist-items-container');
         this.btnOpenYtSearch = document.getElementById('btn-open-yt-search');
 
-        // YouTube Browser Elements (TopTop Style)
+        // YouTube Browser Elements (Sumu Style)
         this.modalYtBrowser = document.getElementById('modal-yt-browser');
         this.btnCloseYtBrowser = document.getElementById('btn-close-yt-browser');
         this.btnBackToPlaylistFromBrowser = document.getElementById('btn-back-to-playlist-from-browser');
@@ -398,7 +398,7 @@ class LiveManager {
     // ================== CORE / AUTH ==================
 
     async initAuth() {
-        onAuthStateChanged(this.auth, (user) => {
+        onAuthStateChanged(this.auth, async (user) => {
             if (user) {
                 this.myId = user.uid;
                 console.log("Firebase Auth: Logged in as", this.myId);
@@ -424,14 +424,10 @@ class LiveManager {
                     this.updatePublicRoomCount();
                 });
 
-                await update(userInRoomRef, {
-                    name: this.username,
-                    avatar: this.userAvatar,
-                    lastSeen: serverTimestamp()
-                });
-
-                this.updatePublicRoomCount();
+        await this.joinRoom();
                 this.listenToRoom();
+            } else {
+                signInAnonymously(this.auth).catch(err => console.error("Anonymous sign-in failed:", err));
             }
         });
     }
@@ -506,6 +502,24 @@ class LiveManager {
 
     async joinRoom() {
         if (!this.roomId) return;
+
+        const roomRef = ref(this.db, `rooms/${this.roomId}`);
+        const roomSnap = await get(roomRef);
+        if (!roomSnap.exists()) {
+            if (this.role === 'owner') {
+                await set(roomRef, {
+                    id: this.roomId,
+                    name: `غرفة ${this.username}`,
+                    owner: this.username,
+                    ownerId: this.myId,
+                    createdAt: serverTimestamp(),
+                    isActive: true
+                });
+            } else {
+                console.warn("Room does not exist in Firebase rooms/ path");
+            }
+        }
+
         const userRef = ref(this.db, `rooms/${this.roomId}/users/${this.myId}`);
         onDisconnect(userRef).remove();
         await update(userRef, {

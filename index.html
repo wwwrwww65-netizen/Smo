@@ -124,7 +124,7 @@
                         </div>
                     </div>
                     <div class="header-actions">
-                        <button class="btn-icon">🔍</button>
+                        <button class="btn-icon" id="btn-main-search">🔍</button>
                     </div>
                 </header>
 
@@ -318,8 +318,9 @@
         <div class="modal-content" style="max-width: 400px; height: 80vh; display: flex; flex-direction: column;">
             <button class="btn-close" id="btn-close-search-users">✖</button>
             <h2 style="margin-bottom: 20px;">بحث عن مستخدمين</h2>
-            <div class="search-bar">
-                <input type="text" id="user-search-input" placeholder="ادخل الاسم أو الـ ID المكون من 9 أرقام">
+            <div class="search-bar" style="display: flex; gap: 8px; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 12px;">
+                <input type="text" id="user-search-input" placeholder="ادخل الاسم أو الـ ID" style="flex: 1; border: none; background: transparent; margin: 0;">
+                <button id="btn-execute-user-search" class="btn-primary" style="padding: 8px 20px; min-width: 80px; margin: 0; height: 40px;">بحث</button>
             </div>
             <div id="search-results" style="flex: 1; overflow-y: auto; margin-top: 10px;">
                 <!-- ستظهر النتائج هنا -->
