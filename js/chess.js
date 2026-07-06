@@ -127,7 +127,7 @@ class ChessGameManager {
         const playerRef = ref(this.db, `rooms/${this.roomId}/players/${this.myId}`);
         const roomRef = ref(this.db, `rooms/${this.roomId}`);
 
-        const snap = await get(roomRef);
+        let snap = await get(roomRef);
         if (!snap.exists()) {
             if (this.role === 'owner') {
                 // Initial setup for host
@@ -139,6 +139,7 @@ class ChessGameManager {
                         createdAt: serverTimestamp()
                     }
                 });
+                snap = await get(roomRef);
             } else {
                 alert("الغرفة غير موجودة");
                 window.location.href = './index.html';

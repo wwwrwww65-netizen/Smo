@@ -194,12 +194,24 @@ class OnoGameManager {
 
     async joinRoom() {
         const roomRef = ref(this.db, `rooms/${this.roomId}`);
-        const snap = await get(roomRef);
+        let snap = await get(roomRef);
 
         if (!snap.exists()) {
-            alert("الغرفة غير موجودة");
-            // window.location.href = './index.html';
-            return;
+            if (this.isHostParam) {
+                // Initialize room for host
+                await set(roomRef, {
+                    config: {
+                        hostId: this.myId,
+                        gameState: 'lobby',
+                        createdAt: serverTimestamp()
+                    }
+                });
+                snap = await get(roomRef);
+            } else {
+                alert("الغرفة غير موجودة");
+                // window.location.href = './index.html';
+                return;
+            }
         }
 
         const data = snap.val();
