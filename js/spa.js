@@ -837,29 +837,8 @@ userSearchInput.addEventListener('input', async () => {
         searchResults.innerHTML = '';
         return;
     }
-
-    const usersRef = ref(db, 'users');
-    const snapshot = await get(usersRef);
-    if (snapshot.exists()) {
-        const users = snapshot.val();
-        let html = '';
-        for (const uid in users) {
-            const user = users[uid];
-            if (uid === currentUser.uid) continue;
-            if (user.name.toLowerCase().includes(queryStr) || user.id.includes(queryStr)) {
-                html += `
-                <div class="chat-item" onclick="showPublicProfile('${uid}', '${user.name}', '${user.avatar}')">
-                    <img src="${user.avatar}" class="chat-avatar">
-                    <div class="chat-info">
-                        <div class="chat-name">${user.name}</div>
-                        <div class="chat-preview">ID: ${user.id}</div>
-                    </div>
-                    <button class="btn-primary" style="padding: 5px 15px; font-size: 12px;">إضافة</button>
-                </div>`;
-            }
-        }
-        searchResults.innerHTML = html;
-    }
+    // We rely on the search button for heavy lifting, or we can call performUserSearch here
+    // For performance, let's just clear if too short, otherwise let user click search
 });
 
 if (btnOpenSearchUsers) btnOpenSearchUsers.onclick = () => searchUsersModal.classList.remove('hidden');
@@ -887,31 +866,56 @@ if (btnExecuteUserSearch) {
 async function performUserSearch(queryStr) {
     searchResults.innerHTML = '<div style="text-align:center; padding:20px;"><div class="spinner"></div> جاري البحث...</div>';
 
-    const usersRef = ref(db, 'users');
-    const snapshot = await get(usersRef);
-    if (snapshot.exists()) {
-        const users = snapshot.val();
-        let html = '';
-        let count = 0;
-        for (const uid in users) {
-            const user = users[uid];
-            if (currentUser && uid === currentUser.uid) continue;
-            if (user.name.toLowerCase().includes(queryStr) || user.id.includes(queryStr)) {
-                count++;
-                html += `
-                <div class="chat-item" onclick="showPublicProfile('${uid}', '${user.name}', '${user.avatar}')">
-                    <img src="${user.avatar}" class="chat-avatar">
-                    <div class="chat-info">
-                        <div class="chat-name">${user.name}</div>
-                        <div class="chat-preview">ID: ${user.id}</div>
-                    </div>
-                    <button class="btn-primary" style="padding: 5px 15px; font-size: 12px;">إضافة</button>
-                </div>`;
+    try {
+        const usersRef = ref(db, 'users');
+        const snapshot = await get(usersRef);
+        if (snapshot.exists()) {
+            const users = snapshot.val();
+            let html = '';
+            let count = 0;
+            for (const uid in users) {
+                const user = users[uid];
+                if (currentUser && uid === currentUser.uid) continue;
+
+                const name = String(user.name || "").toLowerCase();
+                const id = String(user.id || "");
+
+                if (name.includes(queryStr) || id.includes(queryStr)) {
+                    count++;
+                    html += `
+                    <div class="chat-item" onclick="showPublicProfile('${uid}', '${user.name}', '${user.avatar}')">
+                        <img src="${user.avatar}" class="chat-avatar">
+                        <div class="chat-info">
+                            <div class="chat-name">${user.name}</div>
+                            <div class="chat-preview">ID: ${user.id}</div>
+                        </div>
+                        <button class="btn-primary btn-add-direct"
+                                data-uid="${uid}"
+                                data-name="${user.name}"
+                                data-avatar="${user.avatar}"
+                                style="padding: 5px 15px; font-size: 12px; position: relative; z-index: 10;">إضافة</button>
+                    </div>`;
+                }
             }
+            searchResults.innerHTML = html || '<div style="text-align:center; padding:20px; color:#888;">لم يتم العثور على نتائج</div>';
+
+            // Add event listeners for direct add buttons
+            searchResults.querySelectorAll('.btn-add-direct').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation(); // Prevent opening profile
+                    sendFriendRequest(btn.dataset.uid, btn.dataset.name, btn.dataset.avatar);
+                    btn.disabled = true;
+                    btn.innerText = 'تم';
+                    btn.style.opacity = '0.5';
+                };
+            });
+        } else {
+            searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">لم يتم العثور على نتائج</div>';
         }
-        searchResults.innerHTML = html || '<div style="text-align:center; padding:20px; color:#888;">لم يتم العثور على نتائج</div>';
-    } else {
-        searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">لم يتم العثور على نتائج</div>';
+    } catch (error) {
+        console.error("Search error:", error);
+        showError('حدث خطأ أثناء البحث');
+        searchResults.innerHTML = '<div style="text-align:center; padding:20px; color:#f87171;">فشل جلب البيانات</div>';
     }
 }
 
