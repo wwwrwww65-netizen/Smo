@@ -505,7 +505,9 @@ class LiveManager {
 
         const roomRef = ref(this.db, `rooms/${this.roomId}`);
         const roomSnap = await get(roomRef);
+
         if (!roomSnap.exists()) {
+            // If room doesn't exist and user claims to be owner, create it
             if (this.role === 'owner') {
                 await set(roomRef, {
                     id: this.roomId,
@@ -516,8 +518,22 @@ class LiveManager {
                     isActive: true
                 });
             } else {
-                console.warn("Room does not exist in Firebase rooms/ path");
+                console.warn("Room does not exist and user is not owner.");
+                // Optionally redirect or show error
             }
+        } else {
+            // Room exists, verify ownerId
+            const roomData = roomSnap.val();
+            const actualOwnerId = roomData.ownerId;
+
+            if (actualOwnerId === this.myId) {
+                console.log("✅ Verified as Room Owner");
+                this.role = 'owner';
+            } else {
+                console.log("ℹ️ Verified as Guest");
+                this.role = 'guest';
+            }
+            this.applyRolePermissions();
         }
 
         const userRef = ref(this.db, `rooms/${this.roomId}/users/${this.myId}`);
@@ -529,6 +545,20 @@ class LiveManager {
             lastSeen: serverTimestamp()
         });
         this.listenToRoom();
+    }
+
+    applyRolePermissions() {
+        if (this.role === 'owner') {
+            if (this.btnOpenControl) this.btnOpenControl.classList.remove('hidden');
+            if (this.btnOpenYtSearch) this.btnOpenYtSearch.classList.remove('hidden');
+        } else {
+            if (this.btnOpenControl) this.btnOpenControl.classList.add('hidden');
+            if (this.btnOpenYtSearch) this.btnOpenYtSearch.classList.add('hidden');
+
+            // Disable owner-only intervals if any
+            if (this.guestRevertInterval) clearInterval(this.guestRevertInterval);
+            this.guestRevertInterval = setInterval(() => this.guestEnforceSync(), 2000);
+        }
     }
 
     listenToRoom() {
@@ -1079,6 +1109,7 @@ class LiveManager {
     // ================== OWNER ACTIONS ==================
 
     ownerLoadVideo() {
+        if (this.role !== 'owner') return;
         let input = this.ytUrlInput.value.trim();
         if (!input) return;
 
@@ -1124,7 +1155,7 @@ class LiveManager {
     }
 
     ownerUpdateFirebase(forcedTime = null) {
-        if (!this.roomId || this.isSyncing) return;
+        if (this.role !== 'owner' || !this.roomId || this.isSyncing) return;
         this.isSyncing = true;
 
         let time = forcedTime;
@@ -1151,6 +1182,7 @@ class LiveManager {
     }
 
     ownerChangeState(state) {
+        if (this.role !== 'owner') return;
         if (this.mediaState.type === 'youtube' && this.player) {
             if (state === 1) this.player.playVideo();
             else this.player.pauseVideo();
