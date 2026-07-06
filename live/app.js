@@ -552,9 +552,17 @@ class LiveManager {
 
             console.log(`[Auth Check] Room: ${this.roomId}, ActualOwner: ${actualOwnerId}, MyID: ${this.myId}`);
 
-            if (String(actualOwnerId) === String(this.myId)) {
-                console.log("✅ Verified as Room Owner via Database Match");
+            // If actualOwnerId matches myId, OR if this is a personal room where roomId matches myId
+            if (String(actualOwnerId) === String(this.myId) || String(this.roomId) === String(this.myId)) {
+                console.log("✅ Verified as Room Owner via Database/RoomID Match");
                 this.role = 'owner';
+
+                // Auto-heal missing ownerId in database if verified via roomId fallback
+                if (!actualOwnerId) {
+                    console.log("🩹 Auto-healing missing ownerId in database");
+                    update(roomRef, { ownerId: this.myId }).catch(e => console.warn("Failed to auto-heal ownerId", e));
+                    update(ref(this.db, `public_rooms/${this.roomId}`), { ownerId: this.myId }).catch(e => {});
+                }
             } else {
                 console.log("ℹ️ Verified as Guest via Database Match");
                 this.role = 'guest';
