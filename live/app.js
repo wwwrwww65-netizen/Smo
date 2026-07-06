@@ -241,75 +241,77 @@ class LiveManager {
         this.btnSendChat.onclick = () => this.sendChatMessage();
         this.chatInput.onkeypress = (e) => { if (e.key === 'Enter') this.sendChatMessage(); };
 
-        if (this.role === 'owner') {
-            this.btnOpenControl.classList.remove('hidden');
-            this.btnOpenControl.onclick = () => this.modalYT.classList.remove('hidden');
-            this.btnOpenYtSearch.classList.remove('hidden');
-
-            // Generic Video Events for Owner
-            this.genericVideo.onplay = () => this.ownerOnMediaEvent(1);
-            this.genericVideo.onpause = () => this.ownerOnMediaEvent(2);
-            this.genericVideo.onseeked = () => this.ownerOnMediaEvent();
-            this.genericVideo.onended = () => {
-                this.ownerOnMediaEvent(0);
-                this.playNextInPlaylist();
+        // Unified event attachment (Permissions checked inside handlers)
+        if (this.btnOpenControl) {
+            this.btnOpenControl.onclick = () => {
+                if (this.role === 'owner') this.modalYT.classList.remove('hidden');
+                else this.showToast("هذه الميزة مخصصة لمالك الغرفة فقط");
             };
-            this.genericVideo.onerror = () => {
-                if (this.genericVideo.src && !this.genericVideo.src.includes(window.location.host)) {
-                    this.showToast("⚠️ تعذر تشغيل هذا الرابط، قد يكون محمي أو غير مدعوم");
+        }
+
+        if (this.btnOpenYtSearch) {
+            this.btnOpenYtSearch.onclick = () => {
+                if (this.role === 'owner') {
+                    this.modalPlaylist.classList.add('hidden');
+                    this.modalYtBrowser.classList.remove('hidden');
+                    this.fetchTrendingVideos();
                 }
             };
+        }
 
-            // Browser events for owner
-            if (this.btnBrowserGo) {
-                this.btnBrowserGo.onclick = () => {
-                    const input = this.browserUrlInput.value.trim();
-                    if (input) {
-                        const processedUrl = this.processUrl(input);
-                        this.browserUrlInput.value = processedUrl;
-
-                        // Show loading
-                        if (this.browserLoadingOverlay) this.browserLoadingOverlay.classList.remove('hidden');
-                        this.browserIframe.src = processedUrl;
-
-                        // Auto-sync for owner
-                        this.mediaState = {
-                            type: 'web',
-                            url: processedUrl,
-                            state: 1,
-                            updatedAt: serverTimestamp()
-                        };
-                        this.ownerUpdateFirebase();
-                    }
-                };
+        // Generic Video Events (Owner checks inside)
+        this.genericVideo.onplay = () => { if (this.role === 'owner') this.ownerOnMediaEvent(1); };
+        this.genericVideo.onpause = () => { if (this.role === 'owner') this.ownerOnMediaEvent(2); };
+        this.genericVideo.onseeked = () => { if (this.role === 'owner') this.ownerOnMediaEvent(); };
+        this.genericVideo.onended = () => {
+            if (this.role === 'owner') {
+                this.ownerOnMediaEvent(0);
+                this.playNextInPlaylist();
             }
-            if (this.browserUrlInput) {
-                this.browserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnBrowserGo.click(); };
+        };
+        this.genericVideo.onerror = () => {
+            if (this.genericVideo.src && !this.genericVideo.src.includes(window.location.host)) {
+                this.showToast("⚠️ تعذر تشغيل هذا الرابط، قد يكون محمي أو غير مدعوم");
             }
-            if (this.btnBrowserSync) {
-                this.btnBrowserSync.onclick = () => {
-                    const currentUrl = this.browserIframe.src;
-                    if (!currentUrl || currentUrl === window.location.href) return;
+        };
 
-                    this.mediaState = {
-                        type: 'web',
-                        url: currentUrl,
-                        state: 1,
-                        updatedAt: serverTimestamp()
-                    };
+        // Browser events
+        if (this.btnBrowserGo) {
+            this.btnBrowserGo.onclick = () => {
+                if (this.role !== 'owner') return;
+                const input = this.browserUrlInput.value.trim();
+                if (input) {
+                    const processedUrl = this.processUrl(input);
+                    this.browserUrlInput.value = processedUrl;
+                    if (this.browserLoadingOverlay) this.browserLoadingOverlay.classList.remove('hidden');
+                    this.browserIframe.src = processedUrl;
+                    this.mediaState = { type: 'web', url: processedUrl, state: 1, updatedAt: serverTimestamp() };
                     this.ownerUpdateFirebase();
-                    this.showToast("تم مزامنة الموقع مع الجميع");
-                };
-            }
-            if (this.btnBrowserBack) {
-                this.btnBrowserBack.onclick = () => {
-                    try {
-                        this.browserIframe.contentWindow.history.back();
-                    } catch(e) {
-                        this.showToast("لا يمكن الرجوع للمواقع الخارجية أمنياً");
-                    }
-                };
-            }
+                }
+            };
+        }
+        if (this.browserUrlInput) {
+            this.browserUrlInput.onkeypress = (e) => { if (e.key === 'Enter') this.btnBrowserGo.click(); };
+        }
+        if (this.btnBrowserSync) {
+            this.btnBrowserSync.onclick = () => {
+                if (this.role !== 'owner') return;
+                const currentUrl = this.browserIframe.src;
+                if (!currentUrl || currentUrl === window.location.href) return;
+                this.mediaState = { type: 'web', url: currentUrl, state: 1, updatedAt: serverTimestamp() };
+                this.ownerUpdateFirebase();
+                this.showToast("تم مزامنة الموقع مع الجميع");
+            };
+        }
+        if (this.btnBrowserBack) {
+            this.btnBrowserBack.onclick = () => {
+                if (this.role !== 'owner') return;
+                try {
+                    this.browserIframe.contentWindow.history.back();
+                } catch(e) {
+                    this.showToast("لا يمكن الرجوع للمواقع الخارجية أمنياً");
+                }
+            };
         }
 
         if (this.btnBrowserFallback) {
@@ -538,20 +540,23 @@ class LiveManager {
                 await set(roomRef, roomData);
                 // Also update public_rooms index
                 await set(ref(this.db, `public_rooms/${this.roomId}`), roomData);
+                console.log("✅ Room Created successfully as Owner");
             } else {
-                console.warn("Room does not exist and user is not owner.");
-                // Optionally redirect or show error
+                console.warn("Room does not exist and user is not owner via URL.");
             }
+            this.applyRolePermissions();
         } else {
             // Room exists, verify ownerId
             const roomData = roomSnap.val();
             const actualOwnerId = roomData.ownerId;
 
-            if (actualOwnerId === this.myId) {
-                console.log("✅ Verified as Room Owner");
+            console.log(`[Auth Check] Room: ${this.roomId}, ActualOwner: ${actualOwnerId}, MyID: ${this.myId}`);
+
+            if (String(actualOwnerId) === String(this.myId)) {
+                console.log("✅ Verified as Room Owner via Database Match");
                 this.role = 'owner';
             } else {
-                console.log("ℹ️ Verified as Guest");
+                console.log("ℹ️ Verified as Guest via Database Match");
                 this.role = 'guest';
             }
             this.applyRolePermissions();
