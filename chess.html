@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>لعبة الشطرنج - سمو الأميرة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/chess.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+</head>
+<body>
+
+    <!-- Top Bar -->
+    <header class="game-top-bar">
+        <button id="btn-exit" class="icon-btn exit-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+        </button>
+        <div class="game-title">الشطرنج</div>
+        <button id="btn-settings" class="icon-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+        </button>
+    </header>
+
+    <div id="main-toast" class="toast hidden"></div>
+
+    <!-- شاشة الانتظار (اللوبي) -->
+    <section id="section-lobby" class="active">
+        <div class="lobby-container">
+            <h1 class="glow-text">غرفة الشطرنج</h1>
+            <div class="room-id-badge">
+                <span>رمز الغرفة:</span>
+                <strong id="display-room-id">...</strong>
+                <button id="btn-copy-id" class="btn-icon-small">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+            </div>
+
+            <div class="players-slots">
+                <div class="player-slot" id="slot-0">
+                    <div class="avatar-wrapper empty">
+                        <div class="avatar-img">👤</div>
+                    </div>
+                    <div class="player-name">بانتظار...</div>
+                    <div class="player-role">اللاعب الأول (أبيض)</div>
+                </div>
+                <div class="vs-divider">VS</div>
+                <div class="player-slot" id="slot-1">
+                    <div class="avatar-wrapper empty">
+                        <div class="avatar-img">👤</div>
+                    </div>
+                    <div class="player-name">بانتظار...</div>
+                    <div class="player-role">اللاعب الثاني (أسود)</div>
+                </div>
+            </div>
+
+            <div class="lobby-actions">
+                <button id="btn-start-game" class="btn-primary btn-pulse disabled">بدء اللعبة</button>
+                <button id="btn-add-bot" class="btn-secondary">إضافة بوت 🤖</button>
+            </div>
+
+            <div class="spectators-info">
+                <span>المشاهدون: </span>
+                <span id="spectators-count">0</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- شاشة اللعب -->
+    <section id="section-game" class="hidden">
+        <div class="game-container">
+                        <!-- بيانات اللاعب الخصم -->
+            <div class="player-info opponent" id="opponent-info">
+                <div class="avatar-container">
+                    <div class="avatar-wrapper" id="opponent-avatar"></div>
+                </div>
+                <div class="details">
+                    <span class="player-name" id="opponent-name">انتظار...</span>
+                    <span class="player-role">الخصم</span>
+                </div>
+            </div>
+
+            <!-- Timer Pill -->
+            <div id="turn-timer-pill" class="hidden" style="background: rgba(255, 71, 87, 0.2); border: 1px solid #ff4757; color: #ff4757; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 1.2rem; margin: 10px auto; width: fit-content; text-align: center;">
+                <span id="turn-timer-display">30</span> ثانية
+            </div>
+
+            <!-- رقعة الشطرنج -->
+            <div id="chess-board-container">
+                <div id="board"></div>
+            </div>
+
+            <!-- بيانات اللاعب الحالي -->
+            <div class="player-info current" id="current-info">
+                <div class="avatar-container">
+                    <div class="avatar" id="current-avatar">👤</div>
+                    <div class="turn-indicator" id="current-turn-timer"></div>
+                </div>
+                <div class="details">
+                    <div class="name" id="current-name">أنت</div>
+                    <div class="captured-pieces" id="current-captured"></div>
+                </div>
+            </div>
+
+            <!-- أزرار التحكم -->
+            <div class="game-controls">
+                <button id="btn-toggle-chat" class="btn-control">💬 الدردشة</button>
+                <button id="btn-resign" class="btn-control btn-danger">🏳️ انسحاب</button>
+                <button id="btn-exit-game" class="btn-control">🚪 خروج</button>
+            </div>
+        </div>
+
+        <!-- حاوية الدردشة -->
+        <div id="chat-container" class="chat-container hidden">
+            <div class="chat-header">
+                <span>الدردشة</span>
+                <button id="btn-close-chat">×</button>
+            </div>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input-bar">
+                <input type="text" id="chat-input" placeholder="اكتب رسالة..." maxlength="100">
+                <button id="btn-send-chat">ارسال</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- مودال اختيار الترقية -->
+    <div id="modal-promotion" class="modal hidden">
+        <div class="modal-content">
+            <h3>ترقية البيدق</h3>
+            <div class="promotion-options">
+                <div class="promo-option" data-piece="q">♛</div>
+                <div class="promo-option" data-piece="r">♜</div>
+                <div class="promo-option" data-piece="b">♝</div>
+                <div class="promo-option" data-piece="n">♞</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- مودال النتائج -->
+    <div id="modal-results" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="result-title">انتهت اللعبة!</h2>
+            <p id="result-message"></p>
+            <button id="btn-back-lobby" class="btn-primary">العودة للوبي</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/chess.js"></script>
+</body>
+</html>

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Sumu Al-Princesa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        .auth-tabs button {
+            padding: 10px 20px;
+            border: none;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .auth-tabs button.active {
+            background: #38ef7d;
+            color: #000;
+        }
+        .auth-section {
+            display: none;
+        }
+        .auth-section.active {
+            display: block;
+        }
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff6b6b;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: none;
+            text-align: center;
+            font-size: 13px;
+        }
+        .error-message.show {
+            display: block;
+        }
+        .success-message {
+            background: rgba(56, 239, 125, 0.2);
+            color: #38ef7d;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: none;
+            text-align: center;
+            font-size: 13px;
+            white-space: pre-line;
+        }
+        .success-message.show {
+            display: block;
+        }
+    </style>
+</head>
+<body class="spa-shell">
+    
+    <!-- Auth / Splash Screen -->
+    <div id="auth-screen" class="active-screen">
+        <div class="auth-container">
+            <h1 class="glow-text">سمو الأميرة</h1>
+            <p>أهلاً بك في عالم الترفيه</p>
+            
+            <div class="card auth-card">
+                <!-- Tabs -->
+                <div class="auth-tabs">
+                    <button class="auth-tab-btn active" data-tab="login">دخول 🔓</button>
+                    <button class="auth-tab-btn" data-tab="signup">إنشاء حساب 🔐</button>
+                </div>
+
+                <!-- رسائل الخطأ والنجاح -->
+                <div class="error-message" id="error-message"></div>
+                <div class="success-message" id="success-message"></div>
+
+                <!-- تسجيل الدخول -->
+                <div class="auth-section active" id="login-section">
+                    <h3 style="color: white; text-align: center; margin-bottom: 15px;">تسجيل الدخول</h3>
+                    <input type="text" id="login-email" placeholder="اسم المستخدم أو الـ ID">
+                    <input type="password" id="login-password" placeholder="كلمة المرور">
+                    <button id="btn-login" class="btn-primary" style="width: 100%; margin-top: 15px;">دخول</button>
+                </div>
+
+                <!-- إنشاء حساب جديد -->
+                <div class="auth-section" id="signup-section">
+                    <h3 style="color: white; text-align: center; margin-bottom: 15px;">إنشاء حساب جديد</h3>
+                    <input type="text" id="signup-name" placeholder="اسم المستخدم" maxlength="15">
+                    <input type="password" id="signup-password" placeholder="كلمة المرور (6+ أحرف)">
+                    <input type="password" id="signup-password-confirm" placeholder="تأكيد كلمة المرور">
+                    <div class="gender-selection" style="margin: 15px 0;">
+                        <button type="button" class="btn-gender" data-gender="male">👨 ذكر</button>
+                        <button type="button" class="btn-gender" data-gender="female">👩 أنثى</button>
+                    </div>
+                    <button id="btn-signup" class="btn-primary" style="width: 100%; margin-top: 15px;">إنشاء حساب</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main SPA Container (Hidden until logged in) -->
+    <div id="main-spa" class="hidden">
+
+        <!-- Tab Content Sections -->
+        <main class="spa-content">
+            <!-- 1. Home (Games) -->
+            <section id="tab-home" class="spa-tab active">
+                <header class="spa-header">
+                    <div class="header-user-info">
+                        <img id="header-avatar" src="" alt="Avatar" class="avatar-small">
+                        <div class="gold-balance">
+                            <span class="gold-icon">💰</span>
+                            <span id="header-gold">0</span>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn-icon" id="btn-main-search">🔍</button>
+                    </div>
+                </header>
+
+                <div class="online-friends-bar">
+                    <!-- Online friends bubbles go here -->
+                </div>
+
+                <div class="games-grid">
+                    <div class="game-card" data-game="ono.html">
+                        <div class="game-icon" style="background: linear-gradient(135deg, #ff4b2b, #ff416c);">UNO</div>
+                        <h3>أونو</h3>
+                    </div>
+                    <div class="game-card" data-game="chess.html">
+                        <div class="game-icon" style="background: linear-gradient(135deg, #4b6cb7, #182848);">♟️</div>
+                        <h3>شطرنج</h3>
+                    </div>
+                    <div class="game-card" data-game="legacy_game.html">
+                        <div class="game-icon" style="background: linear-gradient(135deg, #11998e, #38ef7d);">📝</div>
+                        <h3>حيوان نبات</h3>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. Rooms -->
+            <section id="tab-rooms" class="spa-tab hidden">
+                <header class="spa-header rooms-header">
+                    <button class="sub-tab active" data-sub="explore">استكشف</button>
+                    <button class="sub-tab" data-sub="my-room">غرفتي</button>
+                    <button class="sub-tab" data-sub="riyadh">الرياض</button>
+                </header>
+                <div id="rooms-explore" class="sub-tab-content active">
+                    <!-- Room list goes here -->
+                    <div class="rooms-list" id="active-rooms-list"></div>
+                </div>
+                <div id="rooms-my-room" class="sub-tab-content hidden">
+                    <button id="btn-create-my-room" class="btn-primary">إنشاء غرفتي الخاصة</button>
+                </div>
+            </section>
+
+            <!-- 3. Posts (Social) -->
+            <section id="tab-posts" class="spa-tab hidden">
+                <header class="spa-header">
+                    <h2>المنشورات</h2>
+                </header>
+                <div class="post-card">
+                    <div class="search-bar" style="margin-bottom:0; display:flex; gap:10px;">
+                        <input type="text" id="new-post-input" placeholder="بم تفكر؟" style="flex:1;">
+                        <button id="btn-submit-post" class="btn-primary" style="padding: 12px 20px;">نشر</button>
+                    </div>
+                </div>
+                <div class="posts-feed" id="posts-feed">
+                    <!-- Posts go here -->
+                </div>
+            </section>
+
+            <!-- 4. Messages -->
+            <section id="tab-messages" class="spa-tab hidden" style="padding: 0;">
+                <header class="spa-header" style="padding: 15px;">
+                    <h2>الرسائل</h2>
+                    <button class="btn-icon" id="btn-open-search-users">🔍</button>
+                </header>
+
+                <!-- الأصدقاء المتصلون حالياً -->
+                <div class="online-friends-horizontal" id="online-friends-list">
+                    <!-- ستظهر هنا صور الأصدقاء المتصلين -->
+                </div>
+
+                <div class="inbox-container">
+                    <!-- قسم طلبات الصداقة -->
+                    <div class="inbox-item" id="inbox-friend-requests">
+                        <div class="inbox-icon-circle" style="background: var(--primary-gradient);">
+                            🔔
+                        </div>
+                        <div class="inbox-info">
+                            <div class="inbox-name">طلبات الصداقة</div>
+                            <div class="inbox-preview">شاهد من يريد مصادقتك</div>
+                        </div>
+                        <div class="unread-badge hidden" id="friend-requests-badge">0</div>
+                    </div>
+
+                    <!-- قائمة الدردشات -->
+                    <div id="chats-list">
+                        <!-- ستظهر الدردشات هنا -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. Profile -->
+            <section id="tab-profile" class="spa-tab hidden">
+                <div class="profile-dashboard">
+                    <div class="profile-header-main">
+                        <img id="profile-avatar-large" src="" alt="Avatar" class="avatar-large">
+                        <h2 id="profile-name-large">الاسم</h2>
+                        <p class="profile-id">ID: <span id="profile-id-large">100000000</span></p>
+                    </div>
+                    <div class="profile-settings">
+                        <button class="setting-item">من زار حسابي <span>👁️</span></button>
+                        <button class="setting-item">المحفظة <span>💰</span></button>
+                        <button class="setting-item">VIP <span>👑</span></button>
+                        <button class="setting-item" id="btn-logout">تسجيل الخروج <span>🚪</span></button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation Bar -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-target="tab-home">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">الرئيسية</span>
+            </button>
+            <button class="nav-item" data-target="tab-rooms">
+                <span class="nav-icon">🎙️</span>
+                <span class="nav-label">الغرف</span>
+            </button>
+            <button class="nav-item" data-target="tab-posts">
+                <span class="nav-icon">🌟</span>
+                <span class="nav-label">المنشورات</span>
+            </button>
+            <button class="nav-item" data-target="tab-messages" style="position: relative;">
+                <span class="nav-icon">💬</span>
+                <span class="nav-label">الرسائل</span>
+                <div class="unread-badge-nav hidden" id="global-unread-badge">0</div>
+            </button>
+            <button class="nav-item" data-target="tab-profile">
+                <span class="nav-icon">👤</span>
+                <span class="nav-label">الخاص بي</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <!-- Iframe Modal Layer -->
+    <div id="iframe-modal" class="iframe-modal hidden">
+        <button id="btn-close-iframe" class="btn-close-modal">✖</button>
+        <iframe id="game-iframe" src="" frameborder="0" allow="autoplay; camera; microphone"></iframe>
+    </div>
+
+    <!-- Game Launcher Modal -->
+    <div id="game-launcher-modal" class="modal hidden">
+        <div class="modal-content launcher-content">
+            <button class="btn-close" id="btn-close-launcher">✖</button>
+            <div class="launcher-header">
+                <div id="launcher-game-icon" class="game-icon-large">🎮</div>
+                <h2 id="launcher-game-title">اسم اللعبة</h2>
+            </div>
+
+            <div class="launcher-actions">
+                <button id="btn-launcher-create" class="btn-launcher-primary">
+                    <span class="icon">➕</span>
+                    <span class="label">إنشاء غرفة</span>
+                </button>
+
+                <button id="btn-launcher-search" class="btn-launcher-secondary">
+                    <span class="icon">🔍</span>
+                    <span class="label">بحث سريع</span>
+                </button>
+            </div>
+
+            <div class="launcher-join-box">
+                <input type="number" id="launcher-room-code" placeholder="أدخل رمز الغرفة">
+                <button id="btn-launcher-join">انضمام</button>
+            </div>
+
+            <!-- Loading Overlay for Search -->
+            <div id="launcher-loading" class="launcher-loading hidden">
+                <div class="spinner"></div>
+                <p>جاري البحث عن لاعبين...</p>
+                <button id="btn-cancel-search" class="btn-text">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Public Profile Modal -->
+    <div id="public-profile-modal" class="modal hidden">
+        <div class="modal-content profile-modal-content">
+            <button class="btn-close" id="btn-close-profile">✖</button>
+            <img id="pub-avatar" src="" class="avatar-huge">
+            <h2 id="pub-name"></h2>
+            <p>ID: <span id="pub-id"></span></p>
+            <p id="pub-bio" class="bio">لا توجد نبذة</p>
+            <div class="level-badge" style="margin-bottom: 20px;">LVL <span id="pub-level">1</span></div>
+            <div id="profile-actions-area">
+                <button id="btn-add-friend" class="btn-primary" style="width: 100%;">إضافة صديق ➕</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Search Modal -->
+    <div id="search-users-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 400px; height: 80vh; display: flex; flex-direction: column;">
+            <button class="btn-close" id="btn-close-search-users">✖</button>
+            <h2 style="margin-bottom: 20px;">بحث عن مستخدمين</h2>
+            <div class="search-bar" style="display: flex; gap: 8px; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 12px;">
+                <input type="text" id="user-search-input" placeholder="ادخل الاسم أو الـ ID" style="flex: 1; border: none; background: transparent; margin: 0;">
+                <button id="btn-execute-user-search" class="btn-primary" style="padding: 8px 20px; min-width: 80px; margin: 0; height: 40px;">بحث</button>
+            </div>
+            <div id="search-results" style="flex: 1; overflow-y: auto; margin-top: 10px;">
+                <!-- ستظهر النتائج هنا -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Friend Requests Modal -->
+    <div id="friend-requests-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 400px; height: 70vh; display: flex; flex-direction: column;">
+            <button class="btn-close" id="btn-close-friend-requests">✖</button>
+            <h2 style="margin-bottom: 20px;">طلبات الصداقة</h2>
+            <div id="friend-requests-list" style="flex: 1; overflow-y: auto;">
+                <!-- قائمة الطلبات -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Private Chat Modal Layer -->
+    <div id="private-chat-modal" class="modal hidden" style="background: var(--bg-dark); z-index: 5000;">
+        <div class="chat-full-screen">
+            <header class="chat-header">
+                <button id="btn-back-from-chat" class="btn-icon">🔙</button>
+                <div class="chat-user-header">
+                    <img id="chat-target-avatar" src="" class="avatar-small">
+                    <div>
+                        <div id="chat-target-name" class="chat-name">الاسم</div>
+                        <div id="chat-target-status" style="font-size: 11px; color: var(--accent-color);">متصل</div>
+                    </div>
+                </div>
+                <button class="btn-icon">⋮</button>
+            </header>
+
+            <div id="private-messages-log" class="chat-messages-log">
+                <!-- الرسائل هنا -->
+            </div>
+
+            <footer class="chat-footer-bar">
+                <button id="btn-chat-games" class="btn-icon-circle">🎮</button>
+                <input type="text" id="private-chat-input" placeholder="اكتب رسالة...">
+                <button id="btn-send-private-msg" class="btn-send-icon">➡️</button>
+                <button id="btn-chat-mic" class="btn-icon-circle">🎤</button>
+            </footer>
+
+            <!-- Game Invite Popup -->
+            <div id="chat-game-popup" class="hidden chat-game-popup">
+                <div class="game-invite-option" data-game="ono.html">
+                    <div class="icon" style="background: linear-gradient(135deg, #ff4b2b, #ff416c);">O</div>
+                    <span>أونو</span>
+                </div>
+                <div class="game-invite-option" data-game="chess.html">
+                    <div class="icon" style="background: linear-gradient(135deg, #4b6cb7, #182848);">♟️</div>
+                    <span>شطرنج</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/spa.js"></script>
+
+<!-- Legacy Room Modal (Floating) -->
+<div id="legacy-room-modal" class="iframe-modal hidden" style="width: 350px; height: 500px; bottom: 80px; top: auto; right: 20px; left: auto; border-radius: 16px; box-shadow: var(--glass-shadow);">
+    <div style="background: var(--bg-dark); padding: 10px; display: flex; justify-content: space-between; border-top-left-radius: 16px; border-top-right-radius: 16px;">
+        <span style="color: white; font-weight: bold;">غرفة صوتية</span>
+        <div>
+            <button id="btn-minimize-room" style="background:none; border:none; color:white; cursor:pointer; margin-left:10px;">➖</button>
+            <button id="btn-close-room" style="background:none; border:none; color:white; cursor:pointer;">✖</button>
+        </div>
+    </div>
+    <iframe id="room-iframe" src="" frameborder="0" allow="autoplay; camera; microphone" style="border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; height: calc(100% - 40px);"></iframe>
+</div>
+
+<!-- Minimized Room Bubble -->
+<div id="minimized-room-bubble" class="hidden" style="position: fixed; bottom: 80px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background: var(--primary-gradient); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 28px; box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);">
+    🎙️
+</div>
+
+</body>
+</html>
