@@ -24,10 +24,15 @@ class LiveManager {
         // Use the unified 9-digit User ID from localStorage
         const savedUser = localStorage.getItem('sumu_user');
         if (savedUser) {
-            const userData = JSON.parse(savedUser);
-            this.myId = userData.id;
-            this.username = userData.name;
-            this.userAvatar = userData.avatar;
+            try {
+                const userData = JSON.parse(savedUser);
+                this.myId = userData.id || userData.uid || localStorage.getItem('sumu_user_id');
+                this.username = userData.name;
+                this.userAvatar = userData.avatar;
+            } catch(e) {
+                console.error("Error parsing savedUser", e);
+                this.myId = localStorage.getItem('sumu_user_id');
+            }
         } else {
             this.myId = localStorage.getItem('sumu_user_id') || null;
             this.userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${this.username}_${Math.random()}`;
@@ -389,7 +394,9 @@ class LiveManager {
         if (nameEl) nameEl.textContent = this.username;
 
         const idEl = document.querySelector('.user-display-id');
-        if (idEl) idEl.textContent = `ID: ${this.roomId}`;
+        if (idEl) idEl.textContent = `ID: ${this.myId || this.roomId}`;
+
+        this.applyRolePermissions();
 
         const avatarEl = document.querySelector('.profile-square');
         if (avatarEl) avatarEl.src = this.userAvatar;
@@ -416,7 +423,10 @@ class LiveManager {
                 // Ensure we use the 9-digit ID for logic even after anonymous auth
                 const savedUser = localStorage.getItem('sumu_user');
                 if (savedUser) {
-                    this.myId = JSON.parse(savedUser).id;
+                    try {
+                        const userData = JSON.parse(savedUser);
+                        this.myId = userData.id || userData.uid || localStorage.getItem('sumu_user_id');
+                    } catch(e) {}
                 }
                 console.log("Firebase Auth: Logged in as", user.uid, "Logical ID:", this.myId);
                 
@@ -523,9 +533,26 @@ class LiveManager {
         const roomRef = ref(this.db, `rooms/${this.roomId}`);
         const roomSnap = await get(roomRef);
 
-        if (!roomSnap.exists()) {
-            // If room doesn't exist and user claims to be owner, create it
+        // Verification logic: Match myId with actualOwnerId OR check if role is owner in URL (fallback)
+        let isOwner = false;
+
+        if (roomSnap.exists()) {
+            const roomData = roomSnap.val();
+            const actualOwnerId = roomData.ownerId;
+            console.log(`[Auth Check] Room: ${this.roomId}, ActualOwner: ${actualOwnerId}, MyID: ${this.myId}`);
+
+            if (String(actualOwnerId) === String(this.myId) || String(this.roomId) === String(this.myId)) {
+                isOwner = true;
+                // Auto-heal missing ownerId if verified via roomId
+                if (!actualOwnerId) {
+                    update(roomRef, { ownerId: this.myId }).catch(() => {});
+                    update(ref(this.db, `public_rooms/${this.roomId}`), { ownerId: this.myId }).catch(() => {});
+                }
+            }
+        } else {
+            // If room doesn't exist, we trust the URL role 'owner' for creation
             if (this.role === 'owner') {
+                isOwner = true;
                 const roomData = {
                     id: this.roomId,
                     name: `غرفة ${this.username}`,
@@ -538,37 +565,19 @@ class LiveManager {
                     isActive: true
                 };
                 await set(roomRef, roomData);
-                // Also update public_rooms index
                 await set(ref(this.db, `public_rooms/${this.roomId}`), roomData);
-                console.log("✅ Room Created successfully as Owner");
-            } else {
-                console.warn("Room does not exist and user is not owner via URL.");
             }
-            this.applyRolePermissions();
-        } else {
-            // Room exists, verify ownerId
-            const roomData = roomSnap.val();
-            const actualOwnerId = roomData.ownerId;
-
-            console.log(`[Auth Check] Room: ${this.roomId}, ActualOwner: ${actualOwnerId}, MyID: ${this.myId}`);
-
-            // If actualOwnerId matches myId, OR if this is a personal room where roomId matches myId
-            if (String(actualOwnerId) === String(this.myId) || String(this.roomId) === String(this.myId)) {
-                console.log("✅ Verified as Room Owner via Database/RoomID Match");
-                this.role = 'owner';
-
-                // Auto-heal missing ownerId in database if verified via roomId fallback
-                if (!actualOwnerId) {
-                    console.log("🩹 Auto-healing missing ownerId in database");
-                    update(roomRef, { ownerId: this.myId }).catch(e => console.warn("Failed to auto-heal ownerId", e));
-                    update(ref(this.db, `public_rooms/${this.roomId}`), { ownerId: this.myId }).catch(e => {});
-                }
-            } else {
-                console.log("ℹ️ Verified as Guest via Database Match");
-                this.role = 'guest';
-            }
-            this.applyRolePermissions();
         }
+
+        if (isOwner) {
+            this.role = 'owner';
+            console.log("✅ Room Ownership Confirmed");
+        } else {
+            this.role = 'guest';
+            console.log("ℹ️ Participating as Guest");
+        }
+
+        this.applyRolePermissions();
 
         const userRef = ref(this.db, `rooms/${this.roomId}/users/${this.myId}`);
         onDisconnect(userRef).remove();
@@ -582,9 +591,13 @@ class LiveManager {
     }
 
     applyRolePermissions() {
+        console.log("Applying permissions for role:", this.role);
         if (this.role === 'owner') {
             if (this.btnOpenControl) this.btnOpenControl.classList.remove('hidden');
             if (this.btnOpenYtSearch) this.btnOpenYtSearch.classList.remove('hidden');
+
+            // Re-render playlist to show delete buttons
+            this.renderPlaylist();
         } else {
             if (this.btnOpenControl) this.btnOpenControl.classList.add('hidden');
             if (this.btnOpenYtSearch) this.btnOpenYtSearch.classList.add('hidden');

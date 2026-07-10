@@ -424,8 +424,9 @@ async function handleCreateRoom() {
             isActive: true
         };
 
-        // حفظ في غرف المستخدم وفي الغرف العامة "استكشف"
+        // حفظ في غرف المستخدم، الغرفة الأساسية، وفي الغرف العامة "استكشف"
         await set(ref(db, `user_rooms/${currentUser.id}/${roomId}`), newRoom);
+        await set(ref(db, `rooms/${roomId}`), newRoom);
         await set(ref(db, `public_rooms/${roomId}`), newRoom);
 
         showSuccess(`✅ تم إنشاء غرفتك!\nرقم الغرفة: ${roomId}`);
